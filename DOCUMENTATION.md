@@ -1,0 +1,922 @@
+# Business Simulator - Complete Documentation
+
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [Architecture](#architecture)
+3. [Backend Components](#backend-components)
+4. [Frontend Components](#frontend-components)
+5. [Database Schema](#database-schema)
+6. [API Reference](#api-reference)
+7. [WebSocket Events](#websocket-events)
+8. [Setup & Installation](#setup--installation)
+9. [Configuration](#configuration)
+10. [Development Guide](#development-guide)
+11. [Deployment](#deployment)
+12. [Troubleshooting](#troubleshooting)
+
+---
+
+## Project Overview
+
+The Business Simulator is a fully autonomous office simulation system where AI-powered employees make decisions, work on projects, communicate with each other, and grow the business. The system uses local LLM (Ollama with Llama3.2) to power employee decision-making, creating a realistic simulation of an office environment.
+
+### Key Features
+
+- **Fully Autonomous Operation**: The office runs completely independently without user interaction
+- **AI-Powered Employees**: Each employee uses LLM to make contextual decisions based on role, personality, and backstory
+- **Employee Hierarchy**: CEO, Managers, and Employees with different decision-making capabilities
+- **Real-time Web Interface**: Modern React dashboard with live updates via WebSocket
+- **Office Layout System**: Visual representation of employees moving between rooms
+- **Communication System**: Email and chat messaging between employees
+- **Project Management**: Employees create, plan, and execute projects
+- **Financial System**: Revenue, expenses, and profit tracking
+- **Goal System**: Business goals with progress tracking
+
+---
+
+## Architecture
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Frontend (React)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │Dashboard │  │Employees │  │ Projects │  │Financial│ │
+│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │OfficeView│  │Communicat│  │WebSocket │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+└──────────────────────┬──────────────────────────────────┘
+                       │ HTTP/WebSocket
+┌──────────────────────┴──────────────────────────────────┐
+│              Backend (FastAPI)                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ API Routes   │  │ WebSocket    │  │ Office       │ │
+│  │              │  │ Handler      │  │ Simulator    │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ Employee     │  │ Business     │  │ LLM Client   │ │
+│  │ Agents       │  │ Managers     │  │ (Ollama)     │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────┴──────────────────────────────────┐
+│              Database (SQLite)                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
+│  │Employees │  │ Projects │  │ Tasks    │  │Financial│ │
+│  └──────────┘  └──────────┘  └──────────┘  └─────────┘ │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │Activities│  │ Emails   │  │ Chats    │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Technology Stack
+
+**Backend:**
+- Python 3.10+
+- FastAPI (Web framework)
+- SQLAlchemy 2.0 (Async ORM)
+- SQLite (Database)
+- Ollama (Local LLM)
+- WebSockets (Real-time communication)
+
+**Frontend:**
+- React 18
+- Vite (Build tool)
+- Tailwind CSS (Styling)
+- React Router (Routing)
+- WebSocket API (Real-time updates)
+
+---
+
+## Backend Components
+
+### Core Modules
+
+#### 1. `main.py`
+Entry point for the FastAPI application. Handles:
+- Application initialization
+- CORS configuration
+- Static file serving (avatars, office layouts)
+- WebSocket endpoint registration
+- Database initialization on startup
+- Auto-seeding if database is empty
+- Simulation startup
+
+#### 2. `engine/office_simulator.py`
+Core simulation engine that:
+- Runs the main simulation loop (every 8 seconds)
+- Processes employees in batches (3 per tick)
+- Manages WebSocket connections for real-time updates
+- Coordinates business context gathering
+- Handles employee hiring/firing
+- Broadcasts activities to connected clients
+
+**Key Methods:**
+- `run()`: Main simulation loop
+- `simulation_tick()`: Processes one simulation cycle
+- `get_business_context()`: Gathers current business state
+- `broadcast_activity()`: Sends updates to frontend
+
+#### 3. `employees/`
+Employee agent system for decision-making:
+
+**`base.py`**: Base `EmployeeAgent` class
+- `evaluate_situation()`: Uses LLM to evaluate current situation
+- `execute_decision()`: Executes the decision and creates activities
+- Handles task completion, project work, communication
+
+**`roles.py`**: Role-specific agents
+- `CEOAgent`: Strategic decisions, project creation
+- `ManagerAgent`: Tactical decisions, task assignment
+- `EmployeeAgent`: Operational decisions, task execution
+
+**`room_assigner.py`**: Room assignment logic
+- Assigns home rooms based on role/title/department
+- Manages room assignments for existing employees
+
+#### 4. `business/`
+Business logic managers:
+
+**`financial_manager.py`**:
+- Tracks revenue and expenses
+- Calculates profit
+- Records financial transactions
+- Links finances to projects
+
+**`project_manager.py`**:
+- Creates and manages projects
+- Calculates project progress
+- Detects stalled projects
+- Manages project tasks
+
+**`goal_system.py`**:
+- Defines business goals
+- Tracks goal progress
+- Evaluates goal completion
+
+#### 5. `database/`
+Database layer:
+
+**`database.py`**:
+- Database connection setup
+- Async session management
+- Table initialization
+
+**`models.py`**: SQLAlchemy models
+- `Employee`: Employee data with room tracking
+- `Project`: Project information
+- `Task`: Task assignments
+- `Activity`: Activity log
+- `Financial`: Financial transactions
+- `Email`: Email messages
+- `ChatMessage`: Chat messages
+- `Decision`: Employee decisions
+- `BusinessMetric`: Business metrics
+- `BusinessSettings`: Business configuration
+
+#### 6. `api/`
+API endpoints:
+
+**`routes.py`**: REST API endpoints
+- `/api/employees`: Get all employees
+- `/api/employees/{id}`: Get employee details
+- `/api/projects`: Get all projects
+- `/api/projects/{id}`: Get project details
+- `/api/dashboard`: Dashboard data
+- `/api/financials`: Financial data
+- `/api/activities`: Activity feed
+- `/api/office-layout`: Office layout with employees
+- `/api/emails`: Email messages
+- `/api/chats`: Chat messages
+
+**`websocket.py`**: WebSocket handler
+- Manages WebSocket connections
+- Broadcasts real-time updates
+- Handles connection lifecycle
+
+#### 7. `llm/ollama_client.py`
+Ollama LLM client:
+- Connects to local Ollama instance
+- Sends prompts to LLM
+- Returns structured responses
+- Handles errors and retries
+
+#### 8. `engine/movement_system.py`
+Employee movement system:
+- Determines target room based on activity
+- Updates employee location
+- Manages room transitions
+
+### Simulation Flow
+
+1. **Startup**: Database initialized, employees loaded, simulation started
+2. **Simulation Loop** (every 8 seconds):
+   - Gather business context (revenue, projects, employees)
+   - Process up to 3 employees per tick
+   - For each employee:
+     - Create employee agent
+     - Evaluate situation using LLM
+     - Execute decision
+     - Process movement
+     - Record activity
+   - Broadcast updates via WebSocket
+3. **Employee Decision Making**:
+   - Employee agent evaluates current situation
+   - LLM generates decision based on role, personality, backstory
+   - Decision executed (task work, communication, project creation, etc.)
+   - Activity recorded in database
+4. **Real-time Updates**:
+   - All activities broadcast to connected WebSocket clients
+   - Frontend receives updates and refreshes UI
+
+---
+
+## Frontend Components
+
+### Structure
+
+```
+frontend/src/
+├── App.jsx                 # Main app component with routing
+├── main.jsx                # Entry point
+├── index.css               # Global styles
+├── components/             # Reusable components
+│   ├── EmployeeAvatar.jsx  # Employee avatar display
+│   ├── OfficeLayout.jsx    # Office layout visualization
+│   ├── RoomDetailModal.jsx # Room detail modal
+│   ├── ChatView.jsx        # Chat message view
+│   └── EmailView.jsx       # Email message view
+├── pages/                  # Page components
+│   ├── Dashboard.jsx      # Main dashboard
+│   ├── Employees.jsx      # Employee list
+│   ├── EmployeeDetail.jsx # Employee detail page
+│   ├── Projects.jsx       # Project list
+│   ├── ProjectDetail.jsx  # Project detail page
+│   ├── Financials.jsx     # Financial reports
+│   ├── OfficeView.jsx     # Office layout view
+│   └── Communications.jsx # Email and chat view
+├── hooks/                  # Custom React hooks
+│   └── useWebSocket.js    # WebSocket connection hook
+└── utils/                  # Utility functions
+    └── avatarMapper.js    # Avatar path mapping
+```
+
+### Key Components
+
+#### `App.jsx`
+Main application component with React Router setup:
+- Routes to different pages
+- Navigation sidebar
+- WebSocket connection management
+
+#### `pages/Dashboard.jsx`
+Main dashboard showing:
+- Business metrics (revenue, profit, expenses)
+- Active projects count
+- Employee count
+- Recent activities feed
+- Business goals with progress
+
+#### `pages/Employees.jsx`
+Employee management:
+- List of all employees
+- Filter by status (active/fired)
+- Click to view details
+- Employee avatars
+
+#### `pages/EmployeeDetail.jsx`
+Employee detail view:
+- Employee information (name, title, role, backstory)
+- Recent activities
+- Decisions made
+- Current task
+- Room location
+
+#### `pages/OfficeView.jsx`
+Office layout visualization:
+- All rooms with images
+- Employees in each room
+- Room capacity
+- Click room to see details
+- Terminated employees section
+
+#### `pages/Projects.jsx`
+Project management:
+- List of all projects
+- Project status and progress
+- Filter by status
+- Click to view details
+
+#### `pages/ProjectDetail.jsx`
+Project detail view:
+- Project information
+- Tasks and progress
+- Financial data
+- Timeline
+
+#### `pages/Financials.jsx`
+Financial reports:
+- Revenue over time
+- Expenses over time
+- Profit calculation
+- Financial transactions list
+
+#### `pages/Communications.jsx`
+Communication hub:
+- Email inbox view
+- Chat messages view
+- Filter by employee
+- Message threads
+
+#### `hooks/useWebSocket.js`
+WebSocket hook for real-time updates:
+- Connects to backend WebSocket
+- Listens for activity updates
+- Provides connection status
+- Handles reconnection
+
+---
+
+## Database Schema
+
+### Tables
+
+#### `employees`
+- `id`: Primary key
+- `name`: Employee name
+- `title`: Job title
+- `role`: CEO, Manager, or Employee
+- `hierarchy_level`: 1 (CEO), 2 (Manager), 3 (Employee)
+- `department`: Department name
+- `status`: active, busy, idle, fired
+- `current_task_id`: Foreign key to tasks
+- `personality_traits`: JSON array
+- `backstory`: Text description
+- `avatar_path`: Path to avatar image
+- `current_room`: Current room location
+- `home_room`: Assigned home room
+- `activity_state`: idle, working, walking, meeting, break
+- `hired_at`: Timestamp
+- `fired_at`: Timestamp (nullable)
+- `created_at`: Timestamp
+
+#### `projects`
+- `id`: Primary key
+- `name`: Project name
+- `description`: Project description
+- `status`: planning, active, completed, cancelled
+- `priority`: low, medium, high
+- `budget`: Budget amount
+- `revenue`: Revenue generated
+- `deadline`: Deadline (nullable)
+- `last_activity_at`: Timestamp
+- `created_at`: Timestamp
+
+#### `tasks`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees
+- `project_id`: Foreign key to projects
+- `description`: Task description
+- `status`: pending, in_progress, completed, cancelled
+- `priority`: low, medium, high
+- `progress`: 0.0 to 100.0
+- `created_at`: Timestamp
+- `completed_at`: Timestamp (nullable)
+
+#### `activities`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees
+- `activity_type`: Type of activity
+- `description`: Activity description
+- `activity_metadata`: JSON metadata
+- `timestamp`: Timestamp
+
+#### `financials`
+- `id`: Primary key
+- `type`: income or expense
+- `amount`: Amount
+- `description`: Description
+- `project_id`: Foreign key to projects (nullable)
+- `timestamp`: Timestamp
+
+#### `emails`
+- `id`: Primary key
+- `sender_id`: Foreign key to employees
+- `recipient_id`: Foreign key to employees
+- `subject`: Email subject
+- `body`: Email body
+- `read`: Boolean
+- `timestamp`: Timestamp
+
+#### `chat_messages`
+- `id`: Primary key
+- `sender_id`: Foreign key to employees
+- `recipient_id`: Foreign key to employees
+- `message`: Message text
+- `timestamp`: Timestamp
+
+#### `decisions`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees
+- `decision_type`: strategic, tactical, operational
+- `description`: Decision description
+- `reasoning`: Decision reasoning
+- `timestamp`: Timestamp
+
+#### `business_metrics`
+- `id`: Primary key
+- `metric_name`: Metric name
+- `value`: Metric value
+- `timestamp`: Timestamp
+
+#### `business_settings`
+- `id`: Primary key
+- `setting_key`: Setting key (unique)
+- `setting_value`: Setting value
+- `updated_at`: Timestamp
+
+---
+
+## API Reference
+
+### Base URL
+```
+http://localhost:8000/api
+```
+
+### Endpoints
+
+#### Employees
+
+**GET `/api/employees`**
+Returns list of all employees.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "John Doe",
+    "title": "Chief Executive Officer",
+    "role": "CEO",
+    "hierarchy_level": 1,
+    "department": "Executive",
+    "status": "active",
+    "current_room": "manager_office",
+    "home_room": "manager_office",
+    "activity_state": "working",
+    "personality_traits": ["strategic", "decisive"],
+    "backstory": "...",
+    "avatar_path": "/avatars/office_char_01_manager.png"
+  }
+]
+```
+
+**GET `/api/employees/{employee_id}`**
+Returns detailed employee information including activities and decisions.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "title": "Chief Executive Officer",
+  "role": "CEO",
+  "activities": [...],
+  "decisions": [...]
+}
+```
+
+#### Projects
+
+**GET `/api/projects`**
+Returns list of all projects.
+
+**GET `/api/projects/{project_id}`**
+Returns detailed project information including tasks.
+
+#### Dashboard
+
+**GET `/api/dashboard`**
+Returns dashboard data including metrics, activities, and goals.
+
+**Response:**
+```json
+{
+  "business_name": "TechFlow Solutions",
+  "revenue": 150000.0,
+  "profit": 50000.0,
+  "expenses": 100000.0,
+  "active_projects": 5,
+  "employee_count": 20,
+  "recent_activities": [...],
+  "goals": [...],
+  "goal_progress": {...}
+}
+```
+
+#### Financials
+
+**GET `/api/financials?days=30`**
+Returns financial transactions for the specified number of days.
+
+#### Activities
+
+**GET `/api/activities?limit=50`**
+Returns recent activities.
+
+#### Office Layout
+
+**GET `/api/office-layout`**
+Returns office layout with employees in each room.
+
+**Response:**
+```json
+{
+  "rooms": [
+    {
+      "id": "open_office",
+      "name": "Open Office",
+      "image_path": "/office_layout/layout01_open_office.png",
+      "capacity": 20,
+      "employees": [...]
+    }
+  ],
+  "terminated_employees": [...],
+  "total_employees": 20
+}
+```
+
+#### Communications
+
+**GET `/api/emails?limit=100`**
+Returns all emails.
+
+**GET `/api/employees/{employee_id}/emails`**
+Returns emails for a specific employee.
+
+**GET `/api/chats?limit=200`**
+Returns all chat messages.
+
+**GET `/api/employees/{employee_id}/chats`**
+Returns chat messages for a specific employee.
+
+---
+
+## WebSocket Events
+
+### Connection
+Connect to `ws://localhost:8000/ws`
+
+### Message Format
+All messages are JSON objects with the following structure:
+
+```json
+{
+  "type": "activity",
+  "data": {
+    "activity_type": "task_completed",
+    "employee_id": 1,
+    "description": "Completed task: Implement feature X",
+    "timestamp": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+### Event Types
+
+- `activity`: New activity occurred
+- `employee_update`: Employee status changed
+- `project_update`: Project status changed
+- `financial_update`: Financial transaction occurred
+
+---
+
+## Setup & Installation
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Node.js 18+ and npm
+- Ollama installed and running
+- Llama3.2 model downloaded
+
+### Quick Setup
+
+#### Windows
+```bash
+setup.bat
+```
+
+#### Linux/Mac
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+### Manual Setup
+
+1. **Create Python virtual environment:**
+   ```bash
+   python -m venv venv
+   ```
+
+2. **Activate virtual environment:**
+   - Windows: `venv\Scripts\activate.bat`
+   - Linux/Mac: `source venv/bin/activate`
+
+3. **Install Python dependencies:**
+   ```bash
+   pip install -r backend/requirements.txt
+   ```
+
+4. **Seed the database:**
+   ```bash
+   cd backend
+   python seed.py
+   cd ..
+   ```
+
+5. **Install frontend dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+### Setting up Ollama
+
+1. Install Ollama from https://ollama.ai
+2. Pull the Llama3.2 model:
+   ```bash
+   ollama pull llama3.2
+   ```
+3. Ensure Ollama is running (default: http://localhost:11434)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the `backend` directory:
+
+```env
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+DATABASE_URL=sqlite+aiosqlite:///./office.db
+```
+
+### Database Configuration
+
+The default database is SQLite (`office.db`). To use PostgreSQL:
+
+1. Update `DATABASE_URL` in `.env`:
+   ```env
+   DATABASE_URL=postgresql+asyncpg://user:password@localhost/dbname
+   ```
+
+2. Install PostgreSQL driver:
+   ```bash
+   pip install asyncpg
+   ```
+
+### Simulation Settings
+
+Simulation settings can be modified in `backend/engine/office_simulator.py`:
+- `SIMULATION_TICK_INTERVAL`: Time between simulation ticks (default: 8 seconds)
+- `EMPLOYEES_PER_TICK`: Number of employees processed per tick (default: 3)
+- `MIN_EMPLOYEES`: Minimum number of employees required (default: 15)
+
+---
+
+## Development Guide
+
+### Running the Application
+
+#### Start Backend
+```bash
+cd backend
+python main.py
+```
+Backend runs on http://localhost:8000
+
+#### Start Frontend
+```bash
+cd frontend
+npm run dev
+```
+Frontend runs on http://localhost:3000
+
+### Project Structure
+
+```
+Business-Simulator/
+├── backend/              # Python backend
+│   ├── api/             # API routes and WebSocket
+│   ├── business/        # Business logic managers
+│   ├── database/        # Database models and setup
+│   ├── employees/       # Employee agent system
+│   ├── engine/          # Simulation engine
+│   ├── llm/             # LLM client
+│   ├── main.py          # FastAPI app entry point
+│   └── requirements.txt # Python dependencies
+├── frontend/            # React frontend
+│   ├── src/
+│   │   ├── components/ # Reusable components
+│   │   ├── pages/      # Page components
+│   │   ├── hooks/      # React hooks
+│   │   └── utils/      # Utility functions
+│   └── package.json    # Node dependencies
+├── avatars/            # Employee avatar images
+├── office_layout/      # Office layout images
+├── .gitignore          # Git ignore rules
+├── README.md           # Quick start guide
+└── DOCUMENTATION.md    # This file
+```
+
+### Adding New Features
+
+#### Adding a New API Endpoint
+
+1. Add route in `backend/api/routes.py`:
+   ```python
+   @router.get("/new-endpoint")
+   async def new_endpoint(db: AsyncSession = Depends(get_db)):
+       # Implementation
+       return {"message": "Success"}
+   ```
+
+#### Adding a New Employee Role
+
+1. Create new agent class in `backend/employees/roles.py`
+2. Extend `EmployeeAgent` base class
+3. Override `evaluate_situation()` and `execute_decision()` methods
+4. Register in `create_employee_agent()` function
+
+#### Adding a New Frontend Page
+
+1. Create component in `frontend/src/pages/`
+2. Add route in `frontend/src/App.jsx`
+3. Add navigation link if needed
+
+### Testing
+
+Currently, the project doesn't include automated tests. To add tests:
+
+1. **Backend tests**: Use `pytest` with `pytest-asyncio`
+2. **Frontend tests**: Use `vitest` or `jest` with React Testing Library
+
+---
+
+## Deployment
+
+### Production Build
+
+#### Backend
+The backend can be run with uvicorn in production:
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+For better performance, use a production ASGI server like Gunicorn with Uvicorn workers:
+```bash
+pip install gunicorn
+gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+#### Frontend
+Build the frontend for production:
+```bash
+cd frontend
+npm run build
+```
+
+Serve the built files with a web server (nginx, Apache, etc.) or use a static file server.
+
+### Docker Deployment (Future)
+
+A Docker setup can be created with:
+- Backend container (Python + FastAPI)
+- Frontend container (Node.js build)
+- Database container (PostgreSQL)
+- Nginx reverse proxy
+
+### Environment Considerations
+
+- Use PostgreSQL instead of SQLite for production
+- Set up proper CORS origins
+- Use environment variables for sensitive data
+- Enable HTTPS in production
+- Set up proper logging
+- Configure backup for database
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Ollama Connection Issues
+
+**Problem**: Employees not making decisions, LLM errors
+
+**Solutions**:
+- Verify Ollama is running: `ollama list`
+- Check Ollama URL in `.env` or default `http://localhost:11434`
+- Verify model is available: `ollama list`
+- Test Ollama API: `curl http://localhost:11434/api/generate`
+
+#### Database Issues
+
+**Problem**: Database errors, missing tables
+
+**Solutions**:
+- Delete `office.db` and re-run `seed.py`
+- Check database path in configuration
+- Verify SQLite file permissions
+- Check for database locks (close other connections)
+
+#### Frontend Not Updating
+
+**Problem**: UI not showing real-time updates
+
+**Solutions**:
+- Check browser console for WebSocket errors
+- Verify backend is running on port 8000
+- Check CORS settings if accessing from different origin
+- Verify WebSocket connection in browser DevTools
+
+#### Employees Not Moving
+
+**Problem**: Employees stuck in one room
+
+**Solutions**:
+- Check `movement_system.py` logic
+- Verify room assignments in database
+- Check activity types triggering movement
+- Review employee `activity_state` field
+
+#### Simulation Not Running
+
+**Problem**: No activities, employees idle
+
+**Solutions**:
+- Check backend logs for errors
+- Verify simulation loop is running
+- Check employee status (should be "active")
+- Verify LLM is responding
+- Check database connection
+
+### Debugging Tips
+
+1. **Enable verbose logging**: Add print statements or use Python logging
+2. **Check database directly**: Use SQLite browser to inspect data
+3. **Monitor WebSocket**: Use browser DevTools to see WebSocket messages
+4. **Test LLM directly**: Use Ollama CLI to test model responses
+5. **Check employee agents**: Review decision-making logic in `employees/roles.py`
+
+### Performance Optimization
+
+- Reduce simulation tick frequency if system is slow
+- Process fewer employees per tick
+- Use database indexes for frequently queried fields
+- Optimize LLM prompts for faster responses
+- Cache frequently accessed data
+
+---
+
+## License
+
+MIT License
+
+---
+
+## Contributing
+
+When contributing to this project:
+
+1. Follow existing code style
+2. Add comments for complex logic
+3. Update documentation for new features
+4. Test changes thoroughly
+5. Keep commits focused and descriptive
+
+---
+
+## Support
+
+For issues and questions:
+- Check the troubleshooting section
+- Review the code comments
+- Check backend logs for errors
+- Verify all prerequisites are installed correctly
+
+---
+
+*Last updated: 2024*
+
