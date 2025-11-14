@@ -5,10 +5,16 @@ function ProjectDetail() {
   const { id } = useParams()
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activities, setActivities] = useState([])
+  const [loadingActivities, setLoadingActivities] = useState(false)
 
   useEffect(() => {
     fetchProject()
-    const interval = setInterval(fetchProject, 10000)
+    fetchActivities()
+    const interval = setInterval(() => {
+      fetchProject()
+      fetchActivities()
+    }, 10000)
     return () => clearInterval(interval)
   }, [id])
 
@@ -21,6 +27,21 @@ function ProjectDetail() {
     } catch (error) {
       console.error('Error fetching project:', error)
       setLoading(false)
+    }
+  }
+
+  const fetchActivities = async () => {
+    setLoadingActivities(true)
+    try {
+      const response = await fetch(`/api/projects/${id}/activities`)
+      if (response.ok) {
+        const data = await response.json()
+        setActivities(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching project activities:', error)
+    } finally {
+      setLoadingActivities(false)
     }
   }
 
@@ -88,12 +109,20 @@ function ProjectDetail() {
           </div>
         </div>
 
-        {project.deadline && (
-          <div className="text-sm text-gray-600">
-            <span className="font-medium">Deadline: </span>
-            {new Date(project.deadline).toLocaleDateString()}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+          {project.deadline && (
+            <div>
+              <span className="font-medium">Deadline: </span>
+              {new Date(project.deadline).toLocaleDateString()}
+            </div>
+          )}
+          {project.completed_at && (
+            <div>
+              <span className="font-medium">Completed: </span>
+              {new Date(project.completed_at).toLocaleDateString()}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tasks */}
@@ -122,6 +151,40 @@ function ProjectDetail() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Project History/Activities */}
+      {(project.status === 'completed' || activities.length > 0) && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            {project.status === 'completed' ? 'Project History' : 'Recent Activity'}
+          </h3>
+          {loadingActivities ? (
+            <div className="text-center py-4 text-gray-500">Loading activities...</div>
+          ) : activities.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">No activities recorded yet</div>
+          ) : (
+            <div className="space-y-3">
+              {activities.map((activity) => (
+                <div key={activity.id} className="border-l-4 border-blue-500 pl-4 py-2">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-gray-900">{activity.description}</p>
+                      {activity.employee_name && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          by {activity.employee_name}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 ml-4">
+                      {new Date(activity.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

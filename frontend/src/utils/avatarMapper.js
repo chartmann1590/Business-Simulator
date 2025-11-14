@@ -101,3 +101,4 @@ export function getAvatarPath(employee) {
   return `/avatars/${allAvatars[0]}`;
 }
 
+

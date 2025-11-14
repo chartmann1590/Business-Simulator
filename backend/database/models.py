@@ -19,6 +19,7 @@ class Employee(Base):
     avatar_path = Column(String, nullable=True)
     current_room = Column(String, nullable=True)  # tracks which room employee is currently in
     home_room = Column(String, nullable=True)  # tracks employee's assigned home room
+    floor = Column(Integer, default=1)  # floor number (1 or 2)
     activity_state = Column(String, default="idle")  # idle, working, walking, meeting, break, etc.
     hired_at = Column(DateTime(timezone=True), server_default=func.now())
     fired_at = Column(DateTime(timezone=True), nullable=True)
@@ -45,6 +46,7 @@ class Project(Base):
     deadline = Column(DateTime(timezone=True), nullable=True)
     last_activity_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     
     tasks = relationship("Task", back_populates="project")
     financials = relationship("Financial", back_populates="project")
@@ -126,6 +128,7 @@ class Email(Base):
     subject = Column(String, nullable=False)
     body = Column(Text, nullable=False)
     read = Column(Boolean, default=False)
+    thread_id = Column(String, nullable=True, index=True)  # Groups all emails between two employees
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
     sender = relationship("Employee", foreign_keys=[sender_id], back_populates="sent_emails")
@@ -138,6 +141,7 @@ class ChatMessage(Base):
     sender_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     recipient_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     message = Column(Text, nullable=False)
+    thread_id = Column(String, nullable=True, index=True)  # Groups all chats between two employees
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
     sender = relationship("Employee", foreign_keys=[sender_id], back_populates="sent_chats")

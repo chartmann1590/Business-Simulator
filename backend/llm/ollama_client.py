@@ -182,6 +182,158 @@ Provide a plan in JSON format:
                 "resources_needed": []
             }
     
+    async def generate_response(self, prompt: str) -> str:
+        """Generate a text response from a prompt."""
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("response", "").strip()
+        except Exception as e:
+            print(f"Error in generate_response: {e}")
+            return ""
+    
+    async def generate_email_response(
+        self,
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        recipient_personality: List[str],
+        sender_name: str,
+        sender_title: str,
+        original_subject: str,
+        original_body: str,
+        project_context: Optional[str] = None,
+        business_context: Dict = None
+    ) -> str:
+        """Generate an email response to a question or request."""
+        personality_str = ", ".join(recipient_personality) if recipient_personality else "balanced"
+        business_info = ""
+        if business_context:
+            business_info = f"""
+Current business situation:
+- Revenue: ${business_context.get('revenue', 0):,.2f}
+- Profit: ${business_context.get('profit', 0):,.2f}
+- Active projects: {business_context.get('active_projects', 0)}
+"""
+        
+        project_info = f"\nYou are currently working on project: {project_context}" if project_context else ""
+        
+        prompt = f"""You are {recipient_name}, {recipient_title} at a company. You received an email from {sender_name} ({sender_title}).
+
+Your personality traits: {personality_str}
+Your role: {recipient_role}
+{project_info}
+{business_info}
+
+Original email from {sender_name}:
+Subject: {original_subject}
+
+{original_body}
+
+Write a professional, helpful email response. The response should:
+1. Address the question or request directly
+2. Be appropriate for your role and personality
+3. Be concise but complete (2-4 sentences)
+4. Use a professional but friendly tone
+5. If you don't know something, offer to help find out or suggest next steps
+
+Write only the email body (no subject line, no signature - just the message content)."""
+
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Add signature
+            return f"{response_text}\n\nBest regards,\n{recipient_name}"
+        except Exception as e:
+            print(f"Error generating email response: {e}")
+            # Fallback response
+            return f"Hi {sender_name},\n\nThanks for reaching out. I'll look into this and get back to you soon.\n\nBest regards,\n{recipient_name}"
+    
+    async def generate_chat_response(
+        self,
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        recipient_personality: List[str],
+        sender_name: str,
+        sender_title: str,
+        original_message: str,
+        project_context: Optional[str] = None,
+        business_context: Dict = None
+    ) -> str:
+        """Generate a chat response to a question or request."""
+        personality_str = ", ".join(recipient_personality) if recipient_personality else "balanced"
+        project_info = f" You're currently working on {project_context}." if project_context else ""
+        
+        prompt = f"""You are {recipient_name}, {recipient_title} at a company. You received a chat message from {sender_name} ({sender_title}).
+
+Your personality traits: {personality_str}
+Your role: {recipient_role}{project_info}
+
+Message from {sender_name}:
+{original_message}
+
+Write a brief, friendly chat response (1-2 sentences). The response should:
+1. Answer the question or address the request directly
+2. Match your personality (e.g., if you're analytical, be precise; if creative, be enthusiastic)
+3. Be conversational and appropriate for a chat message
+4. If you can't help directly, offer to assist or find someone who can
+
+Write only the response message, nothing else."""
+
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Limit length for chat messages
+            if len(response_text) > 200:
+                response_text = response_text[:197] + "..."
+            
+            return response_text
+        except Exception as e:
+            print(f"Error generating chat response: {e}")
+            # Fallback response
+            return f"Sure, I can help with that! Let me get back to you shortly."
+    
     async def close(self):
         await self.client.aclose()
 

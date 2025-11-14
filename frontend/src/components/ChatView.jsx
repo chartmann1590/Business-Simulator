@@ -19,17 +19,30 @@ function ChatView({ chats, employees }) {
       grouped[key].messages.push(chat)
     })
     
-    // Sort messages within each conversation
+    // Sort messages within each conversation - newest first
     Object.keys(grouped).forEach(key => {
       grouped[key].messages.sort((a, b) => 
-        new Date(a.timestamp) - new Date(b.timestamp)
+        new Date(b.timestamp) - new Date(a.timestamp)
       )
     })
     
-    setGroupedChats(grouped)
+    // Sort conversations by most recent message - newest first
+    const sortedKeys = Object.keys(grouped).sort((keyA, keyB) => {
+      const lastMsgA = grouped[keyA].messages[0] // First message is newest after sort
+      const lastMsgB = grouped[keyB].messages[0]
+      return new Date(lastMsgB.timestamp) - new Date(lastMsgA.timestamp)
+    })
     
-    // Select first conversation by default
-    const firstKey = Object.keys(grouped)[0]
+    // Create sorted grouped object
+    const sortedGrouped = {}
+    sortedKeys.forEach(key => {
+      sortedGrouped[key] = grouped[key]
+    })
+    
+    setGroupedChats(sortedGrouped)
+    
+    // Select first conversation by default (most recent)
+    const firstKey = sortedKeys[0]
     if (firstKey && !selectedChat) {
       setSelectedChat(firstKey)
     }
@@ -80,7 +93,8 @@ function ChatView({ chats, employees }) {
             const conv = groupedChats[key]
             const otherId = conv.participants.find(id => id !== conv.participants[0])
             const other = getEmployee(otherId || conv.participants[0])
-            const lastMessage = conv.messages[conv.messages.length - 1]
+            // Messages are sorted newest first, so first message is most recent
+            const lastMessage = conv.messages[0]
             
             return (
               <div
@@ -155,13 +169,14 @@ function ChatView({ chats, employees }) {
               </div>
             </div>
             
-            {/* Messages Area */}
+            {/* Messages Area - newest messages at top */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
               <div className="space-y-4">
                 {currentConversation.messages.map((chat, index) => {
                   const sender = getEmployee(chat.sender_id)
-                  const prevChat = index > 0 ? currentConversation.messages[index - 1] : null
-                  const showAvatar = !prevChat || prevChat.sender_id !== chat.sender_id
+                  // Since messages are sorted newest first, check next message (index + 1) for grouping
+                  const nextChat = index < currentConversation.messages.length - 1 ? currentConversation.messages[index + 1] : null
+                  const showAvatar = !nextChat || nextChat.sender_id !== chat.sender_id
                   const isMe = chat.sender_id === currentConversation.participants[0]
                   
                   return (

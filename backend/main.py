@@ -9,43 +9,17 @@ from api.routes import router
 from api.websocket import websocket_endpoint
 from engine.office_simulator import OfficeSimulator
 from database.database import init_db
+from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
 
-app = FastAPI(title="Autonomous Office Simulation")
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include API routes
-app.include_router(router, prefix="/api")
-
-# Serve static files for avatars
-avatars_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "avatars")
-if os.path.exists(avatars_path):
-    app.mount("/avatars", StaticFiles(directory=avatars_path), name="avatars")
-
-# Serve static files for office layouts
-office_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "office_layout")
-if os.path.exists(office_layout_path):
-    app.mount("/office_layout", StaticFiles(directory=office_layout_path), name="office_layout")
-
-# Create simulator instance
+# Create simulator instance (will be initialized in lifespan)
 simulator = OfficeSimulator()
 
-@app.websocket("/ws")
-async def websocket_route(websocket: WebSocket):
-    await websocket_endpoint(websocket, simulator)
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database and start simulation."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
     print("Initializing database...")
     try:
         await init_db()
@@ -116,15 +90,45 @@ async def startup_event():
     try:
         asyncio.create_task(simulator.run())
         print("Simulation started.")
+        print("Office simulation started...")
     except Exception as e:
         print(f"Warning: Could not start simulation: {e}")
         import traceback
         traceback.print_exc()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Stop simulation on shutdown."""
+    
+    yield
+    
+    # Shutdown
     simulator.stop()
+    print("Office simulation stopped.")
+
+app = FastAPI(title="Autonomous Office Simulation", lifespan=lifespan)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API routes
+app.include_router(router, prefix="/api")
+
+# Serve static files for avatars
+avatars_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "avatars")
+if os.path.exists(avatars_path):
+    app.mount("/avatars", StaticFiles(directory=avatars_path), name="avatars")
+
+# Serve static files for office layouts
+office_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "office_layout")
+if os.path.exists(office_layout_path):
+    app.mount("/office_layout", StaticFiles(directory=office_layout_path), name="office_layout")
+
+@app.websocket("/ws")
+async def websocket_route(websocket: WebSocket):
+    await websocket_endpoint(websocket, simulator)
 
 @app.get("/")
 async def root():

@@ -88,6 +88,7 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - Vite (Build tool)
 - Tailwind CSS (Styling)
 - React Router (Routing)
+- Recharts (Data visualization)
 - WebSocket API (Real-time updates)
 
 ---
@@ -146,6 +147,7 @@ Business logic managers:
 - Calculates profit
 - Records financial transactions
 - Links finances to projects
+- Provides period-based financial analytics
 
 **`project_manager.py`**:
 - Creates and manages projects
@@ -319,11 +321,16 @@ Project detail view:
 - Timeline
 
 #### `pages/Financials.jsx`
-Financial reports:
-- Revenue over time
-- Expenses over time
-- Profit calculation
-- Financial transactions list
+Enhanced financial reports with comprehensive analytics:
+- Summary cards: Total Income, Total Expenses (including payroll), Net Profit, Total Payroll
+- Financial trends line chart: Income, expenses, and profit over time
+- Expense breakdown pie chart: Categorized expenses (Payroll, Facilities, Equipment, Marketing, etc.)
+- Income sources pie chart: Revenue breakdown by source
+- Payroll by role bar chart: Payroll costs by employee role
+- Payroll by department bar chart: Payroll costs by department
+- Employee payroll details table: Individual employee salary information
+- Period selector: View data for 30, 60, 90, 180, or 365 days
+- Financial transactions list: Detailed transaction history
 
 #### `pages/Communications.jsx`
 Communication hub:
@@ -523,6 +530,80 @@ Returns dashboard data including metrics, activities, and goals.
 
 **GET `/api/financials?days=30`**
 Returns financial transactions for the specified number of days.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "type": "income",
+    "amount": 5000.0,
+    "description": "Project revenue",
+    "project_id": 1,
+    "timestamp": "2024-01-01T12:00:00Z"
+  }
+]
+```
+
+**GET `/api/financials/analytics?days=90`**
+Returns comprehensive financial analytics including payroll, trends, and breakdowns.
+
+**Response:**
+```json
+{
+  "summary": {
+    "total_income": 150000.0,
+    "total_expenses": 120000.0,
+    "net_profit": 30000.0,
+    "payroll": 80000.0,
+    "period_days": 90
+  },
+  "payroll": {
+    "total": 80000.0,
+    "by_role": {
+      "CEO": 37500.0,
+      "Manager": 25000.0,
+      "Employee": 17500.0
+    },
+    "by_department": {
+      "Engineering": 30000.0,
+      "Sales": 20000.0,
+      "Marketing": 15000.0
+    },
+    "employee_count": 15
+  },
+  "expense_categories": {
+    "Payroll": 80000.0,
+    "Facilities": 20000.0,
+    "Equipment & Software": 15000.0,
+    "Marketing": 5000.0
+  },
+  "income_sources": {
+    "Project Revenue": 120000.0,
+    "Product Sales": 20000.0,
+    "Services": 10000.0
+  },
+  "daily_trends": [
+    {
+      "date": "2024-01-01",
+      "income": 5000.0,
+      "expenses": 3000.0,
+      "profit": 2000.0
+    }
+  ],
+  "employee_details": [
+    {
+      "id": 1,
+      "name": "John Doe",
+      "role": "CEO",
+      "department": "Executive",
+      "hierarchy_level": 1,
+      "estimated_annual_salary": 150000.0,
+      "period_salary": 37500.0
+    }
+  ]
+}
+```
 
 #### Activities
 

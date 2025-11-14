@@ -21,6 +21,10 @@ export function useWebSocket() {
         const data = JSON.parse(event.data)
         // Store all message types (activity, location_update, etc.)
         if (data.type === 'activity' || data.type === 'location_update') {
+          // Ensure timestamp always exists
+          if (!data.timestamp) {
+            data.timestamp = new Date().toISOString()
+          }
           setActivities(prev => [data, ...prev].slice(0, 100)) // Keep last 100
         }
       } catch (error) {

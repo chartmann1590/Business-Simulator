@@ -144,7 +144,7 @@ The web interface provides several views:
 - **Dashboard**: Overview of business metrics, recent activities, and goals
 - **Employees**: Browse all employees, click to see details, backstories, and activities
 - **Projects**: View all projects, their progress, and details
-- **Financials**: See income, expenses, and profit over time
+- **Financials**: Comprehensive financial analytics with charts, payroll details, expense breakdowns, and income sources
 
 All views update in real-time as the simulation runs.
 

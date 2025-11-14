@@ -70,3 +70,4 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }
 
 export default EmployeeAvatar
 
+

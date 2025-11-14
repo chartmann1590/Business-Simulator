@@ -6,6 +6,10 @@ function Employees() {
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('active') // 'active', 'terminated', 'all'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [titleFilter, setTitleFilter] = useState('all')
 
   useEffect(() => {
     fetchEmployees()
@@ -29,15 +33,50 @@ function Employees() {
     }
   }
   
-  // Filter employees based on selected filter
+  // Filter employees based on selected filters
   const filteredEmployees = employees.filter(emp => {
+    // Status filter
+    let matchesStatus = true
     if (filter === 'active') {
-      return emp.status !== 'fired' && !emp.fired_at
+      matchesStatus = emp.status !== 'fired' && !emp.fired_at
     } else if (filter === 'terminated') {
-      return emp.status === 'fired' || emp.fired_at
+      matchesStatus = emp.status === 'fired' || emp.fired_at
     }
-    return true // 'all'
+    
+    if (!matchesStatus) return false
+    
+    // Search query filter (name, title, department)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      const matchesSearch = 
+        (emp.name && emp.name.toLowerCase().includes(query)) ||
+        (emp.title && emp.title.toLowerCase().includes(query)) ||
+        (emp.department && emp.department.toLowerCase().includes(query))
+      if (!matchesSearch) return false
+    }
+    
+    // Department filter
+    if (departmentFilter !== 'all') {
+      if (emp.department !== departmentFilter) return false
+    }
+    
+    // Role filter
+    if (roleFilter !== 'all') {
+      if (emp.role !== roleFilter) return false
+    }
+    
+    // Job title filter
+    if (titleFilter !== 'all') {
+      if (emp.title !== titleFilter) return false
+    }
+    
+    return true
   })
+  
+  // Get unique departments, roles, and titles for filter dropdowns
+  const departments = [...new Set(employees.map(emp => emp.department).filter(Boolean))].sort()
+  const roles = [...new Set(employees.map(emp => emp.role).filter(Boolean))].sort()
+  const titles = [...new Set(employees.map(emp => emp.title).filter(Boolean))].sort()
   
   const activeCount = employees.filter(emp => emp.status !== 'fired' && !emp.fired_at).length
   const terminatedCount = employees.filter(emp => emp.status === 'fired' || emp.fired_at).length
@@ -68,9 +107,9 @@ function Employees() {
         <h2 className="text-3xl font-bold text-gray-900">Employees</h2>
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-600">
-            <span className="font-medium">{activeCount}</span> active
-            {terminatedCount > 0 && (
-              <> • <span className="font-medium">{terminatedCount}</span> terminated</>
+            <span className="font-medium">{filteredEmployees.length}</span> of <span className="font-medium">{employees.length}</span> shown
+            {filteredEmployees.length !== employees.length && (
+              <span className="ml-2 text-gray-400">({activeCount} active{terminatedCount > 0 ? `, ${terminatedCount} terminated` : ''})</span>
             )}
           </div>
           <div className="flex bg-gray-100 rounded-lg p-1">
@@ -108,6 +147,97 @@ function Employees() {
             </button>
           </div>
         </div>
+      </div>
+      
+      {/* Search and Filter Bar */}
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Search Input */}
+          <div className="md:col-span-2">
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+              Search
+            </label>
+            <input
+              id="search"
+              type="text"
+              placeholder="Search by name, title, or department..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          
+          {/* Department Filter */}
+          <div>
+            <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">
+              Department
+            </label>
+            <select
+              id="department"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Departments</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Role Filter */}
+          <div>
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+              Role
+            </label>
+            <select
+              id="role"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Roles</option>
+              {roles.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Job Title Filter */}
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+              Job Title
+            </label>
+            <select
+              id="title"
+              value={titleFilter}
+              onChange={(e) => setTitleFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Titles</option>
+              {titles.map(title => (
+                <option key={title} value={title}>{title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        
+        {/* Clear Filters Button */}
+        {(searchQuery || departmentFilter !== 'all' || roleFilter !== 'all' || titleFilter !== 'all') && (
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={() => {
+                setSearchQuery('')
+                setDepartmentFilter('all')
+                setRoleFilter('all')
+                setTitleFilter('all')
+              }}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
       </div>
       
       {filteredEmployees.length === 0 ? (

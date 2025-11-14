@@ -63,3 +63,4 @@ class GoalSystem:
         
         await self.db.flush()
 
+

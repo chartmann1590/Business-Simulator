@@ -6,8 +6,26 @@ import os
 _db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "office.db")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{_db_path}")
 
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
-async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# SQLite-specific configuration to handle locks better
+# timeout=20 means wait up to 20 seconds for locks to be released
+# check_same_thread=False allows multiple threads to access the database
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=False, 
+    future=True,
+    connect_args={
+        "timeout": 20,  # Wait up to 20 seconds for locks
+        "check_same_thread": False
+    },
+    pool_pre_ping=True  # Verify connections before using them
+)
+async_session_maker = async_sessionmaker(
+    engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
 
 Base = declarative_base()
 

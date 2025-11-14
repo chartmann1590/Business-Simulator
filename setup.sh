@@ -37,3 +37,4 @@ echo "  2. Run: cd backend && python main.py"
 echo "  3. Open http://localhost:8000 in your browser"
 echo ""
 
+

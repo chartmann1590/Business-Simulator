@@ -9,6 +9,7 @@ function OfficeView() {
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState([])
   const [selectedRoom, setSelectedRoom] = useState(null)
+  const [selectedFloor, setSelectedFloor] = useState(1)  // Default to floor 1
   const navigate = useNavigate()
   
   // Get WebSocket messages for real-time updates
@@ -100,18 +101,46 @@ function OfficeView() {
   const terminatedEmployees = officeData?.terminated_employees || []
   const hasTerminated = terminatedEmployees.length > 0
 
+  // Get rooms for selected floor
+  const roomsForFloor = officeData?.rooms_by_floor?.[selectedFloor] || officeData?.rooms?.filter(r => r.floor === selectedFloor) || []
+  const availableFloors = officeData?.floors || [1]
+
   return (
     <div className="px-4 py-6">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Office View</h2>
-        <p className="text-gray-600">
-          {officeData?.total_employees || 0} active employees across {officeData?.rooms?.length || 0} rooms
-          {hasTerminated && ` • ${officeData?.total_terminated || 0} terminated`}
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Office View</h2>
+            <p className="text-gray-600">
+              {officeData?.total_employees || 0} active employees across {officeData?.rooms?.length || 0} rooms
+              {hasTerminated && ` • ${officeData?.total_terminated || 0} terminated`}
+            </p>
+          </div>
+          
+          {/* Floor Selector */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Floor:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {availableFloors.map((floor) => (
+                <button
+                  key={floor}
+                  onClick={() => setSelectedFloor(floor)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedFloor === floor
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  Floor {floor}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
       
       <OfficeLayout
-        rooms={officeData?.rooms || []}
+        rooms={roomsForFloor}
         employees={[]}
         onEmployeeClick={handleEmployeeClick}
         onRoomClick={handleRoomClick}

@@ -25,10 +25,53 @@ class CEOAgent(EmployeeAgent):
         return activity
     
     async def _create_strategic_project(self, decision: Dict):
-        """Create a new strategic project."""
+        """Create a new strategic project. If capacity is low, trigger hiring instead of deferring."""
         from business.project_manager import ProjectManager
+        from database.models import Activity, Employee
+        from sqlalchemy import select
         import random
         project_manager = ProjectManager(self.db)
+        
+        # Check capacity before creating project
+        can_create, reason = await project_manager.check_capacity_for_new_project()
+        
+        if not can_create:
+            # Instead of deferring, trigger hiring initiative!
+            # Get current employee count
+            result = await self.db.execute(
+                select(Employee).where(Employee.status == "active")
+            )
+            active_employees = result.scalars().all()
+            employee_count = len(active_employees)
+            
+            # Get active projects to calculate needed employees
+            active_projects = await project_manager.get_active_projects()
+            project_count = len(active_projects)
+            
+            # Calculate how many employees we need (3 per project)
+            employees_needed = project_count * 3
+            employees_short = max(0, employees_needed - employee_count)
+            
+            # Log that we're hiring to support projects
+            activity = Activity(
+                employee_id=self.employee.id,
+                activity_type="decision",
+                description=f"{self.employee.name} decided to hire {employees_short} new employee(s) to support {project_count} active projects. New project will proceed once team is expanded.",
+                activity_metadata={
+                    "decision_type": "strategic",
+                    "action": "hiring_initiative",
+                    "reason": reason,
+                    "employees_needed": employees_short,
+                    "current_projects": project_count
+                }
+            )
+            self.db.add(activity)
+            print(f"CEO triggered hiring initiative: Need {employees_short} employees for {project_count} projects")
+            
+            # Note: Actual hiring will happen in the simulator's _manage_employees method
+            # We'll still create the project - hiring will catch up!
+        
+        # Create the project anyway - we'll hire to support it!
         
         project_names = [
             "Market Expansion Initiative",
@@ -39,12 +82,25 @@ class CEOAgent(EmployeeAgent):
         ]
         
         project_name = random.choice(project_names)
-        await project_manager.create_project(
+        project = await project_manager.create_project(
             name=project_name,
             description=f"Strategic project initiated by {self.employee.name}: {decision.get('decision', '')}",
             priority="high",
             budget=random.uniform(50000, 200000)
         )
+        
+        # Log project creation
+        activity = Activity(
+            employee_id=self.employee.id,
+            activity_type="project_created",
+            description=f"{self.employee.name} created new strategic project: {project_name}",
+            activity_metadata={
+                "project_id": project.id,
+                "project_name": project_name,
+                "decision_type": "strategic"
+            }
+        )
+        self.db.add(activity)
 
 class ManagerAgent(EmployeeAgent):
     """Manager-specific decision making."""
@@ -57,8 +113,9 @@ class ManagerAgent(EmployeeAgent):
     async def execute_decision(self, decision: Dict, business_context: Dict):
         activity = await super().execute_decision(decision, business_context)
         
-        # Managers automatically assign tasks (60% chance per tick)
-        if random.random() < 0.6:  # 60% chance to assign tasks
+        # Managers automatically assign tasks (80% chance per tick)
+        # Managers should frequently assign tasks to keep teams working
+        if random.random() < 0.8:  # 80% chance to assign tasks
             await self._assign_tasks()
         
         return activity
@@ -113,12 +170,13 @@ class ManagerAgent(EmployeeAgent):
                             project_id=project.id,
                             description=random.choice(task_descriptions),
                             status="pending",
-                            priority=project.priority
+                            priority=project.priority,
+                            progress=0.0  # Initialize with 0% progress
                         )
                         self.db.add(task)
                     await self.db.flush()
             
-            # Now assign tasks to team members
+            # Now assign tasks to team members - ensure all available employees get tasks
             if team_members:
                 # Get unassigned tasks
                 result = await self.db.execute(
@@ -131,7 +189,9 @@ class ManagerAgent(EmployeeAgent):
                 unassigned_tasks = result.scalars().all()
                 
                 unassigned_list = list(unassigned_tasks)
-                for member in team_members[:2]:  # Assign to up to 2 members
+                # Assign tasks to ALL team members who don't have a task (not just 2)
+                # This ensures teams are always working on projects
+                for member in team_members:
                     if member.current_task_id is None and unassigned_list:
                         task = random.choice(unassigned_list)
                         task.employee_id = member.id
@@ -207,6 +267,7 @@ class EmployeeAgentBase(EmployeeAgent):
         """Complete the current task."""
         from sqlalchemy import select
         from datetime import datetime
+        from database.models import Activity
         
         if self.employee.current_task_id:
             result = await self.db.execute(
@@ -219,6 +280,18 @@ class EmployeeAgentBase(EmployeeAgent):
                 task.progress = 100.0
                 task.completed_at = datetime.utcnow()
                 self.employee.current_task_id = None
+                
+                # Create activity for task completion
+                task_activity = Activity(
+                    employee_id=self.employee.id,
+                    activity_type="task_completed",
+                    description=f"{self.employee.name} completed task: {task.description}",
+                    activity_metadata={
+                        "task_id": task.id,
+                        "task_description": task.description
+                    }
+                )
+                self.db.add(task_activity)
                 
                 # Update project progress
                 if task.project_id:
@@ -234,9 +307,21 @@ class EmployeeAgentBase(EmployeeAgent):
                         await project_manager.update_project_activity(project.id)
                         if project.status == "planning":
                             project.status = "active"
+                            
+                            # Create activity for project activation
+                            activation_activity = Activity(
+                                employee_id=self.employee.id,
+                                activity_type="project_activated",
+                                description=f"Project '{project.name}' has been activated",
+                                activity_metadata={
+                                    "project_id": project.id,
+                                    "project_name": project.name
+                                }
+                            )
+                            self.db.add(activation_activity)
                         
                         
-                        # Check if all tasks are completed
+                        # Check if all tasks are completed AND at 100% progress
                         result = await self.db.execute(
                             select(Task).where(
                                 Task.project_id == project.id,
@@ -244,8 +329,43 @@ class EmployeeAgentBase(EmployeeAgent):
                             )
                         )
                         remaining_tasks = result.scalars().all()
-                        if not remaining_tasks:
+                        
+                        # Also check if all completed tasks are at 100% progress
+                        all_tasks_result = await self.db.execute(
+                            select(Task).where(Task.project_id == project.id)
+                        )
+                        all_tasks = all_tasks_result.scalars().all()
+                        
+                        # Check if all tasks are completed and at 100% progress
+                        all_tasks_completed = not remaining_tasks
+                        all_tasks_at_100_percent = all(
+                            task.status == "completed" and 
+                            (task.progress is not None and task.progress >= 100.0)
+                            for task in all_tasks
+                        ) if all_tasks else False
+                        
+                        # Also check project-level progress
+                        project_progress = await project_manager.calculate_project_progress(project.id)
+                        project_at_100_percent = project_progress >= 100.0
+                        
+                        # Only mark as completed if all conditions are met
+                        if all_tasks_completed and all_tasks_at_100_percent and project_at_100_percent:
                             project.status = "completed"
+                            project.completed_at = datetime.utcnow()
+                            
+                            # Create activity for project completion
+                            activity = Activity(
+                                employee_id=self.employee.id,
+                                activity_type="project_completed",
+                                description=f"Project '{project.name}' has been completed (100% progress)",
+                                activity_metadata={
+                                    "project_id": project.id,
+                                    "project_name": project.name,
+                                    "completed_tasks": len(list(all_tasks)),
+                                    "project_progress": project_progress
+                                }
+                            )
+                            self.db.add(activity)
 
 def create_employee_agent(employee: Employee, db: AsyncSession, llm_client: OllamaClient) -> EmployeeAgent:
     """Factory function to create appropriate agent based on role."""

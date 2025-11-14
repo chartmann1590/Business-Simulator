@@ -65,17 +65,18 @@ class OfficeSimulator:
     
     async def simulation_tick(self):
         """Execute one simulation tick."""
-        async with async_session_maker() as db:
+        # Use a separate session to get employee list (read-only)
+        async with async_session_maker() as read_db:
             try:
                 # Get all active employees
-                result = await db.execute(select(Employee).where(Employee.status == "active"))
+                result = await read_db.execute(select(Employee).where(Employee.status == "active"))
                 employees = result.scalars().all()
                 
                 if not employees:
                     return
                 
-                # Get business context
-                business_context = await self.get_business_context(db)
+                # Get business context (read-only)
+                business_context = await self.get_business_context(read_db)
                 
                 # Process each employee (randomize order for variety)
                 employee_list = list(employees)
@@ -83,92 +84,176 @@ class OfficeSimulator:
                 
                 # Process up to 3 employees per tick to avoid overload
                 for employee in employee_list[:3]:
-                    try:
-                        # Create employee agent
-                        agent = create_employee_agent(employee, db, self.llm_client)
-                        
-                        # Evaluate situation and make decision
-                        decision = await agent.evaluate_situation(business_context)
-                        
-                        # Execute decision
-                        activity = await agent.execute_decision(decision, business_context)
-                        
-                        # Process employee movement based on activity
+                    # Use a separate session for each employee to isolate transactions
+                    async with async_session_maker() as db:
                         try:
-                            await process_employee_movement(
-                                employee,
-                                activity.activity_type,
-                                activity.description,
-                                db
-                            )
-                            await db.flush()
+                            # Get fresh employee instance in this session
+                            result = await db.execute(select(Employee).where(Employee.id == employee.id))
+                            employee_instance = result.scalar_one()
+                            
+                            # Create employee agent with this session
+                            agent = create_employee_agent(employee_instance, db, self.llm_client)
+                            
+                            # Evaluate situation and make decision
+                            decision = await agent.evaluate_situation(business_context)
+                            
+                            # Execute decision
+                            activity = await agent.execute_decision(decision, business_context)
+                            
+                            # Process employee movement based on activity
+                            try:
+                                await process_employee_movement(
+                                    employee_instance,
+                                    activity.activity_type,
+                                    activity.description,
+                                    db
+                                )
+                                await db.flush()
+                            except Exception as e:
+                                print(f"Error processing movement for {employee_instance.name}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                # Rollback and continue with this employee
+                                await db.rollback()
+                                continue
+                            
+                            # Refresh employee instance to get latest state
+                            await db.refresh(employee_instance, ["current_room", "home_room", "activity_state"])
+                            
+                            # Broadcast activity with location info
+                            activity_data = {
+                                "type": "activity",
+                                "id": activity.id,
+                                "employee_id": activity.employee_id,
+                                "employee_name": employee_instance.name,
+                                "activity_type": activity.activity_type,
+                                "description": activity.description,
+                                "timestamp": (activity.timestamp or datetime.utcnow()).isoformat(),
+                                "current_room": employee_instance.current_room,
+                                "activity_state": employee_instance.activity_state
+                            }
+                            await self.broadcast_activity(activity_data)
+                            
+                            # Also broadcast location update separately for real-time office view
+                            location_data = {
+                                "type": "location_update",
+                                "employee_id": employee_instance.id,
+                                "employee_name": employee_instance.name,
+                                "current_room": employee_instance.current_room,
+                                "home_room": employee_instance.home_room,
+                                "activity_state": employee_instance.activity_state,
+                                "timestamp": datetime.utcnow().isoformat()
+                            }
+                            await self.broadcast_activity(location_data)
+                            
+                            # Commit this employee's transaction
+                            await db.commit()
+                            
                         except Exception as e:
-                            print(f"Error processing movement for {employee.name}: {e}")
+                            employee_name = employee_instance.name if 'employee_instance' in locals() else employee.name
+                            print(f"Error processing employee {employee_name}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Rollback this employee's transaction
+                            try:
+                                await db.rollback()
+                            except:
+                                pass  # Session may already be closed
+                            continue
                         
-                        # Broadcast activity with location info
-                        activity_data = {
-                            "type": "activity",
-                            "id": activity.id,
-                            "employee_id": activity.employee_id,
-                            "employee_name": employee.name,
-                            "activity_type": activity.activity_type,
-                            "description": activity.description,
-                            "timestamp": activity.timestamp.isoformat(),
-                            "current_room": employee.current_room,
-                            "activity_state": employee.activity_state
-                        }
-                        await self.broadcast_activity(activity_data)
-                        
-                        # Also broadcast location update separately for real-time office view
-                        location_data = {
-                            "type": "location_update",
-                            "employee_id": employee.id,
-                            "employee_name": employee.name,
-                            "current_room": employee.current_room,
-                            "home_room": employee.home_room,
-                            "activity_state": employee.activity_state
-                        }
-                        await self.broadcast_activity(location_data)
-                        
-                        # Update business metrics and goals more frequently
+                        # Update business metrics and goals more frequently (use separate session)
                         if random.random() < 0.3:  # 30% chance per tick
-                            goal_system = GoalSystem(db)
-                            await goal_system.update_metrics()
+                            async with async_session_maker() as metrics_db:
+                                try:
+                                    goal_system = GoalSystem(metrics_db)
+                                    await goal_system.update_metrics()
+                                    await metrics_db.commit()
+                                except Exception as e:
+                                    print(f"Error updating metrics: {e}")
+                                    await metrics_db.rollback()
                         
                         # Generate revenue from active projects (as they progress)
                         if random.random() < 0.25:  # 25% chance per tick
-                            await self._generate_revenue_from_active_projects(db)
+                            async with async_session_maker() as revenue_db:
+                                try:
+                                    await self._generate_revenue_from_active_projects(revenue_db)
+                                    await revenue_db.commit()
+                                except Exception as e:
+                                    print(f"Error generating revenue: {e}")
+                                    await revenue_db.rollback()
                         
                         # Generate revenue from completed projects
                         if random.random() < 0.1:  # 10% chance per tick
-                            await self._generate_revenue_from_projects(db)
+                            async with async_session_maker() as revenue_db:
+                                try:
+                                    await self._generate_revenue_from_projects(revenue_db)
+                                    await revenue_db.commit()
+                                except Exception as e:
+                                    print(f"Error generating revenue from projects: {e}")
+                                    await revenue_db.rollback()
                         
                         # Generate regular expenses (less frequent, only when needed)
                         if random.random() < 0.05:  # 5% chance per tick (monthly expenses)
-                            await self._generate_regular_expenses(db)
+                            async with async_session_maker() as expense_db:
+                                try:
+                                    await self._generate_regular_expenses(expense_db)
+                                    await expense_db.commit()
+                                except Exception as e:
+                                    print(f"Error generating expenses: {e}")
+                                    await expense_db.rollback()
                         
-                        await db.commit()
-                    except Exception as e:
-                        print(f"Error processing employee {employee.name}: {e}")
-                        await db.rollback()
-                        continue
+                        # Manage project overload periodically (40% chance per tick - more frequent!)
+                        if random.random() < 0.4:  # 40% chance per tick
+                            async with async_session_maker() as project_db:
+                                try:
+                                    await self._manage_project_capacity(project_db)
+                                    await project_db.commit()
+                                except Exception as e:
+                                    print(f"Error managing project capacity: {e}")
+                                    await project_db.rollback()
                 
-                # Handle employee hiring/firing based on business performance
-                # Check more frequently if we're below minimum staffing
-                result = await db.execute(select(Employee).where(Employee.status == "active"))
-                active_check = result.scalars().all()
-                active_count_check = len(active_check)
-                
-                # Always check if below minimum, otherwise check occasionally
-                check_interval = 0.5 if active_count_check < 15 else 0.1  # 50% chance if below min, 10% otherwise
-                if random.random() < check_interval:
+                # Handle employee hiring/firing based on business performance (use separate session)
+                async with async_session_maker() as manage_db:
                     try:
-                        await self._manage_employees(db, business_context)
+                        # Check more frequently if we're below minimum staffing or over capacity
+                        result = await manage_db.execute(select(Employee).where(Employee.status == "active"))
+                        active_check = result.scalars().all()
+                        active_count_check = len(active_check)
+                        
+                        # Check if we're over capacity for projects
+                        from business.project_manager import ProjectManager
+                        project_manager = ProjectManager(manage_db)
+                        active_projects = await project_manager.get_active_projects()
+                        project_count = len(active_projects)
+                        max_projects = max(1, int(active_count_check / 3))
+                        is_over_capacity = project_count > max_projects
+                        
+                        # Always check if below minimum or over capacity, otherwise check occasionally
+                        if active_count_check < 15:
+                            check_interval = 0.5  # 50% chance if below min
+                        elif is_over_capacity:
+                            check_interval = 0.6  # 60% chance if over capacity - hire aggressively!
+                        else:
+                            check_interval = 0.1  # 10% otherwise
+                        
+                        if random.random() < check_interval:
+                            try:
+                                await self._manage_employees(manage_db, business_context)
+                                await manage_db.commit()
+                            except Exception as e:
+                                print(f"Error managing employees: {e}")
+                                await manage_db.rollback()
                     except Exception as e:
-                        print(f"Error managing employees: {e}")
-                
+                        print(f"Error in employee management section: {e}")
+                        try:
+                            await manage_db.rollback()
+                        except:
+                            pass
+                        
             except Exception as e:
                 print(f"Error in simulation tick: {e}")
+                import traceback
+                traceback.print_exc()
     
     async def _generate_revenue_from_active_projects(self, db: AsyncSession):
         """Generate revenue from active projects as they progress."""
@@ -386,32 +471,137 @@ class OfficeSimulator:
             available_employees = result.scalars().all()
             available_count = len(available_employees)
             
-            # If we have many unassigned tasks and few available employees, consider hiring
-            # Also consider hiring if we have many active projects relative to employee count
+            # Check if we're over capacity for projects
             project_count = len(active_projects)
+            max_projects = max(1, int(active_count / 3))
+            is_over_capacity = project_count > max_projects
+            
             tasks_per_employee = unassigned_count / max(1, active_count)
             projects_per_employee = project_count / max(1, active_count)
             
-            should_hire_for_projects = False
-            if unassigned_count > 5 and available_count < 3:
-                # Many unassigned tasks, few available employees
-                should_hire_for_projects = True
-            elif project_count > 3 and projects_per_employee > 0.3:
-                # Many projects relative to employees (more than 0.3 projects per employee)
-                should_hire_for_projects = True
-            elif tasks_per_employee > 2.0 and active_count < 25:
-                # More than 2 tasks per employee on average, and we're not at max capacity
-                should_hire_for_projects = True
+            # AGGRESSIVE HIRING: If over capacity, hire immediately and multiple employees
+            if is_over_capacity:
+                # Calculate how many employees we need
+                # Each project needs ~3 employees, so if we have N projects, we need N*3 employees
+                employees_needed_for_projects = project_count * 3
+                employees_short = max(0, employees_needed_for_projects - active_count)
+                
+                # Hire aggressively: 2-4 employees per tick when over capacity
+                hires_needed = min(employees_short, random.randint(2, 4))
+                hires_needed = min(hires_needed, 50 - active_count)  # Don't exceed max of 50
+                
+                if hires_needed > 0 and active_count < 50:  # Increased max to 50
+                    for _ in range(hires_needed):
+                        await self._hire_employee(db, business_context)
+                    print(f"AGGRESSIVE HIRING: Hired {hires_needed} employee(s) to handle {project_count} projects (capacity: {max_projects}, current: {active_count})")
             
-            if should_hire_for_projects and active_count < 30:  # Can grow up to 30
+            # Also hire if we have many unassigned tasks
+            should_hire_for_tasks = False
+            if unassigned_count > 3 and available_count < 2:
+                # Many unassigned tasks, few available employees
+                should_hire_for_tasks = True
+            elif tasks_per_employee > 1.5 and active_count < 50:  # Lowered threshold, increased max
+                # More than 1.5 tasks per employee on average
+                should_hire_for_tasks = True
+            
+            if should_hire_for_tasks and active_count < 50:  # Increased max to 50
                 # Higher chance to hire if we're profitable, but still possible if breaking even
-                hire_chance = 0.4 if profit > 0 else 0.2
+                hire_chance = 0.6 if profit > 0 else 0.4  # Increased chances
+                if random.random() < hire_chance:
+                    # Hire 1-2 employees for task overload
+                    hires = random.randint(1, 2)
+                    for _ in range(hires):
+                        await self._hire_employee(db, business_context)
+                    print(f"Hiring for task workload: {unassigned_count} unassigned tasks, {available_count} available employees")
+            
+            # Also hire if projects per employee ratio is high (even if not over capacity)
+            if projects_per_employee > 0.25 and active_count < 50:  # Lowered threshold
+                hire_chance = 0.5 if profit > 0 else 0.3
                 if random.random() < hire_chance:
                     await self._hire_employee(db, business_context)
-                    print(f"Hiring for project workload: {unassigned_count} unassigned tasks, {project_count} active projects, {available_count} available employees")
+                    print(f"Hiring for project ratio: {projects_per_employee:.2f} projects per employee")
         
-        # Priority 3: Growth hiring (if profitable and growing, can hire beyond minimum)
-        if profit > 50000 and revenue > 100000 and active_count < 30:  # Can grow up to 30
+        # Priority 3: Ensure we have essential staff (IT, Reception, and Storage) on each floor
+        # Count IT employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%IT%") | Employee.title.ilike("%Information Technology%") | 
+                 Employee.department.ilike("%IT%"))
+            )
+        )
+        it_employees = result.scalars().all()
+        it_count = len(it_employees)
+        
+        # Count Reception employees by floor
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Reception%") | Employee.title.ilike("%Receptionist%"))
+            )
+        )
+        reception_employees = result.scalars().all()
+        reception_count = len(reception_employees)
+        
+        # Count receptionists on each floor
+        reception_floor1 = sum(1 for e in reception_employees if e.floor == 1 or (e.home_room and not e.home_room.endswith('_floor2')))
+        reception_floor2 = sum(1 for e in reception_employees if e.floor == 2 or (e.home_room and e.home_room.endswith('_floor2')))
+        
+        # Count Storage employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Storage%") | Employee.title.ilike("%Warehouse%") | 
+                 Employee.title.ilike("%Inventory%") | Employee.title.ilike("%Stock%"))
+            )
+        )
+        storage_employees = result.scalars().all()
+        storage_count = len(storage_employees)
+        
+        # Count storage employees on each floor
+        storage_floor1 = sum(1 for e in storage_employees if e.floor == 1 or (e.home_room and not e.home_room.endswith('_floor2')))
+        storage_floor2 = sum(1 for e in storage_employees if e.floor == 2 or (e.home_room and e.home_room.endswith('_floor2')))
+        
+        # Ensure we have at least 1-2 IT employees (hire if we have 0)
+        if it_count == 0 and active_count < 50:
+            # Force hire IT employee
+            await self._hire_employee_specific(db, business_context, department="IT", role="Employee")
+            print(f"Hired IT employee to ensure IT coverage")
+        
+        # Ensure we have at least one Reception employee on each floor
+        if reception_floor1 == 0 and active_count < 50:
+            # Force hire Reception employee for floor 1
+            await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
+            print(f"Hired Reception employee for floor 1")
+        elif reception_floor2 == 0 and active_count < 50:
+            # Force hire Reception employee for floor 2
+            await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
+            print(f"Hired Reception employee for floor 2")
+        
+        # Ensure we have at least one Storage employee on each floor
+        if storage_floor1 == 0 and active_count < 50:
+            # Force hire Storage employee for floor 1
+            await self._hire_employee_specific(db, business_context, department="Operations", title="Storage Coordinator", role="Employee")
+            print(f"Hired Storage employee for floor 1")
+        elif storage_floor2 == 0 and active_count < 50:
+            # Force hire Storage employee for floor 2
+            await self._hire_employee_specific(db, business_context, department="Operations", title="Storage Coordinator", role="Employee")
+            print(f"Hired Storage employee for floor 2")
+        
+        # If we have many employees but no IT, hire one
+        if it_count == 0 and active_count >= 10 and active_count < 50:
+            if random.random() < 0.5:  # 50% chance
+                await self._hire_employee_specific(db, business_context, department="IT", role="Employee")
+                print(f"Hired IT employee (office has {active_count} employees but no IT)")
+        
+        # If we have many employees but no Reception, hire one
+        if reception_count == 0 and active_count >= 10 and active_count < 50:
+            if random.random() < 0.5:  # 50% chance
+                await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
+                print(f"Hired Reception employee (office has {active_count} employees but no reception)")
+        
+        # Priority 4: Growth hiring (if profitable and growing, can hire beyond minimum)
+        if profit > 50000 and revenue > 100000 and active_count < 50:  # Increased max to 50
             if random.random() < 0.3:  # 30% chance to hire
                 await self._hire_employee(db, business_context)
     
@@ -421,22 +611,44 @@ class OfficeSimulator:
         from datetime import datetime
         import random
         
-        departments = ["Engineering", "Product", "Marketing", "Sales", "Operations"]
+        departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration"]
         roles = ["Employee", "Manager"]
         
         # Generate employee data
         first_names = ["Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage", "Blake", "Cameron"]
         last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark", "Lewis", "Walker"]
         titles_by_role = {
-            "Employee": ["Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", "Operations Coordinator"],
-            "Manager": ["Engineering Manager", "Product Manager", "Marketing Manager", "Sales Manager", "Operations Manager"]
+            "Employee": [
+                "Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", 
+                "Operations Coordinator", "IT Specialist", "IT Support Technician", "Receptionist", 
+                "Administrative Assistant"
+            ],
+            "Manager": [
+                "Engineering Manager", "Product Manager", "Marketing Manager", "Sales Manager", 
+                "Operations Manager", "IT Manager"
+            ]
         }
         
         name = f"{random.choice(first_names)} {random.choice(last_names)}"
         role = random.choice(roles)
         department = random.choice(departments)
         hierarchy_level = 2 if role == "Manager" else 3
-        title = random.choice(titles_by_role[role])
+        
+        # Special handling for IT and Reception to ensure they get appropriate titles
+        if department == "IT":
+            if role == "Manager":
+                title = "IT Manager"
+            else:
+                title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
+        elif department == "Administration":
+            # Sometimes create receptionists
+            if random.random() < 0.4:  # 40% chance for receptionist
+                title = "Receptionist"
+                department = "Administration"
+            else:
+                title = random.choice(["Administrative Assistant", "Office Coordinator"])
+        else:
+            title = random.choice(titles_by_role[role])
         
         personality_traits = random.sample(
             ["analytical", "creative", "collaborative", "detail-oriented", "innovative", "reliable", "adaptable", "proactive"],
@@ -457,11 +669,21 @@ class OfficeSimulator:
         db.add(new_employee)
         await db.flush()  # Flush to get the employee ID
         
-        # Assign home room based on role/department
-        home_room = assign_home_room(new_employee)
+        # Assign home room and floor based on role/department
+        home_room, floor = await assign_home_room(new_employee, db)
         new_employee.home_room = home_room
-        new_employee.current_room = home_room
-        new_employee.activity_state = "idle"
+        new_employee.floor = floor
+        
+        # New hires start in training room on their assigned floor
+        # Determine training room based on floor
+        from employees.room_assigner import ROOM_TRAINING_ROOM
+        if floor == 2:
+            training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+        else:
+            training_room = ROOM_TRAINING_ROOM
+        
+        new_employee.current_room = training_room
+        new_employee.activity_state = "training"  # Mark as in training
         
         # Create activity
         activity = Activity(
@@ -477,14 +699,155 @@ class OfficeSimulator:
         await db.commit()
         print(f"Hired new employee: {name} ({title})")
     
+    async def _hire_employee_specific(self, db: AsyncSession, business_context: dict, 
+                                     department: str = None, title: str = None, role: str = "Employee"):
+        """Hire a specific type of employee (e.g., IT, Reception)."""
+        from database.models import Employee, Activity
+        from datetime import datetime
+        import random
+        
+        # Generate employee data
+        first_names = ["Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage", "Blake", "Cameron"]
+        last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark", "Lewis", "Walker"]
+        
+        name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        hierarchy_level = 2 if role == "Manager" else 3
+        
+        # Determine title and department based on parameters
+        if title:
+            employee_title = title
+        elif department == "IT":
+            if role == "Manager":
+                employee_title = "IT Manager"
+            else:
+                employee_title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
+        elif department == "Administration" and title is None:
+            employee_title = "Receptionist"
+        elif title and ("Storage" in title or "Warehouse" in title or "Inventory" in title or "Stock" in title):
+            # Storage employee titles
+            employee_title = title
+        elif department == "Operations" and title and "Storage" in title:
+            employee_title = title
+        else:
+            # Fallback to generic titles
+            employee_title = f"{department} {role}" if department else role
+        
+        if not department:
+            department = "Operations"  # Default
+        
+        personality_traits = random.sample(
+            ["analytical", "creative", "collaborative", "detail-oriented", "innovative", "reliable", "adaptable", "proactive"],
+            k=3
+        )
+        
+        new_employee = Employee(
+            name=name,
+            title=employee_title,
+            role=role,
+            hierarchy_level=hierarchy_level,
+            department=department,
+            status="active",
+            personality_traits=personality_traits,
+            backstory=f"{name} joined the team to help drive growth and innovation.",
+            hired_at=datetime.utcnow()
+        )
+        db.add(new_employee)
+        await db.flush()  # Flush to get the employee ID
+        
+        # Assign home room and floor based on role/department
+        home_room, floor = await assign_home_room(new_employee, db)
+        new_employee.home_room = home_room
+        new_employee.floor = floor
+        
+        # New hires start in training room on their assigned floor
+        # Determine training room based on floor
+        from employees.room_assigner import ROOM_TRAINING_ROOM
+        if floor == 2:
+            training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+        else:
+            training_room = ROOM_TRAINING_ROOM
+        
+        new_employee.current_room = training_room
+        new_employee.activity_state = "training"  # Mark as in training
+        
+        # Create activity
+        activity = Activity(
+            employee_id=None,
+            activity_type="hiring",
+            description=f"Hired {name} as {employee_title} in {department}",
+            activity_metadata={"employee_id": None, "action": "hire"}
+        )
+        db.add(activity)
+        
+        await db.flush()
+        activity.activity_metadata["employee_id"] = new_employee.id
+        await db.commit()
+        print(f"Hired specific employee: {name} ({employee_title}) in {department}")
+    
     async def _fire_employee(self, db: AsyncSession, active_employees: list):
-        """Fire an underperforming employee (not CEO)."""
+        """Fire an underperforming employee (not CEO, not last IT/Reception)."""
         from database.models import Activity
         from datetime import datetime
+        from sqlalchemy import select
         
         # Don't fire CEO, and prefer firing regular employees over managers
         candidates = [e for e in active_employees if e.role != "CEO"]
         if not candidates:
+            return
+        
+        # Count IT, Reception, and Storage employees to protect them
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%IT%") | Employee.title.ilike("%Information Technology%") | 
+                 Employee.department.ilike("%IT%"))
+            )
+        )
+        it_employees = result.scalars().all()
+        it_count = len(it_employees)
+        
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Reception%") | Employee.title.ilike("%Receptionist%"))
+            )
+        )
+        reception_employees = result.scalars().all()
+        reception_count = len(reception_employees)
+        
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Storage%") | Employee.title.ilike("%Warehouse%") | 
+                 Employee.title.ilike("%Inventory%") | Employee.title.ilike("%Stock%"))
+            )
+        )
+        storage_employees = result.scalars().all()
+        storage_count = len(storage_employees)
+        
+        # Don't fire IT employees if we only have 1-2
+        if it_count <= 2:
+            it_titles = ["it", "information technology"]
+            candidates = [e for e in candidates if not any(
+                it_title in (e.title or "").lower() or it_title in (e.department or "").lower() 
+                for it_title in it_titles
+            )]
+        
+        # Don't fire Reception employees if we only have 1-2
+        if reception_count <= 2:
+            candidates = [e for e in candidates if not (
+                "reception" in (e.title or "").lower() or "receptionist" in (e.title or "").lower()
+            )]
+        
+        # Don't fire Storage employees if we only have 1-2
+        if storage_count <= 2:
+            candidates = [e for e in candidates if not (
+                "storage" in (e.title or "").lower() or "warehouse" in (e.title or "").lower() or
+                "inventory" in (e.title or "").lower() or "stock" in (e.title or "").lower()
+            )]
+        
+        if not candidates:
+            # If we filtered out all candidates, don't fire anyone
             return
         
         # Prefer firing employees over managers (70% chance)
@@ -493,6 +856,25 @@ class OfficeSimulator:
         
         if not candidates:
             candidates = [e for e in active_employees if e.role != "CEO"]
+            # Re-apply IT/Reception/Storage protection
+            if it_count <= 2:
+                it_titles = ["it", "information technology"]
+                candidates = [e for e in candidates if not any(
+                    it_title in (e.title or "").lower() or it_title in (e.department or "").lower() 
+                    for it_title in it_titles
+                )]
+            if reception_count <= 2:
+                candidates = [e for e in candidates if not (
+                    "reception" in (e.title or "").lower() or "receptionist" in (e.title or "").lower()
+                )]
+            if storage_count <= 2:
+                candidates = [e for e in candidates if not (
+                    "storage" in (e.title or "").lower() or "warehouse" in (e.title or "").lower() or
+                    "inventory" in (e.title or "").lower() or "stock" in (e.title or "").lower()
+                )]
+        
+        if not candidates:
+            return
         
         employee_to_fire = random.choice(candidates)
         
@@ -524,6 +906,47 @@ class OfficeSimulator:
         
         await db.commit()
         print(f"Fired employee: {employee_to_fire.name} ({employee_to_fire.title}) - Reason: {termination_reason}")
+    
+    async def _manage_project_capacity(self, db: AsyncSession):
+        """Periodically review project capacity and hire employees if needed instead of canceling."""
+        from business.project_manager import ProjectManager
+        from database.models import Activity
+        
+        project_manager = ProjectManager(db)
+        
+        # Check project overload (now returns hiring info instead of cancelling)
+        overload_info = await project_manager.manage_project_overload()
+        
+        # If over capacity, hire employees instead of canceling projects!
+        if overload_info.get("should_hire", False):
+            employees_short = overload_info.get("employees_short", 0)
+            project_count = overload_info.get("project_count", 0)
+            employee_count = overload_info.get("employee_count", 0)
+            max_projects = overload_info.get("max_projects", 0)
+            
+            # Hire 2-3 employees per check when over capacity
+            if employees_short > 0 and employee_count < 50:
+                hires_needed = min(employees_short, random.randint(2, 3))
+                business_context = await self.get_business_context(db)
+                
+                for _ in range(hires_needed):
+                    await self._hire_employee(db, business_context)
+                
+                # Create activity for hiring
+                activity = Activity(
+                    employee_id=None,
+                    activity_type="hiring",
+                    description=f"Hired {hires_needed} new employee(s) to support {project_count} active projects (capacity: {max_projects})",
+                    activity_metadata={
+                        "action": "capacity_hiring",
+                        "projects": project_count,
+                        "employees_hired": hires_needed,
+                        "reason": "project_overload"
+                    }
+                )
+                db.add(activity)
+                await db.flush()
+                print(f"Capacity management: Hired {hires_needed} employee(s) to support {project_count} projects (was over capacity: {max_projects})")
     
     async def _generate_termination_reason(self, employee, business_context: dict) -> str:
         """Generate an AI-based termination reason for an employee."""
