@@ -1,20 +1,38 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, or_
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
 from typing import List
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class SendChatRequest(BaseModel):
+    employee_id: int
+    message: str
+
+class CreateReviewRequest(BaseModel):
+    manager_id: int = None
+    overall_rating: float
+    performance_rating: float = None
+    teamwork_rating: float = None
+    communication_rating: float = None
+    productivity_rating: float = None
+    comments: str = None
+    strengths: str = None
+    areas_for_improvement: str = None
+    review_period_start: str = None
+    review_period_end: str = None
 
 @router.get("/employees")
 async def get_employees(db: AsyncSession = Depends(get_db)):
     """Get all employees with termination reasons if applicable."""
-    from database.models import Activity
+    from database.models import Activity, EmployeeReview
     
     result = await db.execute(select(Employee).order_by(Employee.hierarchy_level, Employee.name))
     employees = result.scalars().all()
@@ -35,12 +53,45 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
             if emp_id and emp_id not in termination_reasons:
                 termination_reasons[emp_id] = activity.activity_metadata.get("termination_reason")
     
+    # Get review counts for all employees
+    review_count_result = await db.execute(
+        select(
+            EmployeeReview.employee_id,
+            func.count(EmployeeReview.id).label('review_count')
+        )
+        .group_by(EmployeeReview.employee_id)
+    )
+    review_counts = {row.employee_id: row.review_count for row in review_count_result.all()}
+    
+    # Get latest review info for each employee (using subquery to get the most recent review)
+    # We'll get all reviews ordered by date and then pick the latest for each employee
+    all_reviews_result = await db.execute(
+        select(EmployeeReview)
+        .order_by(desc(EmployeeReview.review_date))
+    )
+    all_reviews = all_reviews_result.scalars().all()
+    
+    # Create maps for latest review information (only keep the first/latest for each employee)
+    latest_review_dates = {}
+    latest_ratings = {}
+    seen_employees = set()
+    for review in all_reviews:
+        if review.employee_id not in seen_employees:
+            latest_review_dates[review.employee_id] = review.review_date
+            latest_ratings[review.employee_id] = review.overall_rating
+            seen_employees.add(review.employee_id)
+    
     employee_list = []
     for emp in employees:
         termination_reason = None
         # Get termination reason from map if employee is fired
         if (emp.status == "fired" or emp.fired_at) and emp.id in termination_reasons:
             termination_reason = termination_reasons[emp.id]
+        
+        # Get review information
+        review_count = review_counts.get(emp.id, 0)
+        latest_review_date = latest_review_dates.get(emp.id)
+        latest_rating = latest_ratings.get(emp.id)
         
         employee_list.append({
             "id": emp.id,
@@ -60,10 +111,143 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
             "hired_at": emp.hired_at.isoformat() if hasattr(emp, 'hired_at') and emp.hired_at else None,
             "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
             "termination_reason": termination_reason,
-            "created_at": emp.created_at.isoformat() if emp.created_at else None
+            "created_at": emp.created_at.isoformat() if emp.created_at else None,
+            "review_count": review_count,
+            "latest_review_date": latest_review_date.isoformat() if latest_review_date else None,
+            "latest_rating": float(latest_rating) if latest_rating else None
         })
     
     return employee_list
+
+@router.get("/employees/waiting-status")
+async def get_waiting_status(db: AsyncSession = Depends(get_db)):
+    """Get diagnostic information about employees in waiting state."""
+    from employees.room_assigner import ROOM_TRAINING_ROOM
+    
+    # Get all waiting employees
+    result = await db.execute(
+        select(Employee).where(
+            Employee.status == "active",
+            Employee.activity_state == "waiting"
+        )
+    )
+    waiting_employees = result.scalars().all()
+    
+    # Get all employees in training rooms
+    result = await db.execute(
+        select(Employee).where(
+            Employee.status == "active",
+            Employee.current_room.like(f"%{ROOM_TRAINING_ROOM}%")
+        )
+    )
+    training_room_employees = result.scalars().all()
+    
+    waiting_details = []
+    for emp in waiting_employees:
+        is_in_training_room = (emp.current_room == ROOM_TRAINING_ROOM or 
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor4" or
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor4_2" or
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor4_3" or
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor4_4" or
+                             emp.current_room == f"{ROOM_TRAINING_ROOM}_floor4_5")
+        
+        waiting_details.append({
+            "id": emp.id,
+            "name": emp.name,
+            "activity_state": emp.activity_state,
+            "current_room": emp.current_room,
+            "home_room": emp.home_room,
+            "is_in_training_room": is_in_training_room,
+            "hired_at": emp.hired_at.isoformat() if emp.hired_at else None
+        })
+    
+    training_room_details = []
+    for emp in training_room_employees:
+        training_room_details.append({
+            "id": emp.id,
+            "name": emp.name,
+            "activity_state": emp.activity_state,
+            "current_room": emp.current_room,
+            "hired_at": emp.hired_at.isoformat() if emp.hired_at else None
+        })
+    
+    return {
+        "waiting_employees": waiting_details,
+        "training_room_employees": training_room_details,
+        "waiting_count": len(waiting_employees),
+        "training_room_count": len(training_room_employees)
+    }
+
+async def _calculate_next_review_info(employee: Employee, db: AsyncSession) -> dict:
+    """Calculate when the next review is scheduled and which manager will conduct it."""
+    from datetime import datetime, timedelta
+    
+    # Check if employee is eligible for reviews (not executives)
+    if employee.role in ["CEO", "Manager", "CTO", "COO", "CFO"] or employee.hierarchy_level < 3:
+        return {
+            "scheduled_at": None,
+            "manager_id": None,
+            "manager_name": None,
+            "manager_title": None,
+            "eligible": False,
+            "reason": "Executives and managers do not receive performance reviews."
+        }
+    
+    # Get the most recent review
+    result = await db.execute(
+        select(EmployeeReview)
+        .where(EmployeeReview.employee_id == employee.id)
+        .order_by(desc(EmployeeReview.review_date))
+        .limit(1)
+    )
+    last_review = result.scalar_one_or_none()
+    
+    # Calculate when next review should be scheduled
+    if last_review and last_review.review_date:
+        # Next review is 6 hours after last review
+        review_date = last_review.review_date.replace(tzinfo=None) if last_review.review_date.tzinfo else last_review.review_date
+        next_review_time = review_date + timedelta(hours=6)
+    elif employee.hired_at:
+        # First review is 6 hours after hire
+        hired_at = employee.hired_at.replace(tzinfo=None) if employee.hired_at.tzinfo else employee.hired_at
+        next_review_time = hired_at + timedelta(hours=6)
+    else:
+        # Fallback: 6 hours from now
+        next_review_time = datetime.utcnow() + timedelta(hours=6)
+    
+    # Find manager who will conduct the review (prefer same department)
+    result = await db.execute(
+        select(Employee).where(
+            Employee.role.in_(["Manager", "CEO", "CTO", "COO", "CFO"]),
+            Employee.status == "active"
+        )
+    )
+    managers = result.scalars().all()
+    
+    if not managers:
+        return {
+            "scheduled_at": next_review_time.isoformat(),
+            "manager_id": None,
+            "manager_name": None,
+            "manager_title": None,
+            "eligible": True,
+            "reason": "No active managers available"
+        }
+    
+    # Prefer manager in same department
+    manager = next((m for m in managers if m.department == employee.department), None)
+    if not manager:
+        manager = managers[0]
+    
+    return {
+        "scheduled_at": next_review_time.isoformat(),
+        "manager_id": manager.id,
+        "manager_name": manager.name,
+        "manager_title": manager.title,
+        "eligible": True,
+        "reason": None
+    }
 
 @router.get("/employees/{employee_id}")
 async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
@@ -92,6 +276,9 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         .limit(5)
     )
     decisions = result.scalars().all()
+    
+    # Calculate next review information
+    next_review_info = await _calculate_next_review_info(emp, db)
     
     return {
         "id": emp.id,
@@ -128,7 +315,117 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
                 "timestamp": dec.timestamp.isoformat() if dec.timestamp else None
             }
             for dec in decisions
-        ]
+        ],
+        "next_review": next_review_info
+    }
+
+@router.get("/employees/{employee_id}/reviews")
+async def get_employee_reviews(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all reviews for a specific employee."""
+    result = await db.execute(
+        select(EmployeeReview)
+        .where(EmployeeReview.employee_id == employee_id)
+        .order_by(desc(EmployeeReview.review_date))
+    )
+    reviews = result.scalars().all()
+    
+    # Get employee names
+    result = await db.execute(select(Employee))
+    all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    
+    return [
+        {
+            "id": review.id,
+            "employee_id": review.employee_id,
+            "manager_id": review.manager_id,
+            "manager_name": all_employees.get(review.manager_id, "Unknown"),
+            "review_date": review.review_date.isoformat() if review.review_date else None,
+            "overall_rating": review.overall_rating,
+            "performance_rating": review.performance_rating,
+            "teamwork_rating": review.teamwork_rating,
+            "communication_rating": review.communication_rating,
+            "productivity_rating": review.productivity_rating,
+            "comments": review.comments,
+            "strengths": review.strengths,
+            "areas_for_improvement": review.areas_for_improvement,
+            "review_period_start": review.review_period_start.isoformat() if review.review_period_start else None,
+            "review_period_end": review.review_period_end.isoformat() if review.review_period_end else None,
+            "created_at": review.created_at.isoformat() if review.created_at else None
+        }
+        for review in reviews
+    ]
+
+@router.post("/employees/{employee_id}/reviews")
+async def create_employee_review(employee_id: int, review_data: CreateReviewRequest, db: AsyncSession = Depends(get_db)):
+    """Create a new review for an employee (for manual creation or system-generated)."""
+    # Verify employee exists
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    employee = result.scalar_one_or_none()
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Get manager_id from review_data or find a manager
+    manager_id = review_data.manager_id
+    if not manager_id:
+        # Find a manager for this employee (preferably in same department or any manager)
+        result = await db.execute(
+            select(Employee).where(
+                Employee.role.in_(["Manager", "CEO", "CTO", "COO", "CFO"]),
+                Employee.status == "active"
+            )
+        )
+        managers = result.scalars().all()
+        if managers:
+            # Prefer manager in same department
+            dept_manager = next((m for m in managers if m.department == employee.department), None)
+            manager_id = dept_manager.id if dept_manager else managers[0].id
+        else:
+            raise HTTPException(status_code=400, detail="No active managers found to conduct review")
+    
+    # Verify manager exists
+    result = await db.execute(select(Employee).where(Employee.id == manager_id))
+    manager = result.scalar_one_or_none()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    
+    # Create review
+    review = EmployeeReview(
+        employee_id=employee_id,
+        manager_id=manager_id,
+        overall_rating=review_data.overall_rating,
+        performance_rating=review_data.performance_rating,
+        teamwork_rating=review_data.teamwork_rating,
+        communication_rating=review_data.communication_rating,
+        productivity_rating=review_data.productivity_rating,
+        comments=review_data.comments,
+        strengths=review_data.strengths,
+        areas_for_improvement=review_data.areas_for_improvement,
+        review_period_start=datetime.fromisoformat(review_data.review_period_start) if review_data.review_period_start else None,
+        review_period_end=datetime.fromisoformat(review_data.review_period_end) if review_data.review_period_end else None
+    )
+    
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+    
+    return {
+        "id": review.id,
+        "employee_id": review.employee_id,
+        "manager_id": review.manager_id,
+        "manager_name": manager.name,
+        "review_date": review.review_date.isoformat() if review.review_date else None,
+        "overall_rating": review.overall_rating,
+        "performance_rating": review.performance_rating,
+        "teamwork_rating": review.teamwork_rating,
+        "communication_rating": review.communication_rating,
+        "productivity_rating": review.productivity_rating,
+        "comments": review.comments,
+        "strengths": review.strengths,
+        "areas_for_improvement": review.areas_for_improvement,
+        "review_period_start": review.review_period_start.isoformat() if review.review_period_start else None,
+        "review_period_end": review.review_period_end.isoformat() if review.review_period_end else None,
+        "created_at": review.created_at.isoformat() if review.created_at else None
     }
 
 @router.get("/projects")
@@ -232,6 +529,206 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
             for task in tasks
         ]
     }
+
+@router.get("/tasks")
+async def get_tasks(db: AsyncSession = Depends(get_db)):
+    """Get all tasks with employee and project information."""
+    # Get all tasks
+    result = await db.execute(
+        select(Task).order_by(Task.created_at.desc())
+    )
+    tasks = result.scalars().all()
+    
+    # Get all employees and projects for lookup
+    employees_result = await db.execute(select(Employee))
+    employees = {emp.id: emp for emp in employees_result.scalars().all()}
+    
+    projects_result = await db.execute(select(Project))
+    projects = {proj.id: proj for proj in projects_result.scalars().all()}
+    
+    task_list = []
+    for task in tasks:
+        task_data = {
+            "id": task.id,
+            "employee_id": task.employee_id,
+            "project_id": task.project_id,
+            "description": task.description,
+            "status": task.status,
+            "priority": task.priority,
+            "progress": task.progress if hasattr(task, 'progress') else (100.0 if task.status == "completed" else 0.0),
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "employee": None,
+            "project": None
+        }
+        
+        # Add employee information if assigned
+        if task.employee_id and task.employee_id in employees:
+            employee = employees[task.employee_id]
+            task_data["employee"] = {
+                "id": employee.id,
+                "name": employee.name,
+                "title": employee.title,
+                "department": employee.department,
+                "role": employee.role
+            }
+        
+        # Add project information if associated
+        if task.project_id and task.project_id in projects:
+            project = projects[task.project_id]
+            task_data["project"] = {
+                "id": project.id,
+                "name": project.name,
+                "status": project.status
+            }
+        
+        task_list.append(task_data)
+    
+    return task_list
+
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: int, db: AsyncSession = Depends(get_db)):
+    """Get task details."""
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Get employee information if assigned
+    employee = None
+    if task.employee_id:
+        emp_result = await db.execute(select(Employee).where(Employee.id == task.employee_id))
+        emp = emp_result.scalar_one_or_none()
+        if emp:
+            employee = {
+                "id": emp.id,
+                "name": emp.name,
+                "title": emp.title,
+                "department": emp.department,
+                "role": emp.role
+            }
+    
+    # Get project information if associated
+    project = None
+    if task.project_id:
+        proj_result = await db.execute(select(Project).where(Project.id == task.project_id))
+        proj = proj_result.scalar_one_or_none()
+        if proj:
+            project = {
+                "id": proj.id,
+                "name": proj.name,
+                "status": proj.status,
+                "description": proj.description
+            }
+    
+    return {
+        "id": task.id,
+        "employee_id": task.employee_id,
+        "project_id": task.project_id,
+        "description": task.description,
+        "status": task.status,
+        "priority": task.priority,
+        "progress": task.progress if hasattr(task, 'progress') else (100.0 if task.status == "completed" else 0.0),
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "employee": employee,
+        "project": project
+    }
+
+@router.get("/tasks/{task_id}/activities")
+async def get_task_activities(task_id: int, limit: int = 50, db: AsyncSession = Depends(get_db)):
+    """Get activities related to a task."""
+    # First verify task exists
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Get activities from the employee assigned to this task
+    all_activities = []
+    
+    if task.employee_id:
+        # Get activities from the employee working on this task
+        employee_activities_result = await db.execute(
+            select(Activity)
+            .where(Activity.employee_id == task.employee_id)
+            .order_by(desc(Activity.timestamp))
+            .limit(limit * 2)
+        )
+        employee_activities = employee_activities_result.scalars().all()
+        all_activities.extend(employee_activities)
+    
+    # Get activities that mention this task in metadata or description
+    result = await db.execute(
+        select(Activity)
+        .where(
+            Activity.description.contains(task.description[:50])  # First 50 chars for matching
+        )
+        .order_by(desc(Activity.timestamp))
+        .limit(limit * 2)
+    )
+    description_activities = result.scalars().all()
+    all_activities.extend(description_activities)
+    
+    # Filter activities that are related to this task
+    # Check metadata for task_id or if employee matches and activity is task-related
+    filtered_activities = []
+    seen_ids = set()
+    
+    for act in all_activities:
+        if act.id in seen_ids:
+            continue
+        seen_ids.add(act.id)
+        
+        # Check if activity metadata contains this task_id
+        if act.activity_metadata and isinstance(act.activity_metadata, dict):
+            metadata_task_id = act.activity_metadata.get("task_id")
+            if metadata_task_id == task_id:
+                filtered_activities.append(act)
+                continue
+        
+        # Check if activity is from the assigned employee and is task-related
+        if act.employee_id == task.employee_id:
+            if act.activity_type in ["task_completed", "decision"]:
+                # For task_completed, check metadata
+                if act.activity_type == "task_completed":
+                    if act.activity_metadata and isinstance(act.activity_metadata, dict):
+                        metadata_task_id = act.activity_metadata.get("task_id")
+                        if metadata_task_id == task_id:
+                            filtered_activities.append(act)
+                            continue
+                else:
+                    # For other task-related activities, include if employee matches
+                    filtered_activities.append(act)
+                    continue
+    
+    # Sort by timestamp descending and limit
+    filtered_activities.sort(key=lambda x: x.timestamp, reverse=True)
+    filtered_activities = filtered_activities[:limit]
+    
+    # Get employee names for activities
+    employee_ids = {act.employee_id for act in filtered_activities if act.employee_id}
+    employees = {}
+    if employee_ids:
+        emp_result = await db.execute(
+            select(Employee).where(Employee.id.in_(employee_ids))
+        )
+        for emp in emp_result.scalars().all():
+            employees[emp.id] = emp.name
+    
+    return [
+        {
+            "id": act.id,
+            "employee_id": act.employee_id,
+            "employee_name": employees.get(act.employee_id) if act.employee_id else None,
+            "activity_type": act.activity_type,
+            "description": act.description,
+            "timestamp": act.timestamp.isoformat() if act.timestamp else None,
+            "activity_metadata": act.activity_metadata
+        }
+        for act in filtered_activities
+    ]
 
 @router.get("/projects/{project_id}/activities")
 async def get_project_activities(project_id: int, limit: int = 50, db: AsyncSession = Depends(get_db)):
@@ -429,14 +926,15 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         projects_with_budget = [p for p in all_projects if p.budget and p.budget > 0]
         avg_project_budget = sum(p.budget for p in projects_with_budget) / len(projects_with_budget) if projects_with_budget else 0.0
         
-        # Get leadership team (CEO, Managers, and executives)
-        leadership_roles = ["CEO", "Manager"]
+        # Get leadership team (CEO, C-level executives, and Managers)
+        leadership_roles = ["CEO", "CTO", "COO", "CFO", "Manager"]
         leadership_employees = [emp for emp in active_employees if emp.role in leadership_roles or emp.hierarchy_level <= 2]
         
         # Get recent leadership decisions
         leadership_employee_ids = [emp.id for emp in leadership_employees]
         leadership_decisions = []
         if leadership_employee_ids:
+            # Get decisions from Decision table
             result = await db.execute(
                 select(Decision)
                 .where(Decision.employee_id.in_(leadership_employee_ids))
@@ -457,6 +955,40 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 }
                 for d in decisions
             ]
+            
+            # Also get strategic decisions from Activities table
+            result = await db.execute(
+                select(Activity)
+                .where(
+                    Activity.employee_id.in_(leadership_employee_ids),
+                    Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+                )
+                .order_by(desc(Activity.timestamp))
+                .limit(10)
+            )
+            strategic_activities = result.scalars().all()
+            for act in strategic_activities:
+                # Extract decision type from activity metadata or activity_type
+                decision_type = "strategic"
+                if act.activity_metadata and isinstance(act.activity_metadata, dict):
+                    decision_type = act.activity_metadata.get("decision_type", "strategic")
+                elif act.activity_type == "strategic_operational_decision":
+                    decision_type = "strategic_operational"
+                
+                leadership_decisions.append({
+                    "id": act.id,
+                    "employee_id": act.employee_id,
+                    "employee_name": next((emp.name for emp in leadership_employees if emp.id == act.employee_id), "Unknown"),
+                    "employee_role": next((emp.role for emp in leadership_employees if emp.id == act.employee_id), "Unknown"),
+                    "decision_type": decision_type,
+                    "description": act.description,
+                    "reasoning": act.activity_metadata.get("reasoning", "") if act.activity_metadata and isinstance(act.activity_metadata, dict) else "",
+                    "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+                })
+            
+            # Sort by timestamp descending and limit to 10
+            leadership_decisions.sort(key=lambda x: x["timestamp"], reverse=True)
+            leadership_decisions = leadership_decisions[:10]
         
         # Get recent leadership activities
         leadership_activities = []
@@ -490,12 +1022,67 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         leadership_tasks = result.scalars().all()
         projects_with_leadership = set(task.project_id for task in leadership_tasks if task.project_id)
         
+        # Count strategic decisions (from both Decision table and Activity table)
+        # Count from Decision table
+        result = await db.execute(
+            select(Decision)
+            .where(
+                Decision.employee_id.in_(leadership_employee_ids),
+                Decision.decision_type == "strategic"
+            )
+        )
+        strategic_decisions_from_table = result.scalars().all()
+        
+        # Count from Activity table
+        result = await db.execute(
+            select(Activity)
+            .where(
+                Activity.employee_id.in_(leadership_employee_ids),
+                Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+            )
+        )
+        strategic_activities = result.scalars().all()
+        
+        strategic_count = len(strategic_decisions_from_table) + len(strategic_activities)
+        
+        # Get employee review statistics
+        # Completed reviews: reviews with all fields filled (comments, strengths, areas_for_improvement)
+        result = await db.execute(
+            select(EmployeeReview)
+            .where(
+                EmployeeReview.comments.isnot(None),
+                EmployeeReview.strengths.isnot(None),
+                EmployeeReview.areas_for_improvement.isnot(None)
+            )
+        )
+        completed_reviews = result.scalars().all()
+        completed_reviews_count = len(completed_reviews)
+        
+        # In progress reviews: reviews that exist but are missing some optional fields
+        result = await db.execute(
+            select(EmployeeReview)
+            .where(
+                or_(
+                    EmployeeReview.comments.is_(None),
+                    EmployeeReview.strengths.is_(None),
+                    EmployeeReview.areas_for_improvement.is_(None)
+                )
+            )
+        )
+        in_progress_reviews = result.scalars().all()
+        in_progress_reviews_count = len(in_progress_reviews)
+        
         leadership_metrics = {
             "total_leadership_count": len(leadership_employees),
             "ceo_count": len([emp for emp in leadership_employees if emp.role == "CEO"]),
             "manager_count": len([emp for emp in leadership_employees if emp.role == "Manager"]),
-            "strategic_decisions_count": len([d for d in leadership_decisions if d["decision_type"] == "strategic"]),
-            "projects_led_by_leadership": len(projects_with_leadership)
+            "cto_count": len([emp for emp in leadership_employees if emp.role == "CTO"]),
+            "coo_count": len([emp for emp in leadership_employees if emp.role == "COO"]),
+            "cfo_count": len([emp for emp in leadership_employees if emp.role == "CFO"]),
+            "strategic_decisions_count": strategic_count,
+            "projects_led_by_leadership": len(projects_with_leadership),
+            "reviews_completed": completed_reviews_count,
+            "reviews_in_progress": in_progress_reviews_count
         }
         
         return {
@@ -656,7 +1243,7 @@ async def get_financial_analytics(days: int = 90, db: AsyncSession = Depends(get
     employees = result.scalars().all()
     
     # Calculate payroll based on hierarchy level and role
-    # CEO: $150k/year, Manager: $100k/year, Employee: $60k/year
+    # CEO: $150k/year, CTO/COO/CFO: $120k/year, Manager: $100k/year, Employee: $60k/year
     payroll_by_role = {}
     total_payroll = 0.0
     payroll_by_department = {}
@@ -665,6 +1252,8 @@ async def get_financial_analytics(days: int = 90, db: AsyncSession = Depends(get
         # Calculate annual salary based on role
         if emp.role == "CEO" or emp.hierarchy_level == 1:
             annual_salary = 150000
+        elif emp.role in ["CTO", "COO", "CFO"]:
+            annual_salary = 120000  # C-level executives get higher salary than managers
         elif emp.role == "Manager" or emp.hierarchy_level == 2:
             annual_salary = 100000
         else:
@@ -792,8 +1381,8 @@ async def get_financial_analytics(days: int = 90, db: AsyncSession = Depends(get
                 "role": emp.role,
                 "department": emp.department,
                 "hierarchy_level": emp.hierarchy_level,
-                "estimated_annual_salary": 150000 if (emp.role == "CEO" or emp.hierarchy_level == 1) else (100000 if (emp.role == "Manager" or emp.hierarchy_level == 2) else 60000),
-                "period_salary": (150000 if (emp.role == "CEO" or emp.hierarchy_level == 1) else (100000 if (emp.role == "Manager" or emp.hierarchy_level == 2) else 60000)) / 12 * (days / 30.44)
+                "estimated_annual_salary": 150000 if (emp.role == "CEO" or emp.hierarchy_level == 1) else (120000 if emp.role in ["CTO", "COO", "CFO"] else (100000 if (emp.role == "Manager" or emp.hierarchy_level == 2) else 60000)),
+                "period_salary": (150000 if (emp.role == "CEO" or emp.hierarchy_level == 1) else (120000 if emp.role in ["CTO", "COO", "CFO"] else (100000 if (emp.role == "Manager" or emp.hierarchy_level == 2) else 60000))) / 12 * (days / 30.44)
             }
             for emp in employees
         ]
@@ -837,11 +1426,18 @@ async def get_employee_emails(employee_id: int, db: AsyncSession = Depends(get_d
 
 @router.get("/employees/{employee_id}/chats")
 async def get_employee_chats(employee_id: int, db: AsyncSession = Depends(get_db)):
-    """Get chat messages for a specific employee."""
+    """Get chat messages between the user and a specific employee only."""
     try:
+        from employees.base import generate_thread_id
+        
+        # Only show messages in the thread between user (0/None) and this employee
+        user_employee_thread_id = generate_thread_id(0, employee_id)
+        
         result = await db.execute(
             select(ChatMessage)
-            .where((ChatMessage.sender_id == employee_id) | (ChatMessage.recipient_id == employee_id))
+            .where(
+                ChatMessage.thread_id == user_employee_thread_id
+            )
             .order_by(desc(ChatMessage.timestamp))
             .limit(100)
         )
@@ -855,9 +1451,9 @@ async def get_employee_chats(employee_id: int, db: AsyncSession = Depends(get_db
             {
                 "id": chat.id,
                 "sender_id": chat.sender_id,
-                "sender_name": all_employees.get(chat.sender_id, "Unknown"),
+                "sender_name": "You" if chat.sender_id is None or chat.sender_id == 0 else all_employees.get(chat.sender_id, "Unknown"),
                 "recipient_id": chat.recipient_id,
-                "recipient_name": all_employees.get(chat.recipient_id, "Unknown"),
+                "recipient_name": "You" if chat.recipient_id is None or chat.recipient_id == 0 else all_employees.get(chat.recipient_id, "Unknown"),
                 "message": chat.message,
                 "thread_id": chat.thread_id,
                 "timestamp": chat.timestamp.isoformat() if chat.timestamp else None
@@ -923,7 +1519,7 @@ async def get_all_chats(limit: int = 200, db: AsyncSession = Depends(get_db)):
             {
                 "id": chat.id,
                 "sender_id": chat.sender_id,
-                "sender_name": all_employees.get(chat.sender_id, "Unknown"),
+                "sender_name": "You" if chat.sender_id is None or chat.sender_id == 0 else all_employees.get(chat.sender_id, "Unknown"),
                 "recipient_id": chat.recipient_id,
                 "recipient_name": all_employees.get(chat.recipient_id, "Unknown"),
                 "message": chat.message,
@@ -936,6 +1532,309 @@ async def get_all_chats(limit: int = 200, db: AsyncSession = Depends(get_db)):
         # If ChatMessage table doesn't exist yet, return empty list
         print(f"Error fetching all chats: {e}")
         return []
+
+@router.post("/chats/send")
+async def send_chat_message(request: SendChatRequest, db: AsyncSession = Depends(get_db)):
+    """Send a chat message from the user/manager to an employee and get an automatic response."""
+    try:
+        from employees.base import generate_thread_id
+        from llm.ollama_client import OllamaClient
+        from engine.office_simulator import get_business_context
+        
+        # Verify employee exists and is not terminated
+        result = await db.execute(
+            select(Employee).where(Employee.id == request.employee_id)
+        )
+        employee = result.scalar_one_or_none()
+        
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        
+        if employee.status == "fired" or employee.fired_at:
+            raise HTTPException(status_code=400, detail="Cannot send messages to terminated employees")
+        
+        # Use sender_id = None to represent messages from the user/manager
+        # We'll use 0 in the thread_id generation for consistency
+        thread_id = generate_thread_id(0, request.employee_id)
+        
+        # Save the user's message
+        user_chat = ChatMessage(
+            sender_id=None,  # None represents messages from the user/manager
+            recipient_id=request.employee_id,
+            message=request.message,
+            thread_id=thread_id
+        )
+        db.add(user_chat)
+        await db.flush()  # Flush to get the timestamp
+        
+        # Get employee's work context
+        project_context = None
+        task_description = None
+        if employee.current_task_id:
+            result = await db.execute(
+                select(Task).where(Task.id == employee.current_task_id)
+            )
+            current_task = result.scalar_one_or_none()
+            if current_task:
+                task_description = current_task.description
+                if current_task.project_id:
+                    result = await db.execute(
+                        select(Project).where(Project.id == current_task.project_id)
+                    )
+                    project = result.scalar_one_or_none()
+                    if project:
+                        project_context = project.name
+        
+        # Get business context
+        business_context = await get_business_context(db)
+        
+        # Generate employee response using Ollama
+        llm_client = OllamaClient()
+        
+        # Build work context string
+        work_context_parts = []
+        if project_context:
+            work_context_parts.append(f"working on the {project_context} project")
+        if task_description:
+            work_context_parts.append(f"task: {task_description}")
+        if employee.status:
+            work_context_parts.append(f"status: {employee.status}")
+        if employee.activity_state:
+            work_context_parts.append(f"currently: {employee.activity_state}")
+        
+        work_context_str = ". ".join(work_context_parts) if work_context_parts else "available for work"
+        
+        # Generate response
+        response_text = await llm_client.generate_chat_response(
+            recipient_name=employee.name,
+            recipient_title=employee.title,
+            recipient_role=employee.role,
+            recipient_personality=employee.personality_traits or [],
+            sender_name="Manager",
+            sender_title="Manager",
+            original_message=request.message,
+            project_context=work_context_str,
+            business_context=business_context
+        )
+        
+        # Save employee's response
+        employee_response = ChatMessage(
+            sender_id=employee.id,
+            recipient_id=None,  # None represents the user/manager
+            message=response_text,
+            thread_id=thread_id
+        )
+        db.add(employee_response)
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": "Chat message sent successfully",
+            "user_message": {
+                "id": user_chat.id,
+                "sender_id": user_chat.sender_id,
+                "sender_name": "You",
+                "recipient_id": user_chat.recipient_id,
+                "recipient_name": employee.name,
+                "message": user_chat.message,
+                "thread_id": user_chat.thread_id,
+                "timestamp": user_chat.timestamp.isoformat() if user_chat.timestamp else None
+            },
+            "employee_response": {
+                "id": employee_response.id,
+                "sender_id": employee_response.sender_id,
+                "sender_name": employee.name,
+                "recipient_id": employee_response.recipient_id,
+                "recipient_name": "You",
+                "message": employee_response.message,
+                "thread_id": employee_response.thread_id,
+                "timestamp": employee_response.timestamp.isoformat() if employee_response.timestamp else None
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"Error sending chat message: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error sending chat message: {str(e)}")
+
+@router.post("/employees/fix-waiting")
+async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
+    """Batch fix all employees stuck in waiting state, especially those waiting for training."""
+    try:
+        from engine.movement_system import find_available_training_room, update_employee_location, check_room_has_space
+        from employees.room_assigner import ROOM_TRAINING_ROOM
+        from datetime import datetime, timedelta
+        
+        # Initialize counters
+        fixed_count = 0
+        training_fixed = 0
+        training_completed = 0
+        status_fixed = 0  # Fixed status without moving
+        other_fixed = 0
+        
+        # First, find and fix all employees in training rooms with "waiting" status
+        # Query for them and update individually (more reliable than bulk SQL)
+        training_rooms = [
+            ROOM_TRAINING_ROOM,
+            f"{ROOM_TRAINING_ROOM}_floor2",
+            f"{ROOM_TRAINING_ROOM}_floor4",
+            f"{ROOM_TRAINING_ROOM}_floor4_2",
+            f"{ROOM_TRAINING_ROOM}_floor4_3",
+            f"{ROOM_TRAINING_ROOM}_floor4_4",
+            f"{ROOM_TRAINING_ROOM}_floor4_5"
+        ]
+        
+        # Get all employees in training rooms with waiting status
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.activity_state == "waiting",
+                Employee.current_room.in_(training_rooms)
+            )
+        )
+        waiting_in_training = result.scalars().all()
+        
+        # Update each one
+        for emp in waiting_in_training:
+            emp.activity_state = "training"
+            status_fixed += 1
+            fixed_count += 1
+        
+        await db.flush()  # Flush immediately to ensure update is applied
+        
+        # Now handle employees who should complete training (hired >1 hour ago)
+        # Get employees in training rooms (now with "training" status after our update)
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.activity_state == "training",
+                Employee.current_room.in_(training_rooms)
+            )
+        )
+        training_complete_employees = result.scalars().all()
+        
+        for employee in training_complete_employees:
+            try:
+                hired_at = getattr(employee, 'hired_at', None)
+                if hired_at:
+                    try:
+                        if hasattr(hired_at, 'replace'):
+                            if hired_at.tzinfo is not None:
+                                hired_at_naive = hired_at.replace(tzinfo=None)
+                            else:
+                                hired_at_naive = hired_at
+                        else:
+                            hired_at_naive = hired_at
+                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        if time_since_hire > timedelta(hours=1):
+                            employee.activity_state = "idle"
+                            if employee.home_room:
+                                await update_employee_location(employee, employee.home_room, "idle", db)
+                            from database.models import Activity
+                            activity = Activity(
+                                employee_id=employee.id,
+                                activity_type="training_completed",
+                                description=f"{employee.name} completed training and reported to work area ({employee.home_room or 'home room'})",
+                                activity_metadata={"note": "Batch fix: Training completed"}
+                            )
+                            db.add(activity)
+                            training_completed += 1
+                            fixed_count += 1
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"Error completing training for employee {employee.id}: {e}")
+                continue
+        
+        # Get remaining waiting employees (not in training rooms)
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.activity_state == "waiting",
+                ~Employee.current_room.in_(training_rooms)
+            )
+        )
+        other_waiting = result.scalars().all()
+        
+        # Process remaining waiting employees (not in training rooms)
+        for employee in other_waiting:
+            try:
+                # Check if they should be in training (recently hired)
+                hired_at = getattr(employee, 'hired_at', None)
+                is_new_hire = False
+                if hired_at:
+                    try:
+                        if hasattr(hired_at, 'replace'):
+                            if hired_at.tzinfo is not None:
+                                hired_at_naive = hired_at.replace(tzinfo=None)
+                            else:
+                                hired_at_naive = hired_at
+                        else:
+                            hired_at_naive = hired_at
+                        
+                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        if time_since_hire <= timedelta(hours=1):
+                            is_new_hire = True
+                    except Exception:
+                        pass
+                
+                if is_new_hire:
+                    # New hire waiting - find training room
+                    available_training_room = await find_available_training_room(db, exclude_employee_id=employee.id)
+                    if available_training_room:
+                        await update_employee_location(employee, available_training_room, "training", db)
+                        training_fixed += 1
+                        fixed_count += 1
+                    else:
+                        # No training room - move to home room anyway
+                        if employee.home_room:
+                            await update_employee_location(employee, employee.home_room, "idle", db)
+                            other_fixed += 1
+                            fixed_count += 1
+                else:
+                    # Not a new hire - just move to home room
+                    if employee.home_room:
+                        await update_employee_location(employee, employee.home_room, "idle", db)
+                        other_fixed += 1
+                        fixed_count += 1
+            except Exception as e:
+                print(f"Error fixing employee {employee.id} ({getattr(employee, 'name', 'unknown')}): {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        await db.commit()
+        
+        # Count total waiting for response
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.activity_state == "waiting"
+            )
+        )
+        total_waiting = len(result.scalars().all())
+        
+        return {
+            "message": f"Fixed {fixed_count} waiting employees",
+            "details": {
+                "total_fixed": fixed_count,
+                "training_room_fixed": training_fixed,
+                "training_completed": training_completed,
+                "status_fixed": status_fixed,
+                "other_waiting_fixed": other_fixed,
+                "total_waiting": total_waiting
+            }
+        }
+    except Exception as e:
+        await db.rollback()
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"Error in fix_waiting_employees: {e}")
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=f"Error fixing waiting employees: {str(e)}")
 
 @router.get("/office-layout")
 async def get_office_layout(db: AsyncSession = Depends(get_db)):
@@ -1650,4 +2549,333 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             "rooms": rooms,
             "total_employees": 0
         }
+
+class BoardroomDiscussionRequest(BaseModel):
+    executive_ids: List[int] = None
+
+@router.post("/boardroom/generate-discussions")
+async def generate_boardroom_discussions(
+    request: BoardroomDiscussionRequest = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate strategic boardroom discussions between executives."""
+    import random
+    import asyncio
+    from llm.ollama_client import OllamaClient
+    from employees.base import generate_thread_id
+    from sqlalchemy.exc import OperationalError
+    
+    async def commit_with_retry(session, max_retries=5):
+        """Commit with retry logic and exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                await session.commit()
+                return True
+            except OperationalError as e:
+                if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                    # Exponential backoff: wait 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
+                    wait_time = 0.1 * (2 ** attempt)
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    raise
+        return False
+    
+    try:
+        # Get executives - use provided IDs if available, otherwise get all leadership
+        executive_ids = request.executive_ids if request and request.executive_ids else None
+        if executive_ids and len(executive_ids) > 0:
+            result = await db.execute(
+                select(Employee).where(
+                    Employee.id.in_(executive_ids),
+                    Employee.status == "active"
+                )
+            )
+            executives = result.scalars().all()
+        else:
+            # Fallback: Get all leadership team (CEO and Managers)
+            result = await db.execute(
+                select(Employee).where(
+                    Employee.role.in_(["CEO", "Manager"]),
+                    Employee.status == "active"
+                )
+            )
+            executives = result.scalars().all()
+        
+        if len(executives) < 2:
+            return {
+                "success": False,
+                "message": "Not enough executives for boardroom discussions",
+                "chats_created": 0
+            }
+        
+        # Get business context
+        from engine.office_simulator import get_business_context
+        business_context = await get_business_context(db)
+        
+        llm_client = OllamaClient()
+        chats_created = 0
+        
+        # Create list of all executives in the room for context
+        executives_in_room = [f"{e.name} ({e.title})" for e in executives]
+        room_context = ", ".join(executives_in_room)
+        
+        # Generate diverse strategic boardroom discussion topics
+        # Much larger pool of topics to ensure variety
+        discussion_topics = [
+            "strategic planning for Q4 revenue growth",
+            "resource allocation for upcoming projects",
+            "market expansion opportunities",
+            "operational efficiency improvements",
+            "team performance and productivity",
+            "budget optimization strategies",
+            "technology investment priorities",
+            "customer acquisition initiatives",
+            "competitive positioning analysis",
+            "risk management and mitigation",
+            "quarterly financial performance review",
+            "hiring and talent acquisition strategy",
+            "product development roadmap",
+            "customer retention programs",
+            "supply chain optimization",
+            "digital transformation initiatives",
+            "partnership and alliance opportunities",
+            "brand positioning and marketing strategy",
+            "workplace culture and employee engagement",
+            "sustainability and corporate responsibility",
+            "merger and acquisition opportunities",
+            "international expansion plans",
+            "innovation and R&D investments",
+            "cost reduction initiatives",
+            "sales strategy and pipeline management",
+            "customer service improvements",
+            "data analytics and business intelligence",
+            "cybersecurity and data protection",
+            "regulatory compliance and governance",
+            "vendor and supplier relationships",
+            "project portfolio management",
+            "quality assurance and process improvement",
+            "employee training and development",
+            "succession planning and leadership development",
+            "market research and customer insights",
+            "pricing strategy and revenue optimization",
+            "channel partner relationships",
+            "product launch planning",
+            "customer feedback and satisfaction",
+            "operational metrics and KPIs",
+            "strategic partnerships",
+            "workforce planning and optimization",
+            "customer experience enhancement",
+            "business continuity planning",
+            "change management initiatives"
+        ]
+        
+        # Shuffle topics to ensure variety
+        available_topics = discussion_topics.copy()
+        random.shuffle(available_topics)
+        topic_index = 0
+        
+        # Generate more discussions - at least 3-6 between random pairs
+        # More discussions = more activity in the boardroom
+        num_discussions = random.randint(3, min(6, max(3, len(executives))))
+        used_pairs = set()
+        used_topics_in_batch = set()
+        
+        for _ in range(num_discussions):
+            # Select two different executives
+            if len(executives) < 2:
+                break
+                
+            sender, recipient = random.sample(executives, 2)
+            pair_key = tuple(sorted([sender.id, recipient.id]))
+            
+            # Avoid duplicate pairs in same batch
+            if pair_key in used_pairs:
+                continue
+            used_pairs.add(pair_key)
+            
+            # Select a topic that hasn't been used in this batch
+            # Cycle through available topics to ensure variety
+            topic = None
+            attempts = 0
+            while topic is None or topic in used_topics_in_batch:
+                if topic_index >= len(available_topics):
+                    # Reset and reshuffle if we've gone through all topics
+                    available_topics = discussion_topics.copy()
+                    random.shuffle(available_topics)
+                    topic_index = 0
+                    used_topics_in_batch.clear()  # Clear used topics when we reset
+                
+                topic = available_topics[topic_index]
+                topic_index += 1
+                attempts += 1
+                
+                # Safety check to avoid infinite loop
+                if attempts > len(discussion_topics):
+                    # Just use any topic if we can't find a unique one
+                    topic = random.choice(discussion_topics)
+                    break
+            
+            used_topics_in_batch.add(topic)
+            
+            # Generate message using LLM
+            personality_str = ", ".join(sender.personality_traits or ["strategic", "analytical"])
+            recipient_personality = ", ".join(recipient.personality_traits or ["strategic", "analytical"])
+            
+            prompt = f"""You are {sender.name}, {sender.title} at a company. You are currently in a boardroom meeting with the following executives: {room_context}.
+
+You are directly addressing {recipient.name} ({recipient.title}) who is sitting across the table from you in this boardroom meeting. You're discussing {topic} together.
+
+Your personality traits: {personality_str}
+Your role: {sender.role}
+{recipient.name}'s personality traits: {recipient_personality}
+{recipient.name}'s role: {recipient.role}
+
+Current business context:
+- Revenue: ${business_context.get('revenue', 0):,.2f}
+- Profit: ${business_context.get('profit', 0):,.2f}
+- Active Projects: {business_context.get('active_projects', 0)}
+- Employees: {business_context.get('employee_count', 0)}
+
+Write a brief, direct boardroom discussion message (1-2 sentences) to {recipient.name} about {topic}. The message should:
+1. Be conversational and direct, as if speaking face-to-face in the boardroom
+2. Address {recipient.name} directly by name
+3. Be strategic and business-focused
+4. Match your executive role and personality
+5. Be appropriate for a boardroom setting where you can see each other
+6. Reference the business context naturally
+7. Feel like a natural conversation between colleagues in the same room
+
+Write only the message, nothing else. Make it feel like you're talking directly to them in person."""
+
+            try:
+                client = await llm_client._get_client()
+                response = await client.post(
+                    f"{llm_client.base_url}/api/generate",
+                    json={
+                        "model": llm_client.model,
+                        "prompt": prompt,
+                        "stream": False
+                    }
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    message = result.get("response", "").strip()
+                    
+                    # Clean up the message (remove quotes, extra whitespace)
+                    message = message.strip('"').strip("'").strip()
+                    
+                    if not message:
+                        # Fallback message - more direct and conversational
+                        message = f"{recipient.name}, I'd like to get your thoughts on {topic}. What's your take on this?"
+                else:
+                    # Fallback message - more direct and conversational
+                    message = f"{recipient.name}, I'd like to get your thoughts on {topic}. What's your take on this?"
+            except Exception as e:
+                print(f"Error generating boardroom message: {e}")
+                # Fallback message - more direct and conversational
+                message = f"{recipient.name}, I'd like to get your thoughts on {topic}. What's your take on this?"
+            
+            # Create chat message
+            thread_id = generate_thread_id(sender.id, recipient.id)
+            chat = ChatMessage(
+                sender_id=sender.id,
+                recipient_id=recipient.id,
+                message=message,
+                thread_id=thread_id
+            )
+            db.add(chat)
+            chats_created += 1
+        
+        # Commit all messages with retry logic
+        await commit_with_retry(db)
+        
+        return {
+            "success": True,
+            "message": f"Generated {chats_created} boardroom discussions",
+            "chats_created": chats_created
+        }
+        
+    except Exception as e:
+        try:
+            await db.rollback()
+        except:
+            pass  # Ignore rollback errors
+        print(f"Error generating boardroom discussions: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "chats_created": 0
+        }
+
+@router.get("/notifications")
+async def get_notifications(limit: int = 50, unread_only: bool = False, db: AsyncSession = Depends(get_db)):
+    """Get all notifications, optionally filtered to unread only."""
+    query = select(Notification).order_by(desc(Notification.created_at))
+    
+    if unread_only:
+        query = query.where(Notification.read == False)
+    
+    query = query.limit(limit)
+    
+    result = await db.execute(query)
+    notifications = result.scalars().all()
+    
+    # Get employee names
+    result = await db.execute(select(Employee))
+    all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    
+    return [
+        {
+            "id": notif.id,
+            "notification_type": notif.notification_type,
+            "title": notif.title,
+            "message": notif.message,
+            "employee_id": notif.employee_id,
+            "employee_name": all_employees.get(notif.employee_id, "Unknown") if notif.employee_id else None,
+            "review_id": notif.review_id,
+            "read": notif.read,
+            "created_at": notif.created_at.isoformat() if notif.created_at else None
+        }
+        for notif in notifications
+    ]
+
+@router.get("/notifications/unread-count")
+async def get_unread_notification_count(db: AsyncSession = Depends(get_db)):
+    """Get count of unread notifications."""
+    result = await db.execute(
+        select(func.count(Notification.id)).where(Notification.read == False)
+    )
+    count = result.scalar() or 0
+    return {"count": count}
+
+@router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark a notification as read."""
+    result = await db.execute(select(Notification).where(Notification.id == notification_id))
+    notification = result.scalar_one_or_none()
+    
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    notification.read = True
+    await db.commit()
+    
+    return {"success": True, "message": "Notification marked as read"}
+
+@router.post("/notifications/read-all")
+async def mark_all_notifications_read(db: AsyncSession = Depends(get_db)):
+    """Mark all notifications as read."""
+    result = await db.execute(select(Notification).where(Notification.read == False))
+    notifications = result.scalars().all()
+    
+    for notification in notifications:
+        notification.read = True
+    
+    await db.commit()
+    
+    return {"success": True, "message": f"Marked {len(notifications)} notifications as read"}
 

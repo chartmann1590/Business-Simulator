@@ -1,0 +1,579 @@
+"""
+Review Manager - Handles periodic employee reviews and performance evaluations.
+"""
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, desc
+from database.models import Employee, EmployeeReview, Task, Activity, Project, Email, ChatMessage
+from datetime import datetime, timedelta
+import random
+from typing import Optional, List
+from llm.ollama_client import OllamaClient
+
+
+class ReviewManager:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    async def conduct_periodic_reviews(self, hours_since_last_review: float = 6.0):
+        """
+        Conduct periodic reviews for employees who haven't been reviewed recently.
+        Reviews are conducted every 6 hours by default.
+        This function is called frequently to ensure reviews happen promptly.
+        """
+        now = datetime.utcnow()
+        cutoff_date = now - timedelta(hours=hours_since_last_review)
+        
+        # Get all active employees
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        all_employees = result.scalars().all()
+        
+        # Get employees who need reviews (non-managers, non-CEO)
+        employees_to_review = [
+            emp for emp in all_employees 
+            if emp.role not in ["CEO", "Manager", "CTO", "COO", "CFO"] and emp.hierarchy_level >= 3
+        ]
+        
+        reviews_created = []
+        overdue_count = 0
+        
+        for employee in employees_to_review:
+            # Check if employee has been reviewed recently
+            result = await self.db.execute(
+                select(EmployeeReview)
+                .where(EmployeeReview.employee_id == employee.id)
+                .order_by(desc(EmployeeReview.review_date))
+                .limit(1)
+            )
+            last_review = result.scalar_one_or_none()
+            
+            # Check if review is needed - be aggressive about creating overdue reviews
+            needs_review = False
+            is_overdue = False
+            
+            if not last_review:
+                # New employee - review if hired more than 6 hours ago
+                if employee.hired_at:
+                    hired_at_naive = employee.hired_at.replace(tzinfo=None) if employee.hired_at.tzinfo else employee.hired_at
+                    hours_since_hire = (now - hired_at_naive).total_seconds() / 3600
+                    if hours_since_hire >= hours_since_last_review:
+                        needs_review = True
+                        # Consider overdue if more than 6.5 hours (30 min buffer)
+                        if hours_since_hire >= hours_since_last_review + 0.5:
+                            is_overdue = True
+            else:
+                # Check if last review was before cutoff
+                if last_review.review_date:
+                    review_date = last_review.review_date.replace(tzinfo=None) if last_review.review_date.tzinfo else last_review.review_date
+                    hours_since_review = (now - review_date).total_seconds() / 3600
+                    if review_date < cutoff_date:
+                        needs_review = True
+                        # Consider overdue if more than 6.5 hours (30 min buffer)
+                        if hours_since_review >= hours_since_last_review + 0.5:
+                            is_overdue = True
+            
+            if needs_review:
+                try:
+                    review = await self._generate_review(employee)
+                    if review:
+                        reviews_created.append(review)
+                        if is_overdue:
+                            overdue_count += 1
+                except Exception as e:
+                    print(f"⚠️  Error generating review for {employee.name}: {e}")
+        
+        if reviews_created:
+            await self.db.commit()
+            if overdue_count > 0:
+                print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
+        
+        return reviews_created
+    
+    async def _generate_review(self, employee: Employee) -> Optional[EmployeeReview]:
+        """
+        Generate a review for an employee based on their performance metrics.
+        """
+        # Find a manager to conduct the review
+        result = await self.db.execute(
+            select(Employee).where(
+                Employee.role.in_(["Manager", "CEO", "CTO", "COO", "CFO"]),
+                Employee.status == "active"
+            )
+        )
+        managers = result.scalars().all()
+        
+        if not managers:
+            return None
+        
+        # Prefer manager in same department
+        manager = next((m for m in managers if m.department == employee.department), None)
+        if not manager:
+            manager = managers[0]
+        
+        # Determine review period (last 6 hours or since last review)
+        review_period_end = datetime.utcnow()
+        result = await self.db.execute(
+            select(EmployeeReview)
+            .where(EmployeeReview.employee_id == employee.id)
+            .order_by(desc(EmployeeReview.review_date))
+            .limit(1)
+        )
+        last_review = result.scalar_one_or_none()
+        
+        if last_review and last_review.review_date:
+            review_period_start = last_review.review_date.replace(tzinfo=None) if last_review.review_date.tzinfo else last_review.review_date
+        else:
+            # If no previous review, use hire date or 6 hours ago
+            if employee.hired_at:
+                review_period_start = employee.hired_at.replace(tzinfo=None) if employee.hired_at.tzinfo else employee.hired_at
+            else:
+                review_period_start = datetime.utcnow() - timedelta(hours=6)
+        
+        # Calculate performance metrics for the review period
+        metrics = await self._calculate_performance_metrics(employee, review_period_start)
+        
+        # Generate ratings based on metrics
+        performance_rating = metrics["performance_score"]
+        teamwork_rating = metrics["teamwork_score"]
+        communication_rating = metrics["communication_score"]
+        productivity_rating = metrics["productivity_score"]
+        
+        # Calculate overall rating (weighted average)
+        overall_rating = (
+            performance_rating * 0.3 +
+            teamwork_rating * 0.2 +
+            communication_rating * 0.2 +
+            productivity_rating * 0.3
+        )
+        
+        # Round to 1 decimal place, ensure between 1.0 and 5.0
+        overall_rating = max(1.0, min(5.0, round(overall_rating, 1)))
+        
+        # Generate review comments using Ollama (manager conducts the review)
+        comments, strengths, areas_for_improvement = await self._generate_review_comments_with_ollama(
+            manager, employee, overall_rating, performance_rating, teamwork_rating, 
+            communication_rating, productivity_rating, metrics, review_period_start, review_period_end
+        )
+        
+        # Create review
+        review = EmployeeReview(
+            employee_id=employee.id,
+            manager_id=manager.id,
+            overall_rating=overall_rating,
+            performance_rating=performance_rating,
+            teamwork_rating=teamwork_rating,
+            communication_rating=communication_rating,
+            productivity_rating=productivity_rating,
+            comments=comments,
+            strengths=strengths,
+            areas_for_improvement=areas_for_improvement,
+            review_period_start=review_period_start,
+            review_period_end=review_period_end
+        )
+        
+        self.db.add(review)
+        
+        # Create activity log
+        from database.models import Activity
+        activity = Activity(
+            employee_id=employee.id,
+            activity_type="performance_review",
+            description=f"{employee.name} received a performance review from {manager.name}. Overall rating: {overall_rating}/5.0",
+            activity_metadata={
+                "review_id": review.id,
+                "overall_rating": overall_rating,
+                "manager_id": manager.id
+            }
+        )
+        self.db.add(activity)
+        
+        # Also create activity for the manager (they conducted the review)
+        manager_activity = Activity(
+            employee_id=manager.id,
+            activity_type="conducted_review",
+            description=f"{manager.name} conducted a performance review for {employee.name}. Overall rating: {overall_rating}/5.0",
+            activity_metadata={
+                "review_id": review.id,
+                "reviewed_employee_id": employee.id,
+                "overall_rating": overall_rating
+            }
+        )
+        self.db.add(manager_activity)
+        
+        # Create notification for the employee
+        from database.models import Notification
+        rating_label = "Excellent" if overall_rating >= 4.5 else "Very Good" if overall_rating >= 4.0 else "Good" if overall_rating >= 3.0 else "Needs Improvement" if overall_rating >= 2.0 else "Poor"
+        notification = Notification(
+            notification_type="review_completed",
+            title=f"Performance Review Completed: {employee.name}",
+            message=f"{manager.name} completed a performance review for {employee.name}. Overall rating: {overall_rating:.1f}/5.0 ({rating_label})",
+            employee_id=employee.id,
+            review_id=review.id,
+            read=False
+        )
+        self.db.add(notification)
+        
+        # Create notification for the manager (reminder they conducted a review)
+        manager_notification = Notification(
+            notification_type="review_conducted",
+            title=f"Review Conducted: {employee.name}",
+            message=f"You completed a performance review for {employee.name}. Rating: {overall_rating:.1f}/5.0 ({rating_label})",
+            employee_id=manager.id,
+            review_id=review.id,
+            read=False
+        )
+        self.db.add(manager_notification)
+        
+        # If rating is excellent (>= 4.5), consider a raise
+        if overall_rating >= 4.5:
+            # Check if employee has had consistently good reviews
+            result = await self.db.execute(
+                select(EmployeeReview)
+                .where(EmployeeReview.employee_id == employee.id)
+                .order_by(desc(EmployeeReview.review_date))
+                .limit(2)
+            )
+            recent_reviews = result.scalars().all()
+            
+            # If this is the second excellent review in a row, recommend a raise
+            if len(recent_reviews) >= 2:
+                prev_review = recent_reviews[1] if len(recent_reviews) > 1 else None
+                if prev_review and prev_review.overall_rating >= 4.5:
+                    raise_activity = Activity(
+                        employee_id=employee.id,
+                        activity_type="raise_recommendation",
+                        description=f"{employee.name} has received excellent performance reviews and is recommended for a salary increase.",
+                        activity_metadata={
+                            "review_id": review.id,
+                            "overall_rating": overall_rating,
+                            "recommended_raise_percentage": 5.0  # 5% raise
+                        }
+                    )
+                    self.db.add(raise_activity)
+                    
+                    # Create notification for raise recommendation
+                    from database.models import Notification
+                    raise_notification = Notification(
+                        notification_type="raise_recommendation",
+                        title=f"Raise Recommended: {employee.name}",
+                        message=f"{employee.name} has received two consecutive excellent performance reviews and is recommended for a 5% salary increase.",
+                        employee_id=employee.id,
+                        review_id=review.id,
+                        read=False
+                    )
+                    self.db.add(raise_notification)
+        
+        return review
+    
+    async def _calculate_performance_metrics(self, employee: Employee, review_period_start: datetime = None) -> dict:
+        """
+        Calculate performance metrics for an employee based on their work.
+        """
+        # Use review period start if provided, otherwise default to last 6 hours
+        if review_period_start:
+            cutoff = review_period_start
+        else:
+            cutoff = datetime.utcnow() - timedelta(hours=6)
+        
+        result = await self.db.execute(
+            select(Task)
+            .where(
+                Task.employee_id == employee.id,
+                Task.status == "completed",
+                Task.completed_at >= cutoff
+            )
+        )
+        completed_tasks = result.scalars().all()
+        
+        # Get all tasks assigned to employee
+        result = await self.db.execute(
+            select(Task).where(Task.employee_id == employee.id)
+        )
+        all_tasks = result.scalars().all()
+        
+        # Calculate task completion rate
+        total_tasks = len(all_tasks)
+        completed_count = len(completed_tasks)
+        completion_rate = (completed_count / total_tasks * 100) if total_tasks > 0 else 0.0
+        
+        # Get activities (to measure communication and teamwork)
+        result = await self.db.execute(
+            select(Activity)
+            .where(
+                Activity.employee_id == employee.id,
+                Activity.timestamp >= cutoff
+            )
+        )
+        recent_activities = result.scalars().all()
+        
+        # Count communication activities (emails, chats, meetings)
+        communication_count = sum(
+            1 for act in recent_activities 
+            if any(keyword in act.activity_type.lower() for keyword in ["email", "chat", "meeting", "communication"])
+        )
+        
+        # Count teamwork activities
+        teamwork_count = sum(
+            1 for act in recent_activities 
+            if any(keyword in act.activity_type.lower() for keyword in ["collaboration", "team", "meeting", "project"])
+        )
+        
+        # Base scores
+        performance_score = 3.0  # Average
+        teamwork_score = 3.0
+        communication_score = 3.0
+        productivity_score = 3.0
+        
+        # Adjust based on metrics
+        if completion_rate >= 80:
+            performance_score = 4.5
+            productivity_score = 4.5
+        elif completion_rate >= 60:
+            performance_score = 3.5
+            productivity_score = 3.5
+        elif completion_rate < 40:
+            performance_score = 2.0
+            productivity_score = 2.0
+        
+        # Adjust for communication
+        if communication_count > 20:
+            communication_score = 4.0
+        elif communication_count < 5:
+            communication_score = 2.5
+        
+        # Adjust for teamwork
+        if teamwork_count > 15:
+            teamwork_score = 4.0
+        elif teamwork_count < 3:
+            teamwork_score = 2.5
+        
+        # Add some randomness based on personality traits
+        if employee.personality_traits:
+            traits = employee.personality_traits
+            if "proactive" in traits or "hardworking" in traits:
+                performance_score = min(5.0, performance_score + 0.3)
+                productivity_score = min(5.0, productivity_score + 0.3)
+            if "collaborative" in traits or "team player" in traits:
+                teamwork_score = min(5.0, teamwork_score + 0.3)
+            if "communicative" in traits or "outgoing" in traits:
+                communication_score = min(5.0, communication_score + 0.3)
+            if "lazy" in traits or "disengaged" in traits:
+                performance_score = max(1.0, performance_score - 0.5)
+                productivity_score = max(1.0, productivity_score - 0.5)
+        
+        # Add small random variation
+        performance_score += random.uniform(-0.2, 0.2)
+        teamwork_score += random.uniform(-0.2, 0.2)
+        communication_score += random.uniform(-0.2, 0.2)
+        productivity_score += random.uniform(-0.2, 0.2)
+        
+        # Ensure scores are between 1.0 and 5.0
+        performance_score = max(1.0, min(5.0, round(performance_score, 1)))
+        teamwork_score = max(1.0, min(5.0, round(teamwork_score, 1)))
+        communication_score = max(1.0, min(5.0, round(communication_score, 1)))
+        productivity_score = max(1.0, min(5.0, round(productivity_score, 1)))
+        
+        return {
+            "performance_score": performance_score,
+            "teamwork_score": teamwork_score,
+            "communication_score": communication_score,
+            "productivity_score": productivity_score,
+            "completion_rate": completion_rate,
+            "communication_count": communication_count,
+            "teamwork_count": teamwork_count,
+            "completed_tasks": completed_count
+        }
+    
+    async def _generate_review_comments_with_ollama(
+        self, manager: Employee, employee: Employee, overall_rating: float,
+        performance_rating: float, teamwork_rating: float,
+        communication_rating: float, productivity_rating: float,
+        metrics: dict, review_period_start: datetime, review_period_end: datetime
+    ) -> tuple:
+        """
+        Generate review comments, strengths, and areas for improvement using Ollama.
+        The manager conducts the review from their perspective.
+        """
+        # Get employee's recent work data for context
+        result = await self.db.execute(
+            select(Task)
+            .where(
+                Task.employee_id == employee.id,
+                Task.created_at >= review_period_start,
+                Task.created_at <= review_period_end
+            )
+            .order_by(desc(Task.created_at))
+            .limit(10)
+        )
+        recent_tasks = result.scalars().all()
+        
+        # Get recent activities
+        result = await self.db.execute(
+            select(Activity)
+            .where(
+                Activity.employee_id == employee.id,
+                Activity.timestamp >= review_period_start,
+                Activity.timestamp <= review_period_end
+            )
+            .order_by(desc(Activity.timestamp))
+            .limit(10)
+        )
+        recent_activities = result.scalars().all()
+        
+        # Build task summary
+        task_summary = []
+        for task in recent_tasks[:5]:
+            status = task.status
+            task_summary.append(f"- {task.description[:100]} ({status})")
+        task_summary_str = "\n".join(task_summary) if task_summary else "No tasks in this period"
+        
+        # Build activity summary
+        activity_summary = []
+        for act in recent_activities[:5]:
+            activity_summary.append(f"- {act.activity_type}: {act.description[:80]}")
+        activity_summary_str = "\n".join(activity_summary) if activity_summary else "No recent activities"
+        
+        # Manager personality traits
+        manager_personality = ", ".join(manager.personality_traits) if manager.personality_traits else "professional, fair"
+        employee_personality = ", ".join(employee.personality_traits) if employee.personality_traits else "balanced"
+        
+        # Format review period
+        period_str = f"{review_period_start.strftime('%Y-%m-%d %H:%M')} to {review_period_end.strftime('%Y-%m-%d %H:%M')}"
+        
+        # Build prompt for Ollama
+        prompt = f"""You are {manager.name}, {manager.title} at a company. You are conducting a performance review for {employee.name}, {employee.title}.
+
+Your personality traits: {manager_personality}
+Your role: {manager.role}
+Your backstory: {manager.backstory or "Experienced manager focused on team development"}
+
+Employee being reviewed:
+- Name: {employee.name}
+- Title: {employee.title}
+- Department: {employee.department}
+- Personality: {employee_personality}
+- Backstory: {employee.backstory or "Team member"}
+
+Review Period: {period_str}
+
+Performance Ratings (out of 5.0):
+- Overall Rating: {overall_rating}/5.0
+- Performance: {performance_rating}/5.0
+- Teamwork: {teamwork_rating}/5.0
+- Communication: {communication_rating}/5.0
+- Productivity: {productivity_rating}/5.0
+
+Performance Metrics:
+- Task Completion Rate: {metrics.get('completion_rate', 0):.1f}%
+- Completed Tasks: {metrics.get('completed_tasks', 0)}
+- Communication Activities: {metrics.get('communication_count', 0)}
+- Teamwork Activities: {metrics.get('teamwork_count', 0)}
+
+Recent Work:
+Tasks:
+{task_summary_str}
+
+Recent Activities:
+{activity_summary_str}
+
+Write a professional performance review from your perspective as {manager.name}. The review should:
+
+1. Include overall comments (2-3 sentences) about {employee.name}'s performance during this period
+2. List 2-3 key strengths (be specific and constructive)
+3. List 1-2 areas for improvement (be supportive and actionable)
+
+Write the review in JSON format:
+{{
+    "comments": "Your overall review comments (2-3 sentences)",
+    "strengths": "strength1; strength2; strength3",
+    "areas_for_improvement": "area1; area2"
+}}
+
+Be professional, fair, and constructive. Match your personality traits when writing the review."""
+
+        try:
+            llm_client = OllamaClient()
+            response_text = await llm_client.generate_response(prompt)
+            
+            # Try to parse JSON from response
+            import json
+            import re
+            
+            # Extract JSON from response (handle nested braces)
+            # Try to find JSON object with balanced braces
+            brace_count = 0
+            start_idx = response_text.find('{')
+            if start_idx != -1:
+                for i in range(start_idx, len(response_text)):
+                    if response_text[i] == '{':
+                        brace_count += 1
+                    elif response_text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            json_str = response_text[start_idx:i+1]
+                            json_match = json_str
+                            break
+                else:
+                    json_match = None
+            else:
+                json_match = None
+            
+            if json_match:
+                try:
+                    review_data = json.loads(json_match if isinstance(json_match, str) else json_match.group())
+                    comments = review_data.get("comments", "")
+                    strengths = review_data.get("strengths", "")
+                    areas_for_improvement = review_data.get("areas_for_improvement", "")
+                except json.JSONDecodeError:
+                    # Fallback: parse manually
+                    comments = response_text[:500] if response_text else ""
+                    strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
+                    areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
+            else:
+                # No JSON found, use fallback
+                comments = response_text[:500] if response_text else ""
+                strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
+                areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
+            
+            # Ensure we have values
+            if not comments:
+                comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
+            if not strengths:
+                strengths = "Consistent performance" if overall_rating >= 3.0 else "Room for growth"
+            if not areas_for_improvement:
+                areas_for_improvement = "Continue to develop skills" if overall_rating < 4.0 else "Maintain current excellence"
+            
+            return comments, strengths, areas_for_improvement
+            
+        except Exception as e:
+            print(f"Error generating review with Ollama: {e}")
+            # Fallback to simple review
+            comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
+            strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
+            areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
+            return comments, strengths, areas_for_improvement
+    
+    async def get_average_rating(self, employee_id: int) -> Optional[float]:
+        """
+        Get the average overall rating for an employee across all reviews.
+        """
+        result = await self.db.execute(
+            select(func.avg(EmployeeReview.overall_rating))
+            .where(EmployeeReview.employee_id == employee_id)
+        )
+        avg_rating = result.scalar_one_or_none()
+        return avg_rating[0] if avg_rating and avg_rating[0] else None
+    
+    async def get_recent_reviews(self, employee_id: int, limit: int = 3) -> List[EmployeeReview]:
+        """
+        Get the most recent reviews for an employee.
+        """
+        result = await self.db.execute(
+            select(EmployeeReview)
+            .where(EmployeeReview.employee_id == employee_id)
+            .order_by(desc(EmployeeReview.review_date))
+            .limit(limit)
+        )
+        return result.scalars().all()
+

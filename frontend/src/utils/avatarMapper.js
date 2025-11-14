@@ -2,11 +2,17 @@
 const avatarMapping = {
   // Role-based mappings
   'CEO': 'office_char_08_exec.png',
+  'CTO': 'office_char_08_exec.png',
+  'COO': 'office_char_08_exec.png',
+  'CFO': 'office_char_13_finance.png',
   'Manager': 'office_char_01_manager.png',
   'Employee': 'office_char_02_dev.png',
   
   // Title-based mappings (more specific)
   'Chief Executive Officer': 'office_char_08_exec.png',
+  'Chief Technology Officer': 'office_char_08_exec.png',
+  'Chief Operating Officer': 'office_char_08_exec.png',
+  'Chief Financial Officer': 'office_char_13_finance.png',
   'Executive': 'office_char_08_exec.png',
   'Manager': 'office_char_01_manager.png',
   'Project Manager': 'office_char_11_pm.png',

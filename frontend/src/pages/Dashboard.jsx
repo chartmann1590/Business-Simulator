@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
+import BoardroomView from '../components/BoardroomView'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [chats, setChats] = useState([])
   const activities = useWebSocket()
 
   // Helper function to safely format timestamps
@@ -113,6 +115,26 @@ function Dashboard() {
     return () => clearInterval(interval)
   }, [fetchDashboardData])
 
+  // Fetch chats for boardroom
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const response = await fetch('/api/chats?limit=500')
+        if (response.ok) {
+          const data = await response.json()
+          setChats(data || [])
+        }
+      } catch (error) {
+        console.error('Error fetching chats:', error)
+        setChats([])
+      }
+    }
+
+    fetchChats()
+    const interval = setInterval(fetchChats, 10000) // Refresh every 10 seconds
+    return () => clearInterval(interval)
+  }, [])
+
   // Update business name in sidebar
   useEffect(() => {
     if (dashboardData?.business_name) {
@@ -197,6 +219,16 @@ function Dashboard() {
             }`}
           >
             Leadership
+          </button>
+          <button
+            onClick={() => setActiveTab('boardroom')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'boardroom'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Boardroom
           </button>
         </nav>
       </div>
@@ -464,7 +496,7 @@ function Dashboard() {
       {activeTab === 'leadership' && (
         <div className="space-y-6">
           {/* Leadership Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="text-sm font-medium text-gray-500">Leadership Team</div>
               <div className="mt-2 text-3xl font-bold text-blue-600">
@@ -496,12 +528,21 @@ function Dashboard() {
               </div>
             </div>
             <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm font-medium text-gray-500">Projects Led</div>
-              <div className="mt-2 text-3xl font-bold text-indigo-600">
-                {dashboardData?.leadership_insights?.metrics?.projects_led_by_leadership || 0}
+              <div className="text-sm font-medium text-gray-500">Reviews In Progress</div>
+              <div className="mt-2 text-3xl font-bold text-yellow-600">
+                {dashboardData?.leadership_insights?.metrics?.reviews_in_progress || 0}
               </div>
               <div className="mt-2 text-sm text-gray-600">
-                Leadership-driven projects
+                Reviews being conducted
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Reviews Completed</div>
+              <div className="mt-2 text-3xl font-bold text-teal-600">
+                {dashboardData?.leadership_insights?.metrics?.reviews_completed || 0}
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Completed reviews
               </div>
             </div>
           </div>
@@ -524,6 +565,9 @@ function Dashboard() {
                         </div>
                         <span className={`px-2 py-1 text-xs font-medium rounded ${
                           leader.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
+                          leader.role === 'CTO' ? 'bg-indigo-100 text-indigo-800' :
+                          leader.role === 'COO' ? 'bg-green-100 text-green-800' :
+                          leader.role === 'CFO' ? 'bg-amber-100 text-amber-800' :
                           leader.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
@@ -666,6 +710,25 @@ function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Boardroom Tab Content */}
+      {activeTab === 'boardroom' && (
+        <BoardroomView 
+          leadershipTeam={dashboardData?.leadership_insights?.leadership_team || []}
+          chats={chats}
+          onChatsUpdate={async () => {
+            try {
+              const response = await fetch('/api/chats?limit=500')
+              if (response.ok) {
+                const data = await response.json()
+                setChats(data || [])
+              }
+            } catch (error) {
+              console.error('Error fetching chats:', error)
+            }
+          }}
+        />
       )}
     </div>
   )

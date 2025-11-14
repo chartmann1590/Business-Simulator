@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import event
 import os
 
 # Use absolute path to ensure we're using the right database file
@@ -19,6 +20,25 @@ engine = create_async_engine(
     },
     pool_pre_ping=True  # Verify connections before using them
 )
+
+# Enable WAL (Write-Ahead Logging) mode for better concurrency
+# This allows multiple readers and one writer simultaneously
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    """Enable WAL mode and optimize SQLite for concurrent access."""
+    cursor = dbapi_conn.cursor()
+    try:
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # Set busy timeout (in milliseconds)
+        cursor.execute("PRAGMA busy_timeout=20000")
+        # Optimize for concurrent access
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        cursor.close()
+    except Exception as e:
+        print(f"Warning: Could not set SQLite pragmas: {e}")
+        cursor.close()
 async_session_maker = async_sessionmaker(
     engine, 
     class_=AsyncSession, 

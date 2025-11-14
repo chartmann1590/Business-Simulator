@@ -10,7 +10,18 @@ class OllamaClient:
     def __init__(self):
         self.base_url = OLLAMA_BASE_URL
         self.model = OLLAMA_MODEL
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self._client = None
+    
+    async def _get_client(self):
+        """Lazy initialization of httpx client to avoid SSL context issues during import."""
+        if self._client is None:
+            # For HTTP connections, we can disable SSL verification
+            # Since we're using localhost HTTP, SSL isn't needed
+            self._client = httpx.AsyncClient(
+                timeout=60.0,
+                verify=False  # Disable SSL verification for localhost HTTP
+            )
+        return self._client
     
     async def generate_decision(
         self,
@@ -54,7 +65,8 @@ Respond in JSON format with:
 }}"""
 
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -114,7 +126,8 @@ Respond in JSON format with:
 Provide a brief analysis (2-3 sentences) of the situation."""
         
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -145,7 +158,8 @@ Provide a plan in JSON format:
 }}"""
 
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -185,7 +199,8 @@ Provide a plan in JSON format:
     async def generate_response(self, prompt: str) -> str:
         """Generate a text response from a prompt."""
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -248,7 +263,8 @@ Write a professional, helpful email response. The response should:
 Write only the email body (no subject line, no signature - just the message content)."""
 
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -287,26 +303,45 @@ Write only the email body (no subject line, no signature - just the message cont
     ) -> str:
         """Generate a chat response to a question or request."""
         personality_str = ", ".join(recipient_personality) if recipient_personality else "balanced"
-        project_info = f" You're currently working on {project_context}." if project_context else ""
+        
+        # Build work context section
+        work_context_section = ""
+        if project_context:
+            work_context_section = f"\nCurrent work context: {project_context}"
+        
+        # Build business context section
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get("revenue"):
+                business_parts.append(f"Company revenue: ${business_context['revenue']:,.2f}")
+            if business_context.get("profit"):
+                business_parts.append(f"Company profit: ${business_context['profit']:,.2f}")
+            if business_context.get("active_projects"):
+                business_parts.append(f"Active projects: {business_context['active_projects']}")
+            if business_parts:
+                business_context_section = f"\nCompany status: {', '.join(business_parts)}"
         
         prompt = f"""You are {recipient_name}, {recipient_title} at a company. You received a chat message from {sender_name} ({sender_title}).
 
 Your personality traits: {personality_str}
-Your role: {recipient_role}{project_info}
+Your role: {recipient_role}{work_context_section}{business_context_section}
 
 Message from {sender_name}:
 {original_message}
 
-Write a brief, friendly chat response (1-2 sentences). The response should:
+Write a brief, friendly chat response (1-3 sentences). The response should:
 1. Answer the question or address the request directly
 2. Match your personality (e.g., if you're analytical, be precise; if creative, be enthusiastic)
 3. Be conversational and appropriate for a chat message
-4. If you can't help directly, offer to assist or find someone who can
+4. Reference your current work if relevant to the question
+5. If you can't help directly, offer to assist or find someone who can
 
 Write only the response message, nothing else."""
 
         try:
-            response = await self.client.post(
+            client = await self._get_client()
+            response = await client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
@@ -334,6 +369,204 @@ Write only the response message, nothing else."""
             # Fallback response
             return f"Sure, I can help with that! Let me get back to you shortly."
     
+    async def generate_email(
+        self,
+        sender_name: str,
+        sender_title: str,
+        sender_role: str,
+        sender_personality: List[str],
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        decision: str,
+        reasoning: str,
+        project_context: Optional[str] = None,
+        business_context: Dict = None
+    ) -> Dict[str, str]:
+        """Generate an initial email from one employee to another based on their decision and context."""
+        personality_str = ", ".join(sender_personality) if sender_personality else "balanced"
+        
+        # Build work context section
+        work_context_section = ""
+        if project_context:
+            work_context_section = f"\nYou are currently working on project: {project_context}"
+        
+        # Build business context section
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get("revenue"):
+                business_parts.append(f"Company revenue: ${business_context['revenue']:,.2f}")
+            if business_context.get("profit"):
+                business_parts.append(f"Company profit: ${business_context['profit']:,.2f}")
+            if business_context.get("active_projects"):
+                business_parts.append(f"Active projects: {business_context['active_projects']}")
+            if business_parts:
+                business_context_section = f"\nCurrent business situation: {', '.join(business_parts)}"
+        
+        prompt = f"""You are {sender_name}, {sender_title} at a company. You want to send an email to {recipient_name} ({recipient_title}).
+
+Your personality traits: {personality_str}
+Your role: {sender_role}
+Recipient's role: {recipient_role}
+{work_context_section}
+{business_context_section}
+
+You recently made a decision: {decision}
+Your reasoning: {reasoning}
+
+Write a professional email to {recipient_name}. The email should:
+1. Have an appropriate subject line (brief and relevant)
+2. Have a professional but friendly body (2-4 sentences)
+3. Match your personality and role
+4. Reference your decision and reasoning naturally
+5. Be appropriate for the recipient's role
+6. Include a professional closing with your name
+
+Respond in JSON format with:
+{{
+    "subject": "email subject line",
+    "body": "email body content"
+}}
+
+Write only the JSON, nothing else."""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Try to parse JSON from the response
+            try:
+                if response_text.strip().startswith("{"):
+                    email_data = json.loads(response_text)
+                else:
+                    # Try to extract JSON from markdown code blocks
+                    import re
+                    json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
+                    if json_match:
+                        email_data = json.loads(json_match.group())
+                    else:
+                        raise ValueError("No JSON found in response")
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error parsing email JSON: {e}")
+                # Fallback: generate simple email
+                email_data = {
+                    "subject": f"Question about {decision[:50]}",
+                    "body": f"Hi {recipient_name},\n\nI wanted to reach out regarding {decision}. {reasoning}\n\nWhat do you think?\n\nBest regards,\n{sender_name}"
+                }
+            
+            # Ensure both subject and body exist
+            if "subject" not in email_data:
+                email_data["subject"] = f"Question about {decision[:50]}"
+            if "body" not in email_data:
+                email_data["body"] = f"Hi {recipient_name},\n\nI wanted to reach out regarding {decision}. {reasoning}\n\nBest regards,\n{sender_name}"
+            
+            return email_data
+        except Exception as e:
+            print(f"Error generating email: {e}")
+            # Fallback email
+            return {
+                "subject": f"Question about {decision[:50]}",
+                "body": f"Hi {recipient_name},\n\nI wanted to reach out regarding {decision}. {reasoning}\n\nWhat do you think?\n\nBest regards,\n{sender_name}"
+            }
+    
+    async def generate_chat(
+        self,
+        sender_name: str,
+        sender_title: str,
+        sender_role: str,
+        sender_personality: List[str],
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        decision: str,
+        reasoning: str,
+        project_context: Optional[str] = None,
+        business_context: Dict = None
+    ) -> str:
+        """Generate an initial chat message from one employee to another based on their decision and context."""
+        personality_str = ", ".join(sender_personality) if sender_personality else "balanced"
+        
+        # Build work context section
+        work_context_section = ""
+        if project_context:
+            work_context_section = f"\nYou are currently working on project: {project_context}"
+        
+        # Build business context section
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get("revenue"):
+                business_parts.append(f"Company revenue: ${business_context['revenue']:,.2f}")
+            if business_context.get("profit"):
+                business_parts.append(f"Company profit: ${business_context['profit']:,.2f}")
+            if business_context.get("active_projects"):
+                business_parts.append(f"Active projects: {business_context['active_projects']}")
+            if business_parts:
+                business_context_section = f"\nCurrent business situation: {', '.join(business_parts)}"
+        
+        prompt = f"""You are {sender_name}, {sender_title} at a company. You want to send a chat message to {recipient_name} ({recipient_title}).
+
+Your personality traits: {personality_str}
+Your role: {sender_role}
+Recipient's role: {recipient_role}
+{work_context_section}
+{business_context_section}
+
+You recently made a decision: {decision}
+Your reasoning: {reasoning}
+
+Write a brief, friendly chat message (1-3 sentences) to {recipient_name}. The message should:
+1. Be conversational and appropriate for a chat message
+2. Match your personality (e.g., if you're analytical, be precise; if creative, be enthusiastic)
+3. Reference your decision and reasoning naturally
+4. Be appropriate for the recipient's role
+5. Feel like a natural, friendly message between colleagues
+
+Write only the chat message, nothing else."""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Limit length for chat messages
+            if len(response_text) > 200:
+                response_text = response_text[:197] + "..."
+            
+            return response_text
+        except Exception as e:
+            print(f"Error generating chat: {e}")
+            # Fallback chat message
+            return f"Hey {recipient_name}, quick question: {decision[:100]}"
+    
     async def close(self):
-        await self.client.aclose()
+        if self._client is not None:
+            await self._client.aclose()
 

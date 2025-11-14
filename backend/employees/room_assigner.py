@@ -174,8 +174,8 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = await _determine_office_space(db_session, ROOM_OPEN_OFFICE, ROOM_CUBICLES)
             floor = await _determine_floor_for_regular_employee(db_session)
     
-    # Managers → Executive Suite, Corner Executive, or Manager Office based on seniority
-    elif role == "Manager":
+    # Managers and C-level executives → Executive Suite, Corner Executive, or Manager Office based on seniority
+    elif role in ["Manager", "CTO", "COO", "CFO"]:
         if "senior" in title or "director" in title or "vp" in title or "vice president" in title:
             # High-level managers get executive spaces
             rand = random.random()

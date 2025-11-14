@@ -6,17 +6,27 @@ function ChatView({ chats, employees }) {
   const [groupedChats, setGroupedChats] = useState({})
 
   useEffect(() => {
-    // Group chats by conversation (pair of employees)
+    // Group chats by thread_id to ensure all messages between two employees stay in the same thread
     const grouped = {}
+    
+    // First pass: group all messages by thread_id (or fallback to sender/recipient pair)
     chats.forEach(chat => {
-      const key = [chat.sender_id, chat.recipient_id].sort().join('-')
+      // Use thread_id if available, otherwise generate consistent key from sender/recipient pair
+      const key = chat.thread_id || [chat.sender_id, chat.recipient_id].sort().join('-')
       if (!grouped[key]) {
         grouped[key] = {
-          participants: [chat.sender_id, chat.recipient_id],
+          participants: new Set(),
           messages: []
         }
       }
+      grouped[key].participants.add(chat.sender_id)
+      grouped[key].participants.add(chat.recipient_id)
       grouped[key].messages.push(chat)
+    })
+    
+    // Convert participants Sets to Arrays
+    Object.keys(grouped).forEach(key => {
+      grouped[key].participants = Array.from(grouped[key].participants)
     })
     
     // Sort messages within each conversation - newest first
@@ -54,19 +64,30 @@ function ChatView({ chats, employees }) {
 
   const currentConversation = selectedChat ? groupedChats[selectedChat] : null
 
-  // Format time for Teams-style display
+  // Format time to show actual date and time (never "just now")
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
-    const now = new Date()
-    const diff = now - date
-    const minutes = Math.floor(diff / 60000)
     
-    if (minutes < 1) return 'Just now'
-    if (minutes < 60) return `${minutes}m ago`
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return new Date().toLocaleString()
     }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    
+    // Always show full date and time
+    const now = new Date()
+    const options = {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }
+    
+    // Include year if different from current year
+    if (date.getFullYear() !== now.getFullYear()) {
+      options.year = 'numeric'
+    }
+    
+    return date.toLocaleString([], options)
   }
 
   return (

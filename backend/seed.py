@@ -18,11 +18,29 @@ EMPLOYEES_DATA = [
     {
         "name": "Marcus Rodriguez",
         "title": "Chief Technology Officer",
-        "role": "Manager",
+        "role": "CTO",
         "hierarchy_level": 2,
         "department": "Engineering",
         "personality_traits": ["analytical", "innovative", "detail-oriented"],
         "backstory": "Marcus has a PhD in Computer Science and spent years at leading tech companies before joining as CTO. He's passionate about building scalable systems and mentoring engineers. His technical expertise is matched only by his ability to translate complex concepts into actionable plans."
+    },
+    {
+        "name": "Jennifer Martinez",
+        "title": "Chief Operating Officer",
+        "role": "COO",
+        "hierarchy_level": 2,
+        "department": "Operations",
+        "personality_traits": ["efficient", "organized", "results-driven"],
+        "backstory": "Jennifer brings over 15 years of operations experience from Fortune 500 companies. She's known for her ability to streamline processes, improve efficiency, and ensure smooth day-to-day operations. Her systematic approach has transformed multiple organizations, making her an invaluable asset to the executive team."
+    },
+    {
+        "name": "Robert Thompson",
+        "title": "Chief Financial Officer",
+        "role": "CFO",
+        "hierarchy_level": 2,
+        "department": "Finance",
+        "personality_traits": ["analytical", "strategic", "risk-aware"],
+        "backstory": "Robert is a CPA with an MBA from a top business school. He's spent his career managing finances for high-growth tech companies, helping them scale responsibly. His financial acumen and strategic thinking have been crucial in guiding companies through rapid expansion while maintaining fiscal health."
     },
     {
         "name": "Emily Watson",

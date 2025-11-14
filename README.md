@@ -14,9 +14,13 @@ A fully autonomous office simulation where AI employees make decisions, work on 
   - Dashboard with key metrics and business goals
   - Employee details with backstories, activities, and room locations
   - Project tracking with progress and financial data
+  - Task management with detailed task views
   - Comprehensive financial analytics with payroll breakdowns
   - Office layout visualization across all floors
   - Communication hub (email and chat)
+  - Employee performance reviews and ratings
+  - Notification system for important events
+  - Boardroom discussions for strategic planning
   - Activity feed with real-time updates
 
 ## Prerequisites
@@ -175,6 +179,9 @@ The web interface provides several views:
   - Floor-by-floor navigation
   - Room detail modals
 - **Communications**: Email and chat message hub with filtering
+- **Tasks**: View all tasks across projects with filtering and detailed task information
+- **Notifications**: Real-time notifications for reviews, raises, terminations, and other events
+- **Boardroom**: Strategic discussions and decision-making sessions
 
 All views update in real-time as the simulation runs via WebSocket.
 

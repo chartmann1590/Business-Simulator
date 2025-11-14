@@ -32,6 +32,8 @@ class Employee(Base):
     received_emails = relationship("Email", foreign_keys="Email.recipient_id", back_populates="recipient")
     sent_chats = relationship("ChatMessage", foreign_keys="ChatMessage.sender_id", back_populates="sender")
     received_chats = relationship("ChatMessage", foreign_keys="ChatMessage.recipient_id", back_populates="recipient")
+    reviews_received = relationship("EmployeeReview", foreign_keys="EmployeeReview.employee_id", back_populates="employee")
+    reviews_given = relationship("EmployeeReview", foreign_keys="EmployeeReview.manager_id", back_populates="manager")
 
 class Project(Base):
     __tablename__ = "projects"
@@ -138,12 +140,49 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     
     id = Column(Integer, primary_key=True, index=True)
-    sender_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    recipient_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # Nullable to allow system/user messages (0 or NULL)
+    recipient_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # Nullable to allow messages to user/manager
     message = Column(Text, nullable=False)
     thread_id = Column(String, nullable=True, index=True)  # Groups all chats between two employees
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
     sender = relationship("Employee", foreign_keys=[sender_id], back_populates="sent_chats")
     recipient = relationship("Employee", foreign_keys=[recipient_id], back_populates="received_chats")
+
+class EmployeeReview(Base):
+    __tablename__ = "employee_reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    manager_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    review_date = Column(DateTime(timezone=True), server_default=func.now())
+    overall_rating = Column(Float, nullable=False)  # 1.0 to 5.0
+    performance_rating = Column(Float, nullable=True)  # 1.0 to 5.0
+    teamwork_rating = Column(Float, nullable=True)  # 1.0 to 5.0
+    communication_rating = Column(Float, nullable=True)  # 1.0 to 5.0
+    productivity_rating = Column(Float, nullable=True)  # 1.0 to 5.0
+    comments = Column(Text, nullable=True)
+    strengths = Column(Text, nullable=True)
+    areas_for_improvement = Column(Text, nullable=True)
+    review_period_start = Column(DateTime(timezone=True), nullable=True)  # Start of review period
+    review_period_end = Column(DateTime(timezone=True), nullable=True)  # End of review period
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    employee = relationship("Employee", foreign_keys=[employee_id], back_populates="reviews_received")
+    manager = relationship("Employee", foreign_keys=[manager_id], back_populates="reviews_given")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    notification_type = Column(String, nullable=False)  # review_completed, raise_recommendation, employee_fired, etc.
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # Related employee if applicable
+    review_id = Column(Integer, ForeignKey("employee_reviews.id"), nullable=True)  # Related review if applicable
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    review = relationship("EmployeeReview", foreign_keys=[review_id])
 

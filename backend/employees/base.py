@@ -46,9 +46,17 @@ class EmployeeAgent:
                 "Prioritize profitable projects and initiatives",
                 "Review company performance and profitability",
                 "Make strategic decisions for business growth",
-                "Focus on making the business successful"
+                "Focus on making the business successful",
+                "Develop strategic initiatives to improve company performance",
+                "Identify opportunities for cost optimization and efficiency",
+                "Plan market expansion and growth strategies",
+                "Make strategic investments in technology and innovation",
+                "Optimize resource allocation for maximum impact",
+                "Drive operational excellence across the organization",
+                "Evaluate competitive position and market opportunities",
+                "Make data-driven strategic decisions for long-term success"
             ]
-        elif self.employee.role == "Manager":
+        elif self.employee.role in ["Manager", "CTO", "COO", "CFO"]:
             options = [
                 "Focus on business operations and profitability",
                 "Review team performance and optimize workflow",
@@ -57,7 +65,15 @@ class EmployeeAgent:
                 "Prioritize profitable work and business outcomes",
                 "Ensure everything is working smoothly",
                 "Focus on what's best for the business",
-                "Review and improve operational effectiveness"
+                "Review and improve operational effectiveness",
+                "Implement process improvements to increase efficiency",
+                "Optimize resource allocation and workload distribution",
+                "Make strategic decisions to improve team productivity",
+                "Identify and eliminate operational bottlenecks",
+                "Drive quality improvements and reduce waste",
+                "Enhance team collaboration and communication",
+                "Make data-driven decisions to improve outcomes",
+                "Focus on continuous improvement and innovation"
             ]
         else:  # Employee
             options = [
@@ -213,85 +229,24 @@ class EmployeeAgent:
             await self._send_chat(recipient, decision, business_context, project_context)
     
     async def _send_email(self, recipient: Employee, decision: Dict, business_context: Dict, project_context: Optional[Project] = None):
-        """Send an email to another employee."""
-        # Generate email content based on decision and context
+        """Send an email to another employee using Ollama to generate the content."""
+        # Get project name if available
         project_name = project_context.name if project_context else None
         
-        if project_name:
-            subject_templates = [
-                f"Question about {project_name}",
-                f"Need help with {project_name}",
-                f"Update on {project_name}",
-                f"Progress update: {project_name}",
-                f"Collaboration needed for {project_name}",
-                f"Status update: {project_name}",
-                f"Request regarding {project_name}"
-            ]
-            
-            # Extract strings to avoid f-string syntax errors
-            progress_msg = "We're making good progress"
-            track_msg = "We're on track with the project goals"
-            decision_text = decision.get('decision', 'Can you help me understand the requirements?')
-            reasoning_text = decision.get('reasoning', "I want to make sure I'm on the right track.")
-            decision_text2 = decision.get('decision', 'Could you assist with this?')
-            reasoning_text2 = decision.get('reasoning', 'Your expertise would be valuable here.')
-            decision_text3 = decision.get('decision', 'What should I do next?')
-            reasoning_text3 = decision.get('reasoning', 'I want to make sure we coordinate properly.')
-            decision_text4 = decision.get('decision', progress_msg)
-            reasoning_text4 = decision.get('reasoning', 'This is important for the project timeline.')
-            decision_text5 = decision.get('decision', 'We need to coordinate on this')
-            reasoning_text5 = decision.get('reasoning', 'What do you think about this approach?')
-            decision_text6 = decision.get('decision', 'We should sync on this')
-            reasoning_text6 = decision.get('reasoning', 'When would be a good time to discuss?')
-            decision_text7 = decision.get('decision', 'Things are progressing well')
-            reasoning_text7 = decision.get('reasoning', track_msg)
-            
-            body_templates = [
-                f"Hi {recipient.name},\n\nI have a question about {project_name}. {decision_text} {reasoning_text}\n\nThanks!\n\nBest regards,\n{self.employee.name}",
-                f"Hello {recipient.name},\n\nI need your help with {project_name}. {decision_text2} {reasoning_text2}\n\nWhat do you think?\n\nThanks,\n{self.employee.name}",
-                f"Hi {recipient.name},\n\nQuick question about {project_name}: {decision_text3} {reasoning_text3}\n\nLet me know your thoughts!\n\nBest,\n{self.employee.name}",
-                f"Dear {recipient.name},\n\nI wanted to update you on {project_name}. {decision_text4}. {reasoning_text4}\n\nDo you have any feedback or suggestions?\n\nRegards,\n{self.employee.name}",
-                f"Hi {recipient.name},\n\nI need your input on {project_name}. {decision_text5}. {reasoning_text5}\n\nThanks,\n{self.employee.name}",
-                f"Hello {recipient.name},\n\nFollowing up on {project_name}. {decision_text6}. {reasoning_text6}\n\nBest regards,\n{self.employee.name}",
-                f"Hi {recipient.name},\n\nQuick update on {project_name}: {decision_text7}. {reasoning_text7}\n\nDo you have any questions?\n\nBest,\n{self.employee.name}"
-            ]
-        else:
-            # Extract decision values for subject templates
-            decision_subj1 = decision.get('decision', 'current work')
-            decision_subj2 = decision.get('decision', 'project')
-            decision_subj3 = decision.get('decision', 'current work')
-            
-            subject_templates = [
-                f"Question about {decision_subj1}",
-                f"Need help with {decision_subj2}",
-                f"Request regarding {decision_subj2}",
-                f"Update on {decision_subj3}",
-                f"Status update from {self.employee.name}",
-                f"Collaboration needed for {decision_subj2}"
-            ]
-            
-            # Extract decision values to avoid f-string syntax issues
-            decision_val1 = decision.get('decision', 'my current work')
-            reasoning_val1 = decision.get('reasoning', 'Can you help me understand this better?')
-            decision_val2 = decision.get('decision', 'this matter')
-            reasoning_val2 = decision.get('reasoning', 'Could you assist me?')
-            decision_val3 = decision.get('decision', 'What should I do next?')
-            reasoning_val3 = decision.get('reasoning', "I want to make sure I'm on the right track.")
-            decision_val4 = decision.get('decision', 'my current work')
-            reasoning_val4 = decision.get('reasoning', 'This is important for our team.')
-            decision_val5 = decision.get('decision', 'this matter')
-            reasoning_val5 = decision.get('reasoning', 'What are your thoughts?')
-            decision_val6 = decision.get('decision', 'our discussion')
-            reasoning_val6 = decision.get('reasoning', 'I think this is the right approach.')
-            
-            body_templates = [
-                f"Hi {recipient.name},\n\nI have a question about {decision_val1}. {reasoning_val1}\n\nWhat do you think?\n\nBest regards,\n{self.employee.name}",
-                f"Hello {recipient.name},\n\nI need your help with {decision_val2}. {reasoning_val2} Your expertise would be valuable.\n\nThanks,\n{self.employee.name}",
-                f"Hi {recipient.name},\n\nQuick question: {decision_val3} {reasoning_val3}\n\nLet me know!\n\nBest,\n{self.employee.name}",
-                f"Dear {recipient.name},\n\nI wanted to update you on {decision_val4}. {reasoning_val4}\n\nDo you have any feedback?\n\nRegards,\n{self.employee.name}",
-                f"Hello {recipient.name},\n\nI need your input on {decision_val5}. {reasoning_val5}\n\nThanks,\n{self.employee.name}",
-                f"Hi {recipient.name},\n\nFollowing up on {decision_val6}. {reasoning_val6}\n\nWhen can we discuss this further?\n\nBest regards,\n{self.employee.name}"
-            ]
+        # Generate email using Ollama
+        email_data = await self.llm_client.generate_email(
+            sender_name=self.employee.name,
+            sender_title=self.employee.title,
+            sender_role=self.employee.role,
+            sender_personality=self.employee.personality_traits or [],
+            recipient_name=recipient.name,
+            recipient_title=recipient.title,
+            recipient_role=recipient.role,
+            decision=decision.get('decision', 'I wanted to reach out'),
+            reasoning=decision.get('reasoning', 'I think this would be helpful'),
+            project_context=project_name,
+            business_context=business_context
+        )
         
         # Generate or find existing thread ID for this employee pair
         thread_id = generate_thread_id(self.employee.id, recipient.id)
@@ -299,8 +254,8 @@ class EmployeeAgent:
         email = Email(
             sender_id=self.employee.id,
             recipient_id=recipient.id,
-            subject=random.choice(subject_templates),
-            body=random.choice(body_templates),
+            subject=email_data.get('subject', 'Question'),
+            body=email_data.get('body', 'Hi, I wanted to reach out.'),
             read=False,
             thread_id=thread_id
         )
@@ -308,63 +263,24 @@ class EmployeeAgent:
         await self.db.flush()
     
     async def _send_chat(self, recipient: Employee, decision: Dict, business_context: Dict, project_context: Optional[Project] = None):
-        """Send a chat message to another employee."""
+        """Send a chat message to another employee using Ollama to generate the content."""
+        # Get project name if available
         project_name = project_context.name if project_context else None
         
-        if project_name:
-            # Extract decision values for chat templates
-            chat_decision1 = decision.get('decision', 'can you help?')
-            chat_decision2 = decision.get('decision', 'Making good progress')
-            chat_reasoning2 = decision.get('reasoning', 'What do you think?')
-            chat_reasoning3 = decision.get('reasoning', 'I need some guidance')
-            chat_decision4 = decision.get('decision', 'What should I do next?')
-            chat_reasoning5 = decision.get('reasoning', 'when can we discuss?')
-            chat_decision6 = decision.get('decision', 'things are going well')
-            chat_reasoning6 = decision.get('reasoning', 'Thoughts?')
-            chat_reasoning7 = decision.get('reasoning', 'We should coordinate')
-            chat_decision8 = decision.get('decision', 'can you help with this?')
-            chat_decision9 = decision.get('decision', 'What do you think about this approach?')
-            chat_reasoning10 = decision.get('reasoning', 'Can you help?')
-            
-            chat_templates = [
-                f"Hey {recipient.name}, quick question about {project_name} - {chat_decision1}",
-                f"Hi! Working on {project_name}. {chat_decision2}. {chat_reasoning2}",
-                f"{recipient.name}, can you help me with {project_name}? {chat_reasoning3}",
-                f"Quick question about {project_name}: {chat_decision4}",
-                f"Hey! Need your input on {project_name} - {chat_reasoning5}",
-                f"Update on {project_name}: {chat_decision6}. {chat_reasoning6}",
-                f"Hey {recipient.name}, how's your part of {project_name} going? {chat_reasoning7}",
-                f"Quick check-in on {project_name} - {chat_decision8}",
-                f"Hi {recipient.name}! Question about {project_name}: {chat_decision9}",
-                f"Hey, need assistance with {project_name}. {chat_reasoning10}"
-            ]
-        else:
-            # Extract decision values for chat templates
-            chat_dec1 = decision.get('decision', 'Can you help me with this?')
-            chat_dec2 = decision.get('decision', 'this task')
-            chat_rea2 = decision.get('reasoning', 'What do you think?')
-            chat_dec3 = decision.get('decision', 'this')
-            chat_rea3 = decision.get('reasoning', 'I need some guidance')
-            chat_dec4 = decision.get('decision', 'What should I do next?')
-            chat_dec5 = decision.get('decision', 'Need to sync')
-            chat_rea5 = decision.get('reasoning', 'when works for you?')
-            chat_dec6 = decision.get('decision', 'this matter')
-            chat_rea6 = decision.get('reasoning', 'Thoughts?')
-            chat_dec7 = decision.get('decision', 'making progress')
-            chat_rea7 = decision.get('reasoning', 'Do you have any feedback?')
-            chat_dec8 = decision.get('decision', 'this')
-            chat_rea8 = decision.get('reasoning', 'I could use some help')
-            
-            chat_templates = [
-                f"Hey {recipient.name}, quick question: {chat_dec1}",
-                f"Hi! Working on {chat_dec2}. {chat_rea2}",
-                f"{recipient.name}, can you help with {chat_dec3}? {chat_rea3}",
-                f"Quick question: {chat_dec4}",
-                f"Hey! {chat_dec5} - {chat_rea5}",
-                f"Hi {recipient.name}, need your input on {chat_dec6}. {chat_rea6}",
-                f"Quick update: {chat_dec7}. {chat_rea7}",
-                f"Hey, can you assist with {chat_dec8}? {chat_rea8}"
-            ]
+        # Generate chat message using Ollama
+        chat_message = await self.llm_client.generate_chat(
+            sender_name=self.employee.name,
+            sender_title=self.employee.title,
+            sender_role=self.employee.role,
+            sender_personality=self.employee.personality_traits or [],
+            recipient_name=recipient.name,
+            recipient_title=recipient.title,
+            recipient_role=recipient.role,
+            decision=decision.get('decision', 'I wanted to reach out'),
+            reasoning=decision.get('reasoning', 'I think this would be helpful'),
+            project_context=project_name,
+            business_context=business_context
+        )
         
         # Generate or find existing thread ID for this employee pair
         thread_id = generate_thread_id(self.employee.id, recipient.id)
@@ -372,7 +288,7 @@ class EmployeeAgent:
         chat = ChatMessage(
             sender_id=self.employee.id,
             recipient_id=recipient.id,
-            message=random.choice(chat_templates),
+            message=chat_message,
             thread_id=thread_id
         )
         self.db.add(chat)

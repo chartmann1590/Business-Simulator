@@ -4,9 +4,12 @@ import Employees from './pages/Employees'
 import EmployeeDetail from './pages/EmployeeDetail'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
+import Tasks from './pages/Tasks'
+import TaskDetail from './pages/TaskDetail'
 import Financials from './pages/Financials'
 import Communications from './pages/Communications'
 import OfficeView from './pages/OfficeView'
+import Notifications from './components/Notifications'
 
 function NavLink({ to, children, icon }) {
   const location = useLocation()
@@ -34,14 +37,20 @@ function App() {
         {/* Sidebar Navigation */}
         <aside className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col">
           <div className="p-6 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900" id="business-name">TechFlow Solutions</h1>
-            <p className="text-xs text-gray-500 mt-1">Business Simulation</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900" id="business-name">TechFlow Solutions</h1>
+                <p className="text-xs text-gray-500 mt-1">Business Simulation</p>
+              </div>
+              <Notifications />
+            </div>
           </div>
           <nav className="flex-1 p-4 space-y-1">
             <NavLink to="/" icon="📊">Dashboard</NavLink>
             <NavLink to="/office-view" icon="🏢">Office View</NavLink>
             <NavLink to="/employees" icon="👥">Employees</NavLink>
             <NavLink to="/projects" icon="📁">Projects</NavLink>
+            <NavLink to="/tasks" icon="✅">Tasks</NavLink>
             <NavLink to="/communications" icon="💬">Communications</NavLink>
             <NavLink to="/financials" icon="💰">Financials</NavLink>
           </nav>
@@ -56,6 +65,8 @@ function App() {
             <Route path="/employees/:id" element={<EmployeeDetail />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/tasks/:id" element={<TaskDetail />} />
             <Route path="/communications" element={<Communications />} />
             <Route path="/financials" element={<Financials />} />
           </Routes>

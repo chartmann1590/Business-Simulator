@@ -140,6 +140,49 @@ async def check_room_has_space(room_id: str, db_session, exclude_employee_id: in
     return occupancy < capacity
 
 
+async def find_available_training_room(db_session, exclude_employee_id: int = None) -> Optional[str]:
+    """
+    Find an available training room across all floors, including floor 4 overflow rooms.
+    Prioritizes rooms with the most available space.
+    
+    Args:
+        db_session: Database session
+        exclude_employee_id: Optional employee ID to exclude from count
+        
+    Returns:
+        Optional[str]: Available training room ID, or None if all are full
+    """
+    from employees.room_assigner import ROOM_TRAINING_ROOM
+    
+    # All possible training rooms (prioritize floor 4 overflow rooms for better distribution)
+    training_rooms = [
+        f"{ROOM_TRAINING_ROOM}_floor4",
+        f"{ROOM_TRAINING_ROOM}_floor4_2",
+        f"{ROOM_TRAINING_ROOM}_floor4_3",
+        f"{ROOM_TRAINING_ROOM}_floor4_4",
+        f"{ROOM_TRAINING_ROOM}_floor4_5",
+        ROOM_TRAINING_ROOM,  # Floor 1
+        f"{ROOM_TRAINING_ROOM}_floor2",  # Floor 2
+    ]
+    
+    best_room = None
+    most_space = -1
+    
+    for room_id in training_rooms:
+        has_space = await check_room_has_space(room_id, db_session, exclude_employee_id)
+        if has_space:
+            # Calculate available space
+            capacity = get_room_capacity(room_id)
+            occupancy = await get_room_occupancy(room_id, db_session)
+            available_space = capacity - occupancy
+            
+            if available_space > most_space:
+                most_space = available_space
+                best_room = room_id
+    
+    return best_room
+
+
 async def determine_target_room(activity_type: str, activity_description: str, employee, db_session=None) -> Optional[str]:
     """
     Determine which room an employee should move to based on their activity.
@@ -173,9 +216,20 @@ async def determine_target_room(activity_type: str, activity_description: str, e
             return room_id
         return room_id
     
-    # Meetings → Conference Room, Huddle (floor 3), or War Room (floor 3) - balance across all floors
+    # Presentations, large meetings, events → Theater (floor 3)
+    if ("presentation" in activity_lower or "presentation" in desc_lower or 
+        "present" in desc_lower or "showcase" in desc_lower or 
+        "all-hands" in desc_lower or "all hands" in desc_lower or
+        "event" in desc_lower or "demo" in desc_lower or "demonstration" in desc_lower):
+        return f"{ROOM_THEATER}_floor3"
+    
+    # Meetings → Conference Room, Huddle (floor 3), War Room (floor 3), or Theater (floor 3) - balance across all floors
     if "meeting" in activity_lower or "meeting" in desc_lower or "conference" in desc_lower:
-        # Small meetings can use Huddle (floor 3), large meetings use Conference Room or War Room
+        # Large meetings (10+ people mentioned) → Theater (floor 3)
+        if "large" in desc_lower or "big" in desc_lower or "many" in desc_lower:
+            return f"{ROOM_THEATER}_floor3"
+        
+        # Small meetings can use Huddle (floor 3), strategic meetings use War Room (floor 3)
         if "huddle" in desc_lower or "quick" in desc_lower or "standup" in desc_lower:
             # Small meetings → Huddle (floor 3)
             return f"{ROOM_HUDDLE}_floor3"
@@ -236,17 +290,21 @@ async def determine_target_room(activity_type: str, activity_description: str, e
         else:
             return f"{ROOM_HUDDLE}_floor3"  # Floor 3
     
-    # Breaks → Breakroom, Lounge, HR Wellness, or Theater (on employee's floor)
+    # Breaks → Breakroom, Lounge, or HR Wellness (on employee's floor)
+    # Theater is NOT used for breaks - it's for presentations/events only
     if "break" in activity_lower or "break" in desc_lower or "lunch" in desc_lower or "coffee" in desc_lower:
-        # Randomly choose between breakroom, lounge, HR wellness (floor 3), or theater (floor 3)
-        # HR Wellness and Theater are on floor 3, so employees on floor 3 can use them
+        # Randomly choose between breakroom, lounge, or HR wellness (floor 3)
+        # HR Wellness is on floor 3, so employees on floor 3 can use it
         if employee_floor == 3:
             chosen_room = random.choice([
                 ROOM_BREAKROOM, ROOM_LOUNGE, 
-                ROOM_HR_WELLNESS, ROOM_THEATER
+                ROOM_HR_WELLNESS
             ])
         else:
             # For other floors, use breakroom or lounge
+            # Allow employees from other floors to visit HR Wellness occasionally (15% chance)
+            if random.random() < 0.15:
+                return f"{ROOM_HR_WELLNESS}_floor3"
             chosen_room = random.choice([ROOM_BREAKROOM, ROOM_LOUNGE])
         return get_room_with_floor(chosen_room)
     
@@ -318,22 +376,62 @@ async def determine_target_room(activity_type: str, activity_description: str, e
                 return home_room  # Use their assigned reception
             return get_room_with_floor(ROOM_RECEPTION)
     
+    # One-on-ones, performance reviews → Manager Office (on employee's floor)
+    if ("one-on-one" in desc_lower or "one on one" in desc_lower or 
+        "performance review" in desc_lower or 
+        ("review" in desc_lower and "performance" in desc_lower) or
+        "1-on-1" in desc_lower or "1:1" in desc_lower):
+        return get_room_with_floor(ROOM_MANAGER_OFFICE)
+    
     # Manager meetings → Manager Office (on employee's floor)
     if ("manager" in activity_lower or "executive" in activity_lower or 
         "strategy" in activity_lower or "planning" in activity_lower or
-        "discuss" in desc_lower or "review" in desc_lower):
+        "discuss" in desc_lower):
         if employee.role in ["CEO", "Manager"]:
             return get_room_with_floor(ROOM_MANAGER_OFFICE)
     
+    # Design and creative work → Design Studio (floor 3)
+    if ("design" in activity_lower or "design" in desc_lower or 
+        "creative" in desc_lower or "prototype" in desc_lower or 
+        "mockup" in desc_lower or "wireframe" in desc_lower or
+        "ui" in desc_lower or "ux" in desc_lower or "graphic" in desc_lower):
+        # Designers go to Design Studio, others can also use it for design-related work
+        return f"{ROOM_DESIGN_STUDIO}_floor3"
+    
+    # Research and innovation work → Innovation Lab (floor 3)
+    if ("research" in activity_lower or "research" in desc_lower or 
+        "innovation" in desc_lower or "experiment" in desc_lower or
+        "r&d" in desc_lower or "r and d" in desc_lower or
+        "develop" in desc_lower and "new" in desc_lower or
+        "explore" in desc_lower and ("technology" in desc_lower or "solution" in desc_lower)):
+        return f"{ROOM_INNOVATION_LAB}_floor3"
+    
+    # Deep work and focused tasks → Focus Pods (floor 3)
+    if ("focus" in desc_lower or "concentrate" in desc_lower or 
+        "deep work" in desc_lower or "quiet" in desc_lower and "work" in desc_lower or
+        "individual" in desc_lower and "work" in desc_lower or
+        "solo" in desc_lower or "alone" in desc_lower and "work" in desc_lower):
+        return f"{ROOM_FOCUS_PODS}_floor3"
+    
+    # Wellness and health activities → HR Wellness (floor 3)
+    if ("wellness" in activity_lower or "wellness" in desc_lower or 
+        "health" in desc_lower or "meditation" in desc_lower or
+        "yoga" in desc_lower or "stress" in desc_lower or "relax" in desc_lower or
+        "mental health" in desc_lower):
+        return f"{ROOM_HR_WELLNESS}_floor3"
+    
     # Collaboration/team work → Conference Room, Collaboration Lounge (floor 3), Open Office, or Cubicles
-    if ("collaborate" in desc_lower or "team" in desc_lower or "discuss" in desc_lower or
-        "brainstorm" in desc_lower or "review" in desc_lower):
-        # 30% collaboration lounge (floor 3), 20% conference room, 25% open office, 25% cubicles
+    # Exclude performance reviews (handled above) and code reviews (which might be design/tech work)
+    if (("collaborate" in desc_lower or "team" in desc_lower or "discuss" in desc_lower or
+        "brainstorm" in desc_lower or ("review" in desc_lower and "performance" not in desc_lower)) and
+        "one-on-one" not in desc_lower and "one on one" not in desc_lower):
+        # 25% collaboration lounge (floor 3), 20% conference room, 30% open office, 25% cubicles
+        # Increased open office usage for better collaboration
         room_choice = random.choice([
-            "collab_lounge", "collab_lounge", "collab_lounge",  # 30%
+            "collab_lounge", "collab_lounge", "collab_lounge", "collab_lounge",  # 25%
             "conference", "conference",  # 20%
-            "open_office", "open_office", "open_office",  # 25%
-            "cubicles", "cubicles", "cubicles"  # 25%
+            "open_office", "open_office", "open_office", "open_office", "open_office", "open_office",  # 30%
+            "cubicles", "cubicles", "cubicles", "cubicles"  # 25%
         ])
         
         if room_choice == "collab_lounge":
@@ -411,7 +509,23 @@ async def determine_target_room(activity_type: str, activity_description: str, e
     home_room = getattr(employee, 'home_room', None)
     if activity_type == "working":
         # When working, use home room (or cubicles if full)
+        # But check if activity description suggests a specific room
         if home_room:
+            # Check if working activity suggests focus pods for deep work
+            if ("focus" in desc_lower or "concentrate" in desc_lower or 
+                "deep work" in desc_lower or "quiet" in desc_lower):
+                return f"{ROOM_FOCUS_PODS}_floor3"
+            
+            # Check if working activity suggests design work
+            if ("design" in desc_lower or "creative" in desc_lower or 
+                "prototype" in desc_lower or "mockup" in desc_lower):
+                return f"{ROOM_DESIGN_STUDIO}_floor3"
+            
+            # Check if working activity suggests research/innovation
+            if ("research" in desc_lower or "innovation" in desc_lower or 
+                "experiment" in desc_lower or "r&d" in desc_lower):
+                return f"{ROOM_INNOVATION_LAB}_floor3"
+            
             if db_session:
                 has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
                 if not has_space:
@@ -421,13 +535,17 @@ async def determine_target_room(activity_type: str, activity_description: str, e
     elif activity_type == "idle":
         # When idle (not working), use break/lounge/wellness/theater areas
         # Randomly choose between breakroom, lounge, HR wellness (floor 3), or theater (floor 3)
+        # But don't use theater for idle - it's for presentations/events
         if employee_floor == 3:
             chosen_room = random.choice([
                 ROOM_BREAKROOM, ROOM_LOUNGE, 
-                ROOM_HR_WELLNESS, ROOM_THEATER
+                ROOM_HR_WELLNESS
             ])
         else:
             # For other floors, use breakroom or lounge
+            # Allow employees from other floors to visit HR Wellness occasionally (10% chance)
+            if random.random() < 0.1:
+                return f"{ROOM_HR_WELLNESS}_floor3"
             chosen_room = random.choice([ROOM_BREAKROOM, ROOM_LOUNGE])
         return get_room_with_floor(chosen_room)
     
@@ -490,8 +608,8 @@ def get_random_movement(employee) -> Optional[str]:
         # Very rarely leave IT room - only for breaks or meetings
         if employee_floor == 3:
             chosen = random.choice([
-                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS, ROOM_THEATER,  # Can go for breaks/wellness
-                None, None, None, None, None  # 5/9 chance to stay
+                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS,  # Can go for breaks/wellness
+                None, None, None, None, None  # 5/8 chance to stay
             ])
         else:
             chosen = random.choice([
@@ -505,8 +623,8 @@ def get_random_movement(employee) -> Optional[str]:
         # Very rarely leave reception - only for breaks
         if employee_floor == 3:
             chosen = random.choice([
-                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS, ROOM_THEATER,  # Can go for breaks/wellness
-                None, None, None, None, None, None  # 6/10 chance to stay
+                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS,  # Can go for breaks/wellness
+                None, None, None, None, None, None  # 6/9 chance to stay
             ])
         else:
             chosen = random.choice([
@@ -520,8 +638,8 @@ def get_random_movement(employee) -> Optional[str]:
         # Very rarely leave storage - only for breaks
         if employee_floor == 3:
             chosen = random.choice([
-                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS, ROOM_THEATER,  # Can go for breaks/wellness
-                None, None, None, None, None, None  # 6/10 chance to stay
+                ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS,  # Can go for breaks/wellness
+                None, None, None, None, None, None  # 6/9 chance to stay
             ])
         else:
             chosen = random.choice([
@@ -535,8 +653,9 @@ def get_random_movement(employee) -> Optional[str]:
         # CEO might visit manager office or conference room
         chosen = random.choice([ROOM_MANAGER_OFFICE, ROOM_CONFERENCE_ROOM, None])
         return get_room_with_floor(chosen) if chosen else None
-    elif employee.role == "Manager":
-        # Managers might visit various rooms including break/lounge/wellness/theater
+    elif employee.role in ["Manager", "CTO", "COO", "CFO"]:
+        # Managers might visit various rooms including break/lounge/wellness
+        # Theater is NOT used for random movement - only for presentations/events
         if employee_floor == 3:
             chosen = random.choice([
                 ROOM_CONFERENCE_ROOM, 
@@ -544,7 +663,7 @@ def get_random_movement(employee) -> Optional[str]:
                 ROOM_BREAKROOM,
                 ROOM_LOUNGE,
                 ROOM_HR_WELLNESS,
-                ROOM_THEATER,
+                ROOM_COLLAB_LOUNGE,  # Can visit collaboration spaces
                 None
             ])
         else:
@@ -557,25 +676,51 @@ def get_random_movement(employee) -> Optional[str]:
             ])
         return get_room_with_floor(chosen) if chosen else None
     else:
-        # Regular employees might visit breakroom, lounge, wellness, theater, or other departments
+        # Regular employees might visit various rooms based on their work
+        # Check if they're designers, engineers, or researchers for specialized rooms
+        is_designer = "design" in title or "design" in department
+        is_engineer = "engineer" in title or "developer" in title or department in ["engineering", "development"]
+        is_researcher = "research" in title or "r&d" in title or department == "research"
+        
         if employee_floor == 3:
-            chosen = random.choice([
+            # Floor 3 employees have access to all floor 3 rooms
+            options = [
                 ROOM_BREAKROOM,
                 ROOM_LOUNGE,
                 ROOM_HR_WELLNESS,
-                ROOM_THEATER,
                 ROOM_OPEN_OFFICE,
                 ROOM_CUBICLES,
-                None
-            ])
+                ROOM_COLLAB_LOUNGE,
+            ]
+            # Add specialized rooms based on role
+            if is_designer:
+                options.append(ROOM_DESIGN_STUDIO)
+            if is_engineer:
+                options.append(ROOM_FOCUS_PODS)
+            if is_researcher:
+                options.append(ROOM_INNOVATION_LAB)
+            options.append(None)
+            chosen = random.choice(options)
         else:
-            chosen = random.choice([
-                ROOM_BREAKROOM,
-                ROOM_LOUNGE,
-                ROOM_OPEN_OFFICE,
-                ROOM_CUBICLES,
-                None
-            ])
+            # Other floors - can visit floor 3 specialized rooms occasionally (5% chance each)
+            rand = random.random()
+            if rand < 0.05 and is_designer:
+                return f"{ROOM_DESIGN_STUDIO}_floor3"
+            elif rand < 0.10 and is_engineer:
+                return f"{ROOM_FOCUS_PODS}_floor3"
+            elif rand < 0.15 and is_researcher:
+                return f"{ROOM_INNOVATION_LAB}_floor3"
+            elif rand < 0.20:
+                # 5% chance to visit HR Wellness on floor 3
+                return f"{ROOM_HR_WELLNESS}_floor3"
+            else:
+                chosen = random.choice([
+                    ROOM_BREAKROOM,
+                    ROOM_LOUNGE,
+                    ROOM_OPEN_OFFICE,
+                    ROOM_CUBICLES,
+                    None
+                ])
         return get_room_with_floor(chosen) if chosen else None
 
 
@@ -752,6 +897,13 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_5")
     
     if is_in_training_room:
+        # FIRST: If employee is in training room but has "waiting" status, fix it immediately
+        # They're already in the room, so they should be in "training" state
+        if employee.activity_state == "waiting":
+            employee.activity_state = "training"
+            await db_session.flush()
+            # Continue processing to check if training should be complete
+        
         # Check if they've been hired recently (within last hour = still in training)
         hired_at = getattr(employee, 'hired_at', None)
         if hired_at:
@@ -788,6 +940,50 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                     return
             except Exception:
                 # If there's any error with date comparison, just proceed normally
+                pass
+    
+    # Check if employee is in training state but not in a training room (stuck waiting)
+    # This can happen if they were waiting for a training room that was full
+    if employee.activity_state == "training" and not is_in_training_room:
+        # Find an available training room
+        available_training_room = await find_available_training_room(db_session, exclude_employee_id=employee.id)
+        if available_training_room:
+            # Found an available training room - move there
+            await update_employee_location(employee, available_training_room, "training", db_session)
+            return
+        # If no training room available, check if training should be complete
+        hired_at = getattr(employee, 'hired_at', None)
+        if hired_at:
+            try:
+                from datetime import datetime, timedelta
+                if hasattr(hired_at, 'replace'):
+                    if hired_at.tzinfo is not None:
+                        hired_at_naive = hired_at.replace(tzinfo=None)
+                    else:
+                        hired_at_naive = hired_at
+                else:
+                    hired_at_naive = hired_at
+                
+                time_since_hire = datetime.utcnow() - hired_at_naive
+                if time_since_hire > timedelta(hours=1):
+                    # Training complete - move to home room
+                    employee.activity_state = "idle"
+                    await update_employee_location(employee, employee.home_room, "idle", db_session)
+                    from database.models import Activity
+                    activity = Activity(
+                        employee_id=employee.id,
+                        activity_type="training_completed",
+                        description=f"{employee.name} completed training and reported to work area ({employee.home_room})",
+                        activity_metadata={
+                            "training_duration": str(time_since_hire),
+                            "home_room": employee.home_room,
+                            "note": "Training completed while waiting for room"
+                        }
+                    )
+                    db_session.add(activity)
+                    await db_session.flush()
+                    return
+            except Exception:
                 pass
     
     # Check if should return to home room
@@ -856,8 +1052,76 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
     # If employee is waiting, they should retry entering their target room
     # (capacity check will happen in update_employee_location)
     if employee.activity_state == "waiting":
-        # Employee was waiting - retry the movement
-        # determine_target_room should return the same room based on activity
+        # FIRST: Check if they're already in a training room - if so, just fix the status
+        current_room = getattr(employee, 'current_room', None)
+        from employees.room_assigner import ROOM_TRAINING_ROOM
+        is_in_training_room_waiting = (current_room == ROOM_TRAINING_ROOM or 
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor4" or
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor4_2" or
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor4_3" or
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor4_4" or
+                                      current_room == f"{ROOM_TRAINING_ROOM}_floor4_5")
+        
+        if is_in_training_room_waiting:
+            # They're already in a training room but marked as waiting - fix the status
+            employee.activity_state = "training"
+            await db_session.flush()
+            return  # They're already where they need to be
+        
+        # Employee was waiting - try to find an available room
+        # Special handling for training: find ANY available training room
+        is_training_state = (activity_state == "training" or 
+                            activity_type.lower() == "training" or
+                            "training" in (getattr(employee, 'activity_state', '') or '').lower())
+        
+        if is_training_state:
+            # Employee is waiting for training - find any available training room
+            available_training_room = await find_available_training_room(db_session, exclude_employee_id=employee.id)
+            if available_training_room:
+                # Found an available training room - move there
+                await update_employee_location(employee, available_training_room, "training", db_session)
+                return
+            else:
+                # All training rooms are full - check if they've been in training too long
+                # If hired more than 1 hour ago, move them out even if waiting
+                hired_at = getattr(employee, 'hired_at', None)
+                if hired_at:
+                    try:
+                        from datetime import datetime, timedelta
+                        if hasattr(hired_at, 'replace'):
+                            if hired_at.tzinfo is not None:
+                                hired_at_naive = hired_at.replace(tzinfo=None)
+                            else:
+                                hired_at_naive = hired_at
+                        else:
+                            hired_at_naive = hired_at
+                        
+                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        if time_since_hire > timedelta(hours=1):
+                            # Training complete - move to home room even if waiting
+                            employee.activity_state = "idle"
+                            await update_employee_location(employee, employee.home_room, "idle", db_session)
+                            from database.models import Activity
+                            activity = Activity(
+                                employee_id=employee.id,
+                                activity_type="training_completed",
+                                description=f"{employee.name} completed training and reported to work area ({employee.home_room})",
+                                activity_metadata={
+                                    "training_duration": str(time_since_hire),
+                                    "home_room": employee.home_room,
+                                    "note": "Moved out due to training room capacity"
+                                }
+                            )
+                            db_session.add(activity)
+                            await db_session.flush()
+                            return
+                    except Exception:
+                        pass
+                # Still waiting for training room - keep waiting but try again next tick
+                return
+        
+        # Not training - retry the original target room
         if target_room:
             # Try to enter the target room again (capacity will be checked)
             await update_employee_location(employee, target_room, activity_state, db_session)

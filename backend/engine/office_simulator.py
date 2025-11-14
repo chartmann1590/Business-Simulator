@@ -14,11 +14,35 @@ from typing import Set
 from datetime import datetime, timedelta
 import random
 
+async def get_business_context(db: AsyncSession) -> dict:
+    """Get current business context for decision making (standalone function)."""
+    financial_manager = FinancialManager(db)
+    project_manager = ProjectManager(db)
+    goal_system = GoalSystem(db)
+    
+    revenue = await financial_manager.get_total_revenue()
+    profit = await financial_manager.get_profit()
+    active_projects = await project_manager.get_active_projects()
+    
+    result = await db.execute(select(Employee))
+    employees = result.scalars().all()
+    
+    goals = await goal_system.get_business_goals()
+    
+    return {
+        "revenue": revenue,
+        "profit": profit,
+        "active_projects": len(active_projects),
+        "employee_count": len(employees),
+        "goals": goals
+    }
+
 class OfficeSimulator:
     def __init__(self):
         self.llm_client = OllamaClient()
         self.running = False
         self.websocket_connections: Set = set()
+        self.review_tick_counter = 0  # Counter for periodic reviews
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -42,29 +66,75 @@ class OfficeSimulator:
     
     async def get_business_context(self, db: AsyncSession) -> dict:
         """Get current business context for decision making."""
-        financial_manager = FinancialManager(db)
-        project_manager = ProjectManager(db)
-        goal_system = GoalSystem(db)
-        
-        revenue = await financial_manager.get_total_revenue()
-        profit = await financial_manager.get_profit()
-        active_projects = await project_manager.get_active_projects()
-        
-        result = await db.execute(select(Employee))
-        employees = result.scalars().all()
-        
-        goals = await goal_system.get_business_goals()
-        
-        return {
-            "revenue": revenue,
-            "profit": profit,
-            "active_projects": len(active_projects),
-            "employee_count": len(employees),
-            "goals": goals
-        }
+        return await get_business_context(db)
+    
+    async def fix_waiting_in_training_rooms(self):
+        """Background task to fix employees stuck in training rooms with waiting status."""
+        try:
+            async with async_session_maker() as db:
+                from employees.room_assigner import ROOM_TRAINING_ROOM
+                
+                # Get all employees in training rooms with waiting status
+                training_rooms = [
+                    ROOM_TRAINING_ROOM,
+                    f"{ROOM_TRAINING_ROOM}_floor2",
+                    f"{ROOM_TRAINING_ROOM}_floor4",
+                    f"{ROOM_TRAINING_ROOM}_floor4_2",
+                    f"{ROOM_TRAINING_ROOM}_floor4_3",
+                    f"{ROOM_TRAINING_ROOM}_floor4_4",
+                    f"{ROOM_TRAINING_ROOM}_floor4_5"
+                ]
+                
+                result = await db.execute(
+                    select(Employee).where(
+                        Employee.status == "active",
+                        Employee.activity_state == "waiting",
+                        Employee.current_room.in_(training_rooms)
+                    )
+                )
+                waiting_in_training = result.scalars().all()
+                
+                if waiting_in_training:
+                    fixed_count = 0
+                    for emp in waiting_in_training:
+                        emp.activity_state = "training"
+                        fixed_count += 1
+                    
+                    await db.commit()
+                    if fixed_count > 0:
+                        print(f"Fixed {fixed_count} employees stuck in training rooms with waiting status")
+        except Exception as e:
+            print(f"Error fixing waiting employees in training rooms: {e}")
     
     async def simulation_tick(self):
         """Execute one simulation tick."""
+        # First, fix any employees stuck in training rooms with waiting status
+        await self.fix_waiting_in_training_rooms()
+        
+        # Conduct periodic reviews every tick to ensure reviews happen promptly
+        # This ensures we catch reviews as soon as they're due
+        try:
+            async with async_session_maker() as review_db:
+                from business.review_manager import ReviewManager
+                review_manager = ReviewManager(review_db)
+                reviews_created = await review_manager.conduct_periodic_reviews(hours_since_last_review=6.0)
+                if reviews_created:
+                    print(f"✅ Conducted {len(reviews_created)} employee performance reviews")
+                    for review in reviews_created:
+                        # Get employee and manager names for logging
+                        emp_result = await review_db.execute(
+                            select(Employee).where(Employee.id == review.employee_id)
+                        )
+                        emp = emp_result.scalar_one_or_none()
+                        mgr_result = await review_db.execute(
+                            select(Employee).where(Employee.id == review.manager_id)
+                        )
+                        mgr = mgr_result.scalar_one_or_none()
+                        if emp and mgr:
+                            print(f"   📝 {mgr.name} reviewed {emp.name} - Rating: {review.overall_rating}/5.0")
+        except Exception as e:
+            print(f"❌ Error conducting periodic reviews: {e}")
+        
         # Use a separate session to get employee list (read-only)
         async with async_session_maker() as read_db:
             try:
@@ -212,6 +282,16 @@ class OfficeSimulator:
                                 except Exception as e:
                                     print(f"Error managing project capacity: {e}")
                                     await project_db.rollback()
+                        
+                        # Check for completed projects and trigger new project creation (30% chance per tick)
+                        if random.random() < 0.3:  # 30% chance per tick
+                            async with async_session_maker() as completion_db:
+                                try:
+                                    await self._handle_completed_projects(completion_db)
+                                    await completion_db.commit()
+                                except Exception as e:
+                                    print(f"Error handling completed projects: {e}")
+                                    await completion_db.rollback()
                 
                 # Handle employee hiring/firing based on business performance (use separate session)
                 async with async_session_maker() as manage_db:
@@ -358,6 +438,8 @@ class OfficeSimulator:
             for employee in employees:
                 if employee.role == "CEO":
                     salary = random.uniform(15000, 25000)
+                elif employee.role in ["CTO", "COO", "CFO"]:
+                    salary = random.uniform(10000, 18000)  # C-level executives get higher salary
                 elif employee.role == "Manager":
                     salary = random.uniform(8000, 15000)
                 else:
@@ -711,7 +793,7 @@ class OfficeSimulator:
             select(Employee).where(
                 Employee.status == "active",
                 or_(
-                    Employee.role == "Manager",
+                    Employee.role.in_(["Manager", "CTO", "COO", "CFO"]),
                     Employee.title.ilike("%Director%"),
                     Employee.title.ilike("%VP%"),
                     Employee.title.ilike("%Vice President%"),
@@ -818,11 +900,11 @@ class OfficeSimulator:
         name = f"{random.choice(first_names)} {random.choice(last_names)}"
         role = random.choice(roles)
         department = random.choice(departments)
-        hierarchy_level = 2 if role == "Manager" else 3
+        hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
         
         # Special handling for IT and Reception to ensure they get appropriate titles
         if department == "IT":
-            if role == "Manager":
+            if role in ["Manager", "CTO", "COO", "CFO"]:
                 title = "IT Manager"
             else:
                 title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
@@ -860,38 +942,25 @@ class OfficeSimulator:
         new_employee.home_room = home_room
         new_employee.floor = floor
         
-        # New hires start in training room on their assigned floor
-        # Determine training room based on floor - check capacity and use floor 4 for overflow
+        # New hires start in training room - find any available training room
         from employees.room_assigner import ROOM_TRAINING_ROOM
-        from engine.movement_system import get_room_occupancy, get_room_capacity
+        from engine.movement_system import find_available_training_room
         
-        # Check if training rooms on floors 1-2 are full, use floor 4 for overflow
-        floor1_occupancy = await get_room_occupancy(ROOM_TRAINING_ROOM, db)
-        floor1_capacity = get_room_capacity(ROOM_TRAINING_ROOM)
-        floor2_occupancy = await get_room_occupancy(f"{ROOM_TRAINING_ROOM}_floor2", db)
-        floor2_capacity = get_room_capacity(f"{ROOM_TRAINING_ROOM}_floor2")
+        # Find an available training room (checks all floors including floor 4 overflow)
+        training_room = await find_available_training_room(db, exclude_employee_id=None)
         
-        # If floors 1-2 training rooms are near capacity, use floor 4
-        if floor1_occupancy >= floor1_capacity - 2 or floor2_occupancy >= floor2_capacity - 2:
+        if not training_room:
+            # All training rooms are full - use floor 4 as fallback (it has the most capacity)
             training_room = f"{ROOM_TRAINING_ROOM}_floor4"
-            new_employee.floor = 4  # Update floor to 4 for training
-        elif floor == 2:
-            training_room = f"{ROOM_TRAINING_ROOM}_floor2"
-        elif floor == 3:
-            # Floor 3 doesn't have a training room, use floor 1, 2, or 4
-            # Check which has space
-            if floor1_occupancy < floor1_capacity:
-                training_room = ROOM_TRAINING_ROOM
-            elif floor2_occupancy < floor2_capacity:
-                training_room = f"{ROOM_TRAINING_ROOM}_floor2"
-                new_employee.floor = 2
-            else:
-                training_room = f"{ROOM_TRAINING_ROOM}_floor4"
-                new_employee.floor = 4
-        elif floor == 4:
-            training_room = f"{ROOM_TRAINING_ROOM}_floor4"
+            new_employee.floor = 4
         else:
-            training_room = ROOM_TRAINING_ROOM
+            # Update floor based on training room location
+            if training_room.endswith('_floor2'):
+                new_employee.floor = 2
+            elif training_room.endswith('_floor4') or '_floor4_' in training_room:
+                new_employee.floor = 4
+            else:
+                new_employee.floor = 1
         
         new_employee.current_room = training_room
         new_employee.activity_state = "training"  # Mark as in training
@@ -907,6 +976,19 @@ class OfficeSimulator:
         
         await db.flush()
         activity.activity_metadata["employee_id"] = new_employee.id
+        
+        # Create notification for employee hire
+        from database.models import Notification
+        notification = Notification(
+            notification_type="employee_hired",
+            title=f"New Employee Hired: {name}",
+            message=f"{name} has been hired as {title} in the {department} department.",
+            employee_id=new_employee.id,
+            review_id=None,
+            read=False
+        )
+        db.add(notification)
+        
         await db.commit()
         print(f"Hired new employee: {name} ({title})")
     
@@ -922,13 +1004,13 @@ class OfficeSimulator:
         last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark", "Lewis", "Walker"]
         
         name = f"{random.choice(first_names)} {random.choice(last_names)}"
-        hierarchy_level = 2 if role == "Manager" else 3
+        hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
         
         # Determine title and department based on parameters
         if title:
             employee_title = title
         elif department == "IT":
-            if role == "Manager":
+            if role in ["Manager", "CTO", "COO", "CFO"]:
                 employee_title = "IT Manager"
             else:
                 employee_title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
@@ -970,62 +1052,25 @@ class OfficeSimulator:
         new_employee.home_room = home_room
         new_employee.floor = floor
         
-        # New hires start in training room on their assigned floor
-        # Determine training room based on floor - check capacity and use floor 4 for overflow
+        # New hires start in training room - find any available training room
         from employees.room_assigner import ROOM_TRAINING_ROOM
-        from engine.movement_system import get_room_occupancy, get_room_capacity
+        from engine.movement_system import find_available_training_room
         
-        # Check if training rooms on floors 1-2 are full, use floor 4 for overflow
-        floor1_occupancy = await get_room_occupancy(ROOM_TRAINING_ROOM, db)
-        floor1_capacity = get_room_capacity(ROOM_TRAINING_ROOM)
-        floor2_occupancy = await get_room_occupancy(f"{ROOM_TRAINING_ROOM}_floor2", db)
-        floor2_capacity = get_room_capacity(f"{ROOM_TRAINING_ROOM}_floor2")
+        # Find an available training room (checks all floors including floor 4 overflow)
+        training_room = await find_available_training_room(db, exclude_employee_id=None)
         
-        # Helper function to find best available training room on floor 4
-        async def find_best_floor4_training_room():
-            floor4_training_rooms = [
-                f"{ROOM_TRAINING_ROOM}_floor4",
-                f"{ROOM_TRAINING_ROOM}_floor4_2",
-                f"{ROOM_TRAINING_ROOM}_floor4_3",
-                f"{ROOM_TRAINING_ROOM}_floor4_4",
-                f"{ROOM_TRAINING_ROOM}_floor4_5"
-            ]
-            
-            best_room = None
-            most_space = -1
-            
-            for room_id in floor4_training_rooms:
-                occupancy = await get_room_occupancy(room_id, db)
-                capacity = get_room_capacity(room_id)
-                available_space = capacity - occupancy
-                
-                if available_space > most_space:
-                    most_space = available_space
-                    best_room = room_id
-            
-            return best_room if best_room else f"{ROOM_TRAINING_ROOM}_floor4"  # Fallback
-        
-        # If floors 1-2 training rooms are near capacity, use floor 4
-        if floor1_occupancy >= floor1_capacity - 2 or floor2_occupancy >= floor2_capacity - 2:
-            training_room = await find_best_floor4_training_room()
-            new_employee.floor = 4  # Update floor to 4 for training
-        elif floor == 2:
-            training_room = f"{ROOM_TRAINING_ROOM}_floor2"
-        elif floor == 3:
-            # Floor 3 doesn't have a training room, use floor 1, 2, or 4
-            # Check which has space
-            if floor1_occupancy < floor1_capacity:
-                training_room = ROOM_TRAINING_ROOM
-            elif floor2_occupancy < floor2_capacity:
-                training_room = f"{ROOM_TRAINING_ROOM}_floor2"
-                new_employee.floor = 2
-            else:
-                training_room = await find_best_floor4_training_room()
-                new_employee.floor = 4
-        elif floor == 4:
-            training_room = await find_best_floor4_training_room()
+        if not training_room:
+            # All training rooms are full - use floor 4 as fallback (it has the most capacity)
+            training_room = f"{ROOM_TRAINING_ROOM}_floor4"
+            new_employee.floor = 4
         else:
-            training_room = ROOM_TRAINING_ROOM
+            # Update floor based on training room location
+            if training_room.endswith('_floor2'):
+                new_employee.floor = 2
+            elif training_room.endswith('_floor4') or '_floor4_' in training_room:
+                new_employee.floor = 4
+            else:
+                new_employee.floor = 1
         
         new_employee.current_room = training_room
         new_employee.activity_state = "training"  # Mark as in training
@@ -1041,6 +1086,19 @@ class OfficeSimulator:
         
         await db.flush()
         activity.activity_metadata["employee_id"] = new_employee.id
+        
+        # Create notification for employee hire
+        from database.models import Notification
+        notification = Notification(
+            notification_type="employee_hired",
+            title=f"New Employee Hired: {name}",
+            message=f"{name} has been hired as {employee_title} in the {department} department.",
+            employee_id=new_employee.id,
+            review_id=None,
+            read=False
+        )
+        db.add(notification)
+        
         await db.commit()
         print(f"Hired specific employee: {name} ({employee_title}) in {department}")
     
@@ -1110,12 +1168,13 @@ class OfficeSimulator:
             # If we filtered out all candidates, don't fire anyone
             return
         
-        # Prefer firing employees over managers (70% chance)
+        # Prefer firing employees over managers and C-level executives (70% chance)
         if random.random() < 0.7:
             candidates = [e for e in candidates if e.role == "Employee"]
         
         if not candidates:
-            candidates = [e for e in active_employees if e.role != "CEO"]
+            # Don't fire CEO or C-level executives
+            candidates = [e for e in active_employees if e.role not in ["CEO", "CTO", "COO", "CFO"]]
             # Re-apply IT/Reception/Storage protection
             if it_count <= 2:
                 it_titles = ["it", "information technology"]
@@ -1136,10 +1195,36 @@ class OfficeSimulator:
         if not candidates:
             return
         
-        employee_to_fire = random.choice(candidates)
+        # Prioritize employees with poor reviews
+        from business.review_manager import ReviewManager
+        review_manager = ReviewManager(db)
         
-        # Generate AI termination reason based on business context
+        # Get average ratings for candidates
+        candidate_ratings = {}
+        for candidate in candidates:
+            avg_rating = await review_manager.get_average_rating(candidate.id)
+            if avg_rating:
+                candidate_ratings[candidate.id] = avg_rating
+            else:
+                # If no reviews, give neutral rating
+                candidate_ratings[candidate.id] = 3.0
+        
+        # Sort candidates by rating (lowest first - more likely to fire)
+        candidates_with_ratings = [(c, candidate_ratings.get(c.id, 3.0)) for c in candidates]
+        candidates_with_ratings.sort(key=lambda x: x[1])
+        
+        # Weight selection: 60% chance to pick from bottom 30% (worst performers)
+        if random.random() < 0.6 and len(candidates_with_ratings) > 3:
+            bottom_count = max(1, len(candidates_with_ratings) // 3)
+            worst_candidates = [c for c, _ in candidates_with_ratings[:bottom_count]]
+            employee_to_fire = random.choice(worst_candidates)
+        else:
+            # Random selection from all candidates
+            employee_to_fire = random.choice(candidates)
+        
+        # Generate AI termination reason based on business context and reviews
         business_context = await self.get_business_context(db)
+        avg_rating = candidate_ratings.get(employee_to_fire.id, 3.0)
         termination_reason = await self._generate_termination_reason(
             employee_to_fire, 
             business_context
@@ -1163,6 +1248,18 @@ class OfficeSimulator:
             }
         )
         db.add(activity)
+        
+        # Create notification for employee termination
+        from database.models import Notification
+        notification = Notification(
+            notification_type="employee_fired",
+            title=f"Employee Terminated: {employee_to_fire.name}",
+            message=f"{employee_to_fire.name} ({employee_to_fire.title}) has been terminated. Reason: {termination_reason}",
+            employee_id=employee_to_fire.id,
+            review_id=None,
+            read=False
+        )
+        db.add(notification)
         
         await db.commit()
         print(f"Fired employee: {employee_to_fire.name} ({employee_to_fire.title}) - Reason: {termination_reason}")
@@ -1215,6 +1312,110 @@ class OfficeSimulator:
                 db.add(activity)
                 await db.flush()
                 print(f"Capacity management: Hired {hires_needed} employee(s) to support {project_count} projects (was over capacity: {max_projects})")
+    
+    async def _handle_completed_projects(self, db: AsyncSession):
+        """Monitor for completed projects and ensure new ones are created to maintain growth."""
+        from business.project_manager import ProjectManager
+        from database.models import Project, Activity, Employee
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        
+        project_manager = ProjectManager(db)
+        
+        # Check for projects completed in the last 2 hours (recently completed)
+        cutoff_time = datetime.utcnow() - timedelta(hours=2)
+        result = await db.execute(
+            select(Project).where(
+                Project.status == "completed",
+                Project.completed_at >= cutoff_time
+            )
+        )
+        recently_completed = result.scalars().all()
+        
+        if not recently_completed:
+            return
+        
+        # Get active projects count
+        active_projects = await project_manager.get_active_projects()
+        active_count = len(active_projects)
+        
+        # Get employee count
+        result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        active_employees = result.scalars().all()
+        employee_count = len(active_employees)
+        max_projects = max(1, int(employee_count / 3))
+        
+        # For each recently completed project, check if we need to create a replacement
+        for completed_project in recently_completed:
+            # Check if we already created a replacement project for this completion
+            # (to avoid creating multiple projects for the same completion)
+            result = await db.execute(
+                select(Project).where(
+                    Project.status.in_(["planning", "active"]),
+                    Project.created_at >= completed_project.completed_at
+                )
+            )
+            replacement_projects = result.scalars().all()
+            
+            # Only create if we haven't already created a replacement
+            if len(replacement_projects) == 0:
+                # Check capacity
+                can_create, reason = await project_manager.check_capacity_for_new_project()
+                
+                # Create new project to replace completed one (even if at capacity, we'll hire)
+                project_names = [
+                    "Growth Initiative",
+                    "Next Phase Expansion",
+                    "Market Development Project",
+                    "Innovation Drive",
+                    "Strategic Growth Program",
+                    "Business Expansion Initiative",
+                    "Revenue Growth Project",
+                    "Market Penetration Strategy",
+                    "Company Growth Initiative"
+                ]
+                
+                project_name = random.choice(project_names)
+                project = await project_manager.create_project(
+                    name=project_name,
+                    description=f"New project launched following completion of '{completed_project.name}' to maintain company growth and momentum",
+                    priority="high",
+                    budget=random.uniform(50000, 200000)
+                )
+                
+                # Log project creation
+                activity = Activity(
+                    employee_id=None,
+                    activity_type="project_created",
+                    description=f"New project '{project_name}' launched following completion of '{completed_project.name}' to drive company growth",
+                    activity_metadata={
+                        "project_id": project.id,
+                        "project_name": project_name,
+                        "triggered_by": "project_completion",
+                        "completed_project_id": completed_project.id,
+                        "completed_project_name": completed_project.name,
+                        "system_generated": True
+                    }
+                )
+                db.add(activity)
+                print(f"System: Created new project '{project_name}' following completion of '{completed_project.name}' to maintain growth (active: {active_count}/{max_projects})")
+                
+                # If at capacity, note that hiring will be needed
+                if not can_create:
+                    activity = Activity(
+                        employee_id=None,
+                        activity_type="decision",
+                        description=f"New project '{project_name}' created following project completion. Additional hiring will be needed to support growth.",
+                        activity_metadata={
+                            "decision_type": "growth_focus",
+                            "action": "project_created_at_capacity",
+                            "project_id": project.id,
+                            "reason": reason
+                        }
+                    )
+                    db.add(activity)
     
     async def _generate_termination_reason(self, employee, business_context: dict) -> str:
         """Generate an AI-based termination reason for an employee."""

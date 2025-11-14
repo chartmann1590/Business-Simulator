@@ -13,28 +13,67 @@ class CEOAgent(EmployeeAgent):
         # CEO makes strategic decisions focused on business success and profitability
         # Add profitability and business metrics to context for decision-making
         from business.financial_manager import FinancialManager
+        from business.project_manager import ProjectManager
+        from sqlalchemy import select
+        
         financial_manager = FinancialManager(self.db)
+        project_manager = ProjectManager(self.db)
         
         profit = await financial_manager.get_profit()
         revenue = await financial_manager.get_total_revenue()
         profit_margin = (profit / revenue * 100) if revenue > 0 else 0
         
-        # Enhance business context with profitability focus
+        # Get project completion metrics
+        active_projects = await project_manager.get_active_projects()
+        result = await self.db.execute(
+            select(Project).where(Project.status == "completed")
+        )
+        completed_projects = result.scalars().all()
+        completed_count = len(completed_projects)
+        
+        # Check for stalled or near-completion projects
+        stalled_count = 0
+        near_completion_count = 0
+        for project in active_projects:
+            is_stalled = await project_manager.is_project_stalled(project.id)
+            if is_stalled:
+                stalled_count += 1
+            else:
+                progress = await project_manager.calculate_project_progress(project.id)
+                if progress >= 75:
+                    near_completion_count += 1
+        
+        # Enhance business context with profitability and project completion focus
         enhanced_context = business_context.copy()
         enhanced_context["profit"] = profit
         enhanced_context["revenue"] = revenue
         enhanced_context["profit_margin"] = profit_margin
-        enhanced_context["focus"] = "profitability and business success"
+        enhanced_context["active_projects"] = len(active_projects)
+        enhanced_context["completed_projects"] = completed_count
+        enhanced_context["stalled_projects"] = stalled_count
+        enhanced_context["near_completion_projects"] = near_completion_count
+        enhanced_context["focus"] = "profitability, project completion, and continuous growth"
+        enhanced_context["priority"] = "Complete active projects and launch new ones to grow the company"
         
         decision = await super().evaluate_situation(enhanced_context)
         decision["action_type"] = "strategic"
-        decision["business_focus"] = "profitability"
+        decision["business_focus"] = "profitability and growth through project completion"
         return decision
     
     async def execute_decision(self, decision: Dict, business_context: Dict):
         activity = await super().execute_decision(decision, business_context)
         
-        # CEO can create new projects
+        # PRIORITY 1: Make strategic business decisions (increased frequency - 80% chance)
+        if random.random() < 0.8:
+            await self._make_strategic_business_decision(business_context)
+        
+        # PRIORITY 2: Check for recently completed projects and create new ones immediately
+        await self._handle_project_completions()
+        
+        # PRIORITY 3: Monitor and focus on getting active projects completed
+        await self._focus_on_project_completion()
+        
+        # PRIORITY 4: CEO can create new projects
         # Also proactively create projects when there's capacity
         should_create_project = False
         
@@ -74,13 +113,13 @@ class CEOAgent(EmployeeAgent):
             if can_create and project_count < max_projects * 0.8:  # Using less than 80% of capacity
                 # Higher chance to create projects if profitable, lower if not
                 if profit_margin > 20:
-                    create_chance = 0.5  # 50% chance if very profitable
+                    create_chance = 0.6  # Increased from 50% to 60%
                 elif profit_margin > 10:
-                    create_chance = 0.4  # 40% chance if moderately profitable
+                    create_chance = 0.5  # Increased from 40% to 50%
                 elif profit > 0:
-                    create_chance = 0.3  # 30% chance if barely profitable
+                    create_chance = 0.4  # Increased from 30% to 40%
                 else:
-                    create_chance = 0.2  # 20% chance if losing money - focus on existing projects
+                    create_chance = 0.3  # Increased from 20% to 30% - still focus on growth even when struggling
                 
                 if random.random() < create_chance:
                     should_create_project = True
@@ -90,6 +129,185 @@ class CEOAgent(EmployeeAgent):
             await self._create_strategic_project(decision)
         
         return activity
+    
+    async def _handle_project_completions(self):
+        """Check for recently completed projects and immediately create new ones to maintain growth."""
+        from business.project_manager import ProjectManager
+        from database.models import Activity
+        from datetime import datetime, timedelta
+        from sqlalchemy import select
+        
+        project_manager = ProjectManager(self.db)
+        
+        # Check for projects completed in the last hour (recently completed)
+        cutoff_time = datetime.utcnow() - timedelta(hours=1)
+        result = await self.db.execute(
+            select(Project).where(
+                Project.status == "completed",
+                Project.completed_at >= cutoff_time
+            )
+        )
+        recently_completed = result.scalars().all()
+        
+        # For each recently completed project, create a new one to maintain growth
+        for completed_project in recently_completed:
+            # Check if we already created a replacement project for this one
+            # (to avoid creating multiple projects for the same completion)
+            result = await self.db.execute(
+                select(Project).where(
+                    Project.status.in_(["planning", "active"]),
+                    Project.created_at >= completed_project.completed_at
+                )
+            )
+            replacement_projects = result.scalars().all()
+            
+            # Only create if we haven't already created a replacement recently
+            if len(replacement_projects) == 0 or random.random() < 0.3:  # 30% chance even if replacement exists
+                # Check capacity
+                can_create, reason = await project_manager.check_capacity_for_new_project()
+                
+                if can_create:
+                    # Create new project to replace completed one
+                    project_names = [
+                        "Next Phase Expansion",
+                        "Growth Initiative",
+                        "Market Development Project",
+                        "Innovation Drive",
+                        "Strategic Growth Program",
+                        "Business Expansion Initiative",
+                        "Revenue Growth Project",
+                        "Market Penetration Strategy"
+                    ]
+                    
+                    project_name = random.choice(project_names)
+                    project = await project_manager.create_project(
+                        name=project_name,
+                        description=f"New project launched following completion of '{completed_project.name}' to maintain company growth",
+                        priority="high",
+                        budget=random.uniform(50000, 200000)
+                    )
+                    
+                    # Log project creation
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="project_created",
+                        description=f"{self.employee.name} launched new project '{project_name}' following completion of '{completed_project.name}' to drive company growth",
+                        activity_metadata={
+                            "project_id": project.id,
+                            "project_name": project_name,
+                            "triggered_by": "project_completion",
+                            "completed_project_id": completed_project.id,
+                            "completed_project_name": completed_project.name
+                        }
+                    )
+                    self.db.add(activity)
+                    print(f"CEO created new project '{project_name}' following completion of '{completed_project.name}' to maintain growth")
+                else:
+                    # Even if at capacity, create activity showing intent to grow
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} is planning new project following completion of '{completed_project.name}'. Hiring additional staff to support growth.",
+                        activity_metadata={
+                            "decision_type": "growth_focus",
+                            "action": "planning_new_project",
+                            "completed_project_id": completed_project.id,
+                            "reason": reason
+                        }
+                    )
+                    self.db.add(activity)
+                    print(f"CEO planning new project after '{completed_project.name}' completion (at capacity, will hire)")
+    
+    async def _focus_on_project_completion(self):
+        """Focus leadership attention on getting active projects completed."""
+        from business.project_manager import ProjectManager
+        from database.models import Activity, Task
+        from sqlalchemy import select
+        
+        project_manager = ProjectManager(self.db)
+        active_projects = await project_manager.get_active_projects()
+        
+        if not active_projects:
+            return
+        
+        # Check for stalled or slow-moving projects
+        stalled_projects = []
+        slow_projects = []
+        
+        for project in active_projects:
+            # Check if project is stalled
+            is_stalled = await project_manager.is_project_stalled(project.id)
+            if is_stalled:
+                stalled_projects.append(project)
+            
+            # Check project progress
+            progress = await project_manager.calculate_project_progress(project.id)
+            if progress < 50 and project.status == "active":
+                # Project is active but less than 50% complete - might be slow
+                # Check how long it's been active
+                from datetime import datetime
+                if hasattr(project, 'last_activity_at') and project.last_activity_at:
+                    days_since_activity = (datetime.utcnow() - project.last_activity_at.replace(tzinfo=None)).days
+                    if days_since_activity > 3:  # No activity in 3+ days
+                        slow_projects.append(project)
+        
+        # Create activities to focus on completion
+        if stalled_projects or slow_projects:
+            focus_chance = 0.4  # 40% chance to create focus activity
+            if random.random() < focus_chance:
+                if stalled_projects:
+                    project = random.choice(stalled_projects)
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} is focusing on getting stalled project '{project.name}' back on track and completed",
+                        activity_metadata={
+                            "decision_type": "project_completion_focus",
+                            "action": "unstalling_project",
+                            "project_id": project.id,
+                            "project_name": project.name
+                        }
+                    )
+                    self.db.add(activity)
+                elif slow_projects:
+                    project = random.choice(slow_projects)
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} is prioritizing completion of project '{project.name}' to drive company growth",
+                        activity_metadata={
+                            "decision_type": "project_completion_focus",
+                            "action": "accelerating_project",
+                            "project_id": project.id,
+                            "project_name": project.name
+                        }
+                    )
+                    self.db.add(activity)
+        
+        # Also check for projects near completion and push them over the finish line
+        near_completion = []
+        for project in active_projects:
+            progress = await project_manager.calculate_project_progress(project.id)
+            if progress >= 75:  # 75% or more complete
+                near_completion.append((project, progress))
+        
+        if near_completion:
+            # Focus on getting near-completion projects finished
+            if random.random() < 0.3:  # 30% chance
+                project, progress = random.choice(near_completion)
+                activity = Activity(
+                    employee_id=self.employee.id,
+                    activity_type="decision",
+                    description=f"{self.employee.name} is ensuring project '{project.name}' ({progress:.1f}% complete) gets finished to enable new project launches",
+                    activity_metadata={
+                        "decision_type": "project_completion_focus",
+                        "action": "completing_project",
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "progress": progress
+                    }
+                )
+                self.db.add(activity)
     
     async def _create_strategic_project(self, decision: Dict):
         """Create a new strategic project. If capacity is low, trigger hiring instead of deferring."""
@@ -168,6 +386,122 @@ class CEOAgent(EmployeeAgent):
             }
         )
         self.db.add(activity)
+    
+    async def _make_strategic_business_decision(self, business_context: Dict):
+        """CEO makes strategic business decisions to improve company performance."""
+        from business.financial_manager import FinancialManager
+        from database.models import Activity
+        from sqlalchemy import select
+        import random
+        
+        financial_manager = FinancialManager(self.db)
+        profit = await financial_manager.get_profit()
+        revenue = await financial_manager.get_total_revenue()
+        profit_margin = (profit / revenue * 100) if revenue > 0 else 0
+        
+        # Get project and employee metrics
+        from business.project_manager import ProjectManager
+        project_manager = ProjectManager(self.db)
+        active_projects = await project_manager.get_active_projects()
+        project_count = len(active_projects)
+        
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        active_employees = result.scalars().all()
+        employee_count = len(active_employees)
+        
+        # Strategic decisions based on company state
+        strategic_actions = []
+        
+        # Cost optimization strategies
+        if profit_margin < 15 and revenue > 0:
+            strategic_actions.extend([
+                ("cost_optimization", "Implementing cost reduction initiatives to improve profitability"),
+                ("efficiency_review", "Reviewing operational efficiency to reduce waste and improve margins"),
+                ("resource_optimization", "Optimizing resource allocation to maximize ROI"),
+                ("process_improvement", "Streamlining processes to reduce operational costs")
+            ])
+        
+        # Growth strategies when profitable
+        if profit_margin > 15 and revenue > 0:
+            strategic_actions.extend([
+                ("market_expansion", "Exploring market expansion opportunities to grow revenue"),
+                ("investment_in_innovation", "Investing in innovation and R&D to stay competitive"),
+                ("talent_acquisition", "Planning strategic hiring to support growth initiatives"),
+                ("technology_upgrade", "Evaluating technology investments to improve efficiency")
+            ])
+        
+        # Efficiency improvements
+        if project_count > 5:
+            strategic_actions.extend([
+                ("project_prioritization", "Prioritizing high-value projects to maximize returns"),
+                ("workflow_optimization", "Optimizing workflows to accelerate project delivery"),
+                ("quality_improvement", "Focusing on quality improvements to reduce rework and costs")
+            ])
+        
+        # Resource management
+        if employee_count > 10:
+            strategic_actions.extend([
+                ("team_optimization", "Optimizing team structure for maximum productivity"),
+                ("skill_development", "Investing in employee development to improve capabilities"),
+                ("cross_functional_collaboration", "Enhancing cross-functional collaboration for better outcomes")
+            ])
+        
+        # Always available strategic actions
+        strategic_actions.extend([
+            ("strategic_planning", "Reviewing long-term strategic goals and company direction"),
+            ("performance_analysis", "Analyzing business performance metrics to identify improvement areas"),
+            ("competitive_analysis", "Analyzing market position and competitive landscape"),
+            ("risk_management", "Assessing and mitigating business risks"),
+            ("revenue_optimization", "Identifying opportunities to increase revenue streams"),
+            ("customer_focus", "Strengthening customer relationships and satisfaction"),
+            ("operational_excellence", "Driving operational excellence across all departments")
+        ])
+        
+        if strategic_actions:
+            action_type, description = random.choice(strategic_actions)
+            
+            # Create financial impact for strategic decisions
+            financial_impact = 0.0
+            if action_type in ["cost_optimization", "efficiency_review", "process_improvement"]:
+                # Cost savings
+                financial_impact = -random.uniform(5000, 25000)  # Negative = expense reduction
+            elif action_type in ["market_expansion", "revenue_optimization"]:
+                # Revenue increase potential
+                financial_impact = random.uniform(10000, 50000)
+            
+            activity = Activity(
+                employee_id=self.employee.id,
+                activity_type="strategic_decision",
+                description=f"{self.employee.name} (CEO): {description}",
+                activity_metadata={
+                    "decision_type": "strategic",
+                    "action_type": action_type,
+                    "profit": profit,
+                    "revenue": revenue,
+                    "profit_margin": profit_margin,
+                    "project_count": project_count,
+                    "employee_count": employee_count,
+                    "financial_impact": financial_impact,
+                    "strategic_priority": "high"
+                }
+            )
+            self.db.add(activity)
+            
+            # Apply financial impact if significant
+            if abs(financial_impact) > 1000:
+                if financial_impact > 0:
+                    # Revenue opportunity - record as potential income
+                    await financial_manager.record_income(
+                        amount=financial_impact,
+                        description=f"Revenue opportunity from {action_type.replace('_', ' ')}"
+                    )
+                # Note: Cost savings (negative impact) are tracked in metadata but not recorded as expenses
+                # since they represent reduced costs rather than actual transactions
+            
+            await self.db.flush()
+            print(f"CEO strategic decision: {description}")
 
 class ManagerAgent(EmployeeAgent):
     """Manager-specific decision making."""
@@ -176,28 +510,60 @@ class ManagerAgent(EmployeeAgent):
         # Managers make tactical decisions focused on business operations and success
         # Add profitability and operational metrics to context
         from business.financial_manager import FinancialManager
+        from business.project_manager import ProjectManager
+        from sqlalchemy import select
+        
         financial_manager = FinancialManager(self.db)
+        project_manager = ProjectManager(self.db)
         
         profit = await financial_manager.get_profit()
         revenue = await financial_manager.get_total_revenue()
         profit_margin = (profit / revenue * 100) if revenue > 0 else 0
         
-        # Enhance business context with operational focus
+        # Get project completion metrics
+        active_projects = await project_manager.get_active_projects()
+        result = await self.db.execute(
+            select(Project).where(Project.status == "completed")
+        )
+        completed_projects = result.scalars().all()
+        completed_count = len(completed_projects)
+        
+        # Check for projects needing attention
+        stalled_count = 0
+        near_completion_count = 0
+        for project in active_projects:
+            is_stalled = await project_manager.is_project_stalled(project.id)
+            if is_stalled:
+                stalled_count += 1
+            else:
+                progress = await project_manager.calculate_project_progress(project.id)
+                if progress >= 75:
+                    near_completion_count += 1
+        
+        # Enhance business context with operational and project completion focus
         enhanced_context = business_context.copy()
         enhanced_context["profit"] = profit
         enhanced_context["revenue"] = revenue
         enhanced_context["profit_margin"] = profit_margin
-        enhanced_context["focus"] = "business operations and profitability"
+        enhanced_context["active_projects"] = len(active_projects)
+        enhanced_context["completed_projects"] = completed_count
+        enhanced_context["stalled_projects"] = stalled_count
+        enhanced_context["near_completion_projects"] = near_completion_count
+        enhanced_context["focus"] = "business operations, project completion, and profitability"
+        enhanced_context["priority"] = "Get projects completed to enable company growth"
         
         decision = await super().evaluate_situation(enhanced_context)
         decision["action_type"] = "tactical"
-        decision["business_focus"] = "operations"
+        decision["business_focus"] = "operations and project completion"
         return decision
     
     async def execute_decision(self, decision: Dict, business_context: Dict):
         activity = await super().execute_decision(decision, business_context)
         
-        # Managers focus on business operations: task assignment AND business decisions
+        # PRIORITY 1: Focus on getting projects completed
+        await self._focus_on_project_completion()
+        
+        # PRIORITY 2: Managers focus on business operations: task assignment AND business decisions
         # Check for task overload - if severe, always assign tasks
         from sqlalchemy import select
         from database.models import Task, Employee
@@ -225,11 +591,101 @@ class ManagerAgent(EmployeeAgent):
         if should_assign:
             await self._assign_tasks()
         
-        # Managers also focus on business success and profitability
-        if random.random() < 0.5:  # 50% chance to make business-focused decisions
+        # PRIORITY 3: Managers make strategic operational decisions (increased to 70% chance)
+        if random.random() < 0.7:  # Increased from 50% to 70%
             await self._focus_on_business_operations(business_context)
         
+        # PRIORITY 4: Managers make strategic improvements (60% chance)
+        if random.random() < 0.6:
+            await self._make_strategic_operational_decision(business_context)
+        
         return activity
+    
+    async def _focus_on_project_completion(self):
+        """Managers focus on getting active projects completed to enable growth."""
+        from business.project_manager import ProjectManager
+        from database.models import Activity, Task
+        from sqlalchemy import select
+        
+        project_manager = ProjectManager(self.db)
+        active_projects = await project_manager.get_active_projects()
+        
+        if not active_projects:
+            return
+        
+        # Check for projects that need attention to get completed
+        stalled_projects = []
+        slow_projects = []
+        near_completion = []
+        
+        for project in active_projects:
+            # Check if project is stalled
+            is_stalled = await project_manager.is_project_stalled(project.id)
+            if is_stalled:
+                stalled_projects.append(project)
+            
+            # Check project progress
+            progress = await project_manager.calculate_project_progress(project.id)
+            
+            if progress >= 75:  # Near completion
+                near_completion.append((project, progress))
+            elif progress < 50 and project.status == "active":
+                # Check how long it's been active
+                from datetime import datetime
+                if hasattr(project, 'last_activity_at') and project.last_activity_at:
+                    days_since_activity = (datetime.utcnow() - project.last_activity_at.replace(tzinfo=None)).days
+                    if days_since_activity > 3:  # No activity in 3+ days
+                        slow_projects.append(project)
+        
+        # Managers focus on completion - higher chance than CEO since they're more hands-on
+        focus_chance = 0.5  # 50% chance to create focus activity
+        
+        if stalled_projects or slow_projects or near_completion:
+            if random.random() < focus_chance:
+                if stalled_projects:
+                    project = random.choice(stalled_projects)
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} (Manager) is taking action to get stalled project '{project.name}' completed",
+                        activity_metadata={
+                            "decision_type": "project_completion_focus",
+                            "action": "unstalling_project",
+                            "project_id": project.id,
+                            "project_name": project.name
+                        }
+                    )
+                    self.db.add(activity)
+                elif near_completion:
+                    # Prioritize near-completion projects
+                    project, progress = random.choice(near_completion)
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} (Manager) is pushing to complete project '{project.name}' ({progress:.1f}% done) to free up resources for new projects",
+                        activity_metadata={
+                            "decision_type": "project_completion_focus",
+                            "action": "completing_project",
+                            "project_id": project.id,
+                            "project_name": project.name,
+                            "progress": progress
+                        }
+                    )
+                    self.db.add(activity)
+                elif slow_projects:
+                    project = random.choice(slow_projects)
+                    activity = Activity(
+                        employee_id=self.employee.id,
+                        activity_type="decision",
+                        description=f"{self.employee.name} (Manager) is accelerating work on project '{project.name}' to get it completed",
+                        activity_metadata={
+                            "decision_type": "project_completion_focus",
+                            "action": "accelerating_project",
+                            "project_id": project.id,
+                            "project_name": project.name
+                        }
+                    )
+                    self.db.add(activity)
     
     async def _assign_tasks(self):
         """Assign tasks to team members."""
@@ -539,6 +995,121 @@ class ManagerAgent(EmployeeAgent):
             )
             self.db.add(activity)
             await self.db.flush()
+    
+    async def _make_strategic_operational_decision(self, business_context: Dict):
+        """Managers make strategic operational decisions to improve efficiency and outcomes."""
+        from business.financial_manager import FinancialManager
+        from database.models import Activity
+        from sqlalchemy import select
+        import random
+        
+        financial_manager = FinancialManager(self.db)
+        profit = await financial_manager.get_profit()
+        revenue = await financial_manager.get_total_revenue()
+        profit_margin = (profit / revenue * 100) if revenue > 0 else 0
+        
+        # Get operational metrics
+        from business.project_manager import ProjectManager
+        project_manager = ProjectManager(self.db)
+        active_projects = await project_manager.get_active_projects()
+        project_count = len(active_projects)
+        
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        active_employees = result.scalars().all()
+        employee_count = len(active_employees)
+        
+        # Get task metrics
+        from database.models import Task
+        result = await self.db.execute(
+            select(Task).where(
+                Task.employee_id.is_(None),
+                Task.status.in_(["pending", "in_progress"])
+            )
+        )
+        unassigned_tasks = result.scalars().all()
+        unassigned_count = len(unassigned_tasks)
+        
+        # Strategic operational decisions
+        strategic_actions = []
+        
+        # Efficiency improvements
+        if unassigned_count > employee_count:
+            strategic_actions.extend([
+                ("workload_balancing", "Reallocating workload to balance team capacity"),
+                ("task_prioritization", "Prioritizing critical tasks to improve delivery"),
+                ("process_streamlining", "Streamlining processes to reduce bottlenecks")
+            ])
+        
+        # Quality and performance
+        if project_count > 3:
+            strategic_actions.extend([
+                ("quality_assurance", "Implementing quality checks to reduce errors"),
+                ("performance_monitoring", "Monitoring team performance and providing feedback"),
+                ("best_practices", "Establishing best practices for consistent delivery")
+            ])
+        
+        # Resource optimization
+        if employee_count > 5:
+            strategic_actions.extend([
+                ("skill_matching", "Matching employee skills to project needs"),
+                ("team_collaboration", "Improving team collaboration and communication"),
+                ("knowledge_sharing", "Facilitating knowledge sharing across teams")
+            ])
+        
+        # Cost and efficiency
+        if profit_margin < 20:
+            strategic_actions.extend([
+                ("operational_efficiency", "Improving operational efficiency to reduce costs"),
+                ("waste_reduction", "Identifying and eliminating waste in processes"),
+                ("time_management", "Optimizing time management to increase productivity")
+            ])
+        
+        # Always available strategic actions
+        strategic_actions.extend([
+            ("continuous_improvement", "Identifying opportunities for continuous improvement"),
+            ("team_development", "Developing team capabilities for better performance"),
+            ("stakeholder_alignment", "Ensuring alignment with business objectives"),
+            ("risk_mitigation", "Identifying and mitigating operational risks"),
+            ("innovation_encouragement", "Encouraging innovation and creative problem-solving"),
+            ("customer_focus", "Maintaining focus on customer value delivery")
+        ])
+        
+        if strategic_actions:
+            action_type, description = random.choice(strategic_actions)
+            
+            # Create operational impact
+            operational_impact = {
+                "efficiency_gain": random.uniform(5, 15),  # Percentage improvement
+                "cost_savings": random.uniform(1000, 10000),
+                "quality_improvement": random.uniform(3, 10)
+            }
+            
+            activity = Activity(
+                employee_id=self.employee.id,
+                activity_type="strategic_operational_decision",
+                description=f"{self.employee.name} (Manager): {description}",
+                activity_metadata={
+                    "decision_type": "strategic_operational",
+                    "action_type": action_type,
+                    "profit": profit,
+                    "revenue": revenue,
+                    "profit_margin": profit_margin,
+                    "project_count": project_count,
+                    "employee_count": employee_count,
+                    "unassigned_tasks": unassigned_count,
+                    "operational_impact": operational_impact,
+                    "strategic_priority": "medium"
+                }
+            )
+            self.db.add(activity)
+            
+            # Note: Cost savings are tracked in metadata to show operational improvements
+            # They represent efficiency gains rather than actual financial transactions
+            
+            await self.db.flush()
+            print(f"Manager strategic decision: {description}")
 
 class EmployeeAgentBase(EmployeeAgent):
     """Regular employee decision making."""
@@ -571,8 +1142,10 @@ class EmployeeAgentBase(EmployeeAgent):
                 # Determine work amount based on decision quality and employee role
                 base_progress = 5.0  # Base 5% per work session
                 
-                # Managers work faster
-                if self.employee.role == "Manager":
+                # Managers and C-level executives work faster
+                if self.employee.role in ["CTO", "COO", "CFO"]:
+                    base_progress *= 1.5  # C-level executives work at manager speed
+                elif self.employee.role == "Manager":
                     base_progress *= 1.5
                 elif self.employee.role == "CEO":
                     base_progress *= 2.0
@@ -698,12 +1271,24 @@ class EmployeeAgentBase(EmployeeAgent):
                                 }
                             )
                             self.db.add(activity)
+                            
+                            # Create notification for project completion
+                            from database.models import Notification
+                            notification = Notification(
+                                notification_type="project_completed",
+                                title=f"Project Completed: {project.name}",
+                                message=f"Project '{project.name}' has been successfully completed with {len(list(all_tasks))} tasks finished.",
+                                employee_id=None,
+                                review_id=None,
+                                read=False
+                            )
+                            self.db.add(notification)
 
 def create_employee_agent(employee: Employee, db: AsyncSession, llm_client: OllamaClient) -> EmployeeAgent:
     """Factory function to create appropriate agent based on role."""
     if employee.role == "CEO":
         return CEOAgent(employee, db, llm_client)
-    elif employee.role == "Manager":
+    elif employee.role in ["Manager", "CTO", "COO", "CFO"]:
         return ManagerAgent(employee, db, llm_client)
     else:
         return EmployeeAgentBase(employee, db, llm_client)

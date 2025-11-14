@@ -32,8 +32,12 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Office Layout System**: Visual representation of employees moving between rooms across all floors
 - **Communication System**: Email and chat messaging between employees
 - **Project Management**: Employees create, plan, and execute projects with progress tracking
+- **Task Management**: Detailed task tracking with progress, assignments, and activity history
 - **Financial System**: Comprehensive revenue, expenses, profit tracking with detailed analytics
 - **Goal System**: Business goals with progress tracking and completion evaluation
+- **Employee Reviews**: Performance review system with ratings and feedback
+- **Notification System**: Real-time notifications for important events (reviews, raises, terminations)
+- **Boardroom Discussions**: Strategic planning and decision-making sessions
 
 ---
 
@@ -178,6 +182,11 @@ Business logic managers:
 - Tracks goal progress
 - Evaluates goal completion
 
+**`review_manager.py`**:
+- Manages employee performance reviews
+- Tracks review ratings and feedback
+- Generates review recommendations
+
 #### 5. `database/`
 Database layer:
 
@@ -197,6 +206,8 @@ Database layer:
 - `Decision`: Employee decisions
 - `BusinessMetric`: Business metrics
 - `BusinessSettings`: Business configuration
+- `EmployeeReview`: Employee performance reviews
+- `Notification`: System notifications
 
 #### 6. `api/`
 API endpoints:
@@ -204,14 +215,29 @@ API endpoints:
 **`routes.py`**: REST API endpoints
 - `/api/employees`: Get all employees
 - `/api/employees/{id}`: Get employee details
+- `/api/employees/{id}/reviews`: Get employee reviews
+- `/api/employees/{id}/reviews` (POST): Create employee review
+- `/api/employees/waiting-status`: Get employees in waiting state
+- `/api/employees/fix-waiting` (POST): Fix employees stuck in waiting state
 - `/api/projects`: Get all projects
 - `/api/projects/{id}`: Get project details
+- `/api/projects/{id}/activities`: Get project activities
+- `/api/tasks`: Get all tasks
+- `/api/tasks/{id}`: Get task details
+- `/api/tasks/{id}/activities`: Get task activities
 - `/api/dashboard`: Dashboard data
 - `/api/financials`: Financial data
+- `/api/financials/analytics`: Comprehensive financial analytics
 - `/api/activities`: Activity feed
 - `/api/office-layout`: Office layout with employees
 - `/api/emails`: Email messages
 - `/api/chats`: Chat messages
+- `/api/chats/send` (POST): Send chat message
+- `/api/notifications`: Get all notifications
+- `/api/notifications/unread-count`: Get unread notification count
+- `/api/notifications/{id}/read` (POST): Mark notification as read
+- `/api/notifications/read-all` (POST): Mark all notifications as read
+- `/api/boardroom/generate-discussions` (POST): Generate boardroom discussions
 
 **`websocket.py`**: WebSocket handler
 - Manages WebSocket connections
@@ -304,7 +330,11 @@ frontend/src/
 │   ├── OfficeLayout.jsx    # Office layout visualization
 │   ├── RoomDetailModal.jsx # Room detail modal
 │   ├── ChatView.jsx        # Chat message view
-│   └── EmailView.jsx       # Email message view
+│   ├── EmailView.jsx       # Email message view
+│   ├── BoardroomView.jsx   # Boardroom discussions view
+│   ├── EmployeeChat.jsx    # Employee chat component
+│   ├── EmployeeChatModal.jsx # Employee chat modal
+│   └── Notifications.jsx   # Notifications component
 ├── pages/                  # Page components
 │   ├── Dashboard.jsx      # Main dashboard
 │   ├── Employees.jsx      # Employee list
@@ -399,6 +429,21 @@ Communication hub:
 - Filter by employee
 - Message threads
 
+#### `pages/Tasks.jsx`
+Task management:
+- List of all tasks across projects
+- Filter by status, priority, employee, or project
+- Task progress tracking
+- Click to view task details
+
+#### `pages/TaskDetail.jsx`
+Task detail view:
+- Task information and status
+- Assigned employee details
+- Associated project information
+- Task progress and completion status
+- Activity history for the task
+
 #### `hooks/useWebSocket.js`
 WebSocket hook for real-time updates:
 - Connects to backend WebSocket
@@ -482,10 +527,38 @@ WebSocket hook for real-time updates:
 
 #### `chat_messages`
 - `id`: Primary key
-- `sender_id`: Foreign key to employees
-- `recipient_id`: Foreign key to employees
+- `sender_id`: Foreign key to employees (nullable)
+- `recipient_id`: Foreign key to employees (nullable)
 - `message`: Message text
+- `thread_id`: Thread identifier for grouping related messages
 - `timestamp`: Timestamp
+
+#### `employee_reviews`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees (employee being reviewed)
+- `manager_id`: Foreign key to employees (manager conducting review)
+- `review_date`: Review date
+- `overall_rating`: Overall rating (1.0 to 5.0)
+- `performance_rating`: Performance rating (1.0 to 5.0, nullable)
+- `teamwork_rating`: Teamwork rating (1.0 to 5.0, nullable)
+- `communication_rating`: Communication rating (1.0 to 5.0, nullable)
+- `productivity_rating`: Productivity rating (1.0 to 5.0, nullable)
+- `comments`: Review comments (nullable)
+- `strengths`: Employee strengths (nullable)
+- `areas_for_improvement`: Areas for improvement (nullable)
+- `review_period_start`: Start of review period (nullable)
+- `review_period_end`: End of review period (nullable)
+- `created_at`: Timestamp
+
+#### `notifications`
+- `id`: Primary key
+- `notification_type`: Type of notification (review_completed, raise_recommendation, employee_fired, etc.)
+- `title`: Notification title
+- `message`: Notification message
+- `employee_id`: Foreign key to employees (related employee, nullable)
+- `review_id`: Foreign key to employee_reviews (related review, nullable)
+- `read`: Boolean (read status)
+- `created_at`: Timestamp
 
 #### `decisions`
 - `id`: Primary key
@@ -707,6 +780,80 @@ Returns all chat messages.
 **GET `/api/employees/{employee_id}/chats`**
 Returns chat messages for a specific employee.
 
+**POST `/api/chats/send`**
+Send a chat message.
+
+**Request Body:**
+```json
+{
+  "employee_id": 1,
+  "message": "Hello, how are you?"
+}
+```
+
+#### Tasks
+
+**GET `/api/tasks`**
+Returns all tasks with employee and project information.
+
+**GET `/api/tasks/{task_id}`**
+Returns detailed task information.
+
+**GET `/api/tasks/{task_id}/activities`**
+Returns activities related to a specific task.
+
+#### Employee Reviews
+
+**GET `/api/employees/{employee_id}/reviews`**
+Returns all reviews for a specific employee.
+
+**POST `/api/employees/{employee_id}/reviews`**
+Creates a new employee review.
+
+**Request Body:**
+```json
+{
+  "manager_id": 2,
+  "overall_rating": 4.5,
+  "performance_rating": 4.0,
+  "teamwork_rating": 5.0,
+  "communication_rating": 4.5,
+  "productivity_rating": 4.0,
+  "comments": "Excellent work this quarter",
+  "strengths": "Strong communication skills",
+  "areas_for_improvement": "Could improve time management",
+  "review_period_start": "2024-01-01T00:00:00Z",
+  "review_period_end": "2024-03-31T23:59:59Z"
+}
+```
+
+#### Notifications
+
+**GET `/api/notifications`**
+Returns all notifications.
+
+**GET `/api/notifications/unread-count`**
+Returns the count of unread notifications.
+
+**POST `/api/notifications/{notification_id}/read`**
+Marks a notification as read.
+
+**POST `/api/notifications/read-all`**
+Marks all notifications as read.
+
+#### Boardroom
+
+**POST `/api/boardroom/generate-discussions`**
+Generates boardroom discussions for strategic planning.
+
+#### Employee Management
+
+**GET `/api/employees/waiting-status`**
+Returns employees currently in waiting state (rooms full).
+
+**POST `/api/employees/fix-waiting`**
+Fixes employees stuck in waiting state by reassigning them to available rooms.
+
 ---
 
 ## WebSocket Events
@@ -735,6 +882,8 @@ All messages are JSON objects with the following structure:
 - `employee_update`: Employee status changed
 - `project_update`: Project status changed
 - `financial_update`: Financial transaction occurred
+- `review_completed`: Employee review completed
+- `notification`: New notification created
 
 ---
 
@@ -1108,7 +1257,7 @@ For issues and questions:
 
 ---
 
-*Last updated: December 2024*
+*Last updated: January 2025*
 
 ## Office Layout Details
 

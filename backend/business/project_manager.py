@@ -90,12 +90,84 @@ class ProjectManager:
             
             calculated_progress = total_progress / len(tasks) if tasks else 0.0
             # Ensure progress is between 0 and 100
-            return max(0.0, min(100.0, calculated_progress))
+            progress = max(0.0, min(100.0, calculated_progress))
+            
+            # If progress is 100%, ensure project is marked as completed
+            if progress >= 100.0:
+                await self.ensure_project_completion(project_id, progress)
+            
+            return progress
         except Exception as e:
             print(f"Error calculating project progress for {project_id}: {e}")
             import traceback
             traceback.print_exc()
             return 0.0
+    
+    async def ensure_project_completion(self, project_id: int, progress: float = None):
+        """Ensure that projects at 100% progress are marked as completed."""
+        try:
+            project = await self.get_project_by_id(project_id)
+            if not project:
+                return
+            
+            # Only mark as completed if project is not already completed or cancelled
+            if project.status in ["completed", "cancelled"]:
+                return
+            
+            # Use provided progress or calculate it (but avoid recursion by using internal calculation)
+            if progress is None:
+                # Calculate progress without triggering completion check
+                result = await self.db.execute(
+                    select(Task).where(Task.project_id == project_id)
+                )
+                tasks = list(result.scalars().all())
+                
+                if not tasks:
+                    return
+                
+                total_progress = 0.0
+                for task in tasks:
+                    try:
+                        if hasattr(task, 'progress') and task.progress is not None:
+                            total_progress += float(task.progress)
+                        elif task.status == "completed":
+                            total_progress += 100.0
+                        elif task.status == "in_progress":
+                            total_progress += 50.0
+                        else:
+                            total_progress += 0.0
+                    except (AttributeError, TypeError, ValueError):
+                        if task.status == "completed":
+                            total_progress += 100.0
+                        elif task.status == "in_progress":
+                            total_progress += 50.0
+                        else:
+                            total_progress += 0.0
+                
+                progress = (total_progress / len(tasks)) if tasks else 0.0
+                progress = max(0.0, min(100.0, progress))
+            
+            # Mark project as completed if progress is 100%
+            if progress >= 100.0 and project.status != "completed":
+                project.status = "completed"
+                if not project.completed_at:
+                    project.completed_at = datetime.utcnow()
+                    
+                    # Create notification for project completion
+                    from database.models import Notification
+                    notification = Notification(
+                        notification_type="project_completed",
+                        title=f"Project Completed: {project.name}",
+                        message=f"Project '{project.name}' has been successfully completed.",
+                        employee_id=None,
+                        review_id=None,
+                        read=False
+                    )
+                    self.db.add(notification)
+        except Exception as e:
+            print(f"Error ensuring project completion for {project_id}: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def is_project_stalled(self, project_id: int, days_threshold: int = 7) -> bool:
         """Check if a project is stalled (no activity in X days)."""
@@ -157,6 +229,12 @@ class ProjectManager:
         project = await self.get_project_by_id(project_id)
         if project:
             project.last_activity_at = datetime.utcnow()
+            # Check if project should be marked as completed after activity update
+            # Only check if project is not already completed or cancelled
+            if project.status not in ["completed", "cancelled"]:
+                progress = await self.calculate_project_progress(project_id)
+                # Note: calculate_project_progress already calls ensure_project_completion,
+                # so we don't need to call it again here
     
     async def check_capacity_for_new_project(self):
         """

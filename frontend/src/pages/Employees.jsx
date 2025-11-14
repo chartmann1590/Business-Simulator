@@ -10,6 +10,7 @@ function Employees() {
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState('all')
   const [titleFilter, setTitleFilter] = useState('all')
+  const [reviewFilter, setReviewFilter] = useState('all') // 'all', 'with_reviews', 'without_reviews'
 
   useEffect(() => {
     fetchEmployees()
@@ -68,6 +69,13 @@ function Employees() {
     // Job title filter
     if (titleFilter !== 'all') {
       if (emp.title !== titleFilter) return false
+    }
+    
+    // Review filter
+    if (reviewFilter === 'with_reviews') {
+      if (!emp.review_count || emp.review_count === 0) return false
+    } else if (reviewFilter === 'without_reviews') {
+      if (emp.review_count && emp.review_count > 0) return false
     }
     
     return true
@@ -151,7 +159,7 @@ function Employees() {
       
       {/* Search and Filter Bar */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {/* Search Input */}
           <div className="md:col-span-2">
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
@@ -220,10 +228,27 @@ function Employees() {
               ))}
             </select>
           </div>
+          
+          {/* Review Filter */}
+          <div>
+            <label htmlFor="review" className="block text-sm font-medium text-gray-700 mb-2">
+              Reviews
+            </label>
+            <select
+              id="review"
+              value={reviewFilter}
+              onChange={(e) => setReviewFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Employees</option>
+              <option value="with_reviews">With Reviews</option>
+              <option value="without_reviews">Without Reviews</option>
+            </select>
+          </div>
         </div>
         
         {/* Clear Filters Button */}
-        {(searchQuery || departmentFilter !== 'all' || roleFilter !== 'all' || titleFilter !== 'all') && (
+        {(searchQuery || departmentFilter !== 'all' || roleFilter !== 'all' || titleFilter !== 'all' || reviewFilter !== 'all') && (
           <div className="mt-4 flex justify-end">
             <button
               onClick={() => {
@@ -231,6 +256,7 @@ function Employees() {
                 setDepartmentFilter('all')
                 setRoleFilter('all')
                 setTitleFilter('all')
+                setReviewFilter('all')
               }}
               className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:underline"
             >
@@ -295,6 +321,30 @@ function Employees() {
                   </span>
                 )}
               </div>
+              {employee.review_count > 0 && (
+                <div className="flex items-center text-sm text-gray-600 mt-2">
+                  <span className="font-medium">Reviews:</span>
+                  <span className="ml-2 px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 font-semibold">
+                    {employee.review_count} review{employee.review_count !== 1 ? 's' : ''}
+                  </span>
+                  {employee.latest_rating && (
+                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                      employee.latest_rating >= 4.5 ? 'bg-green-100 text-green-800' :
+                      employee.latest_rating >= 4.0 ? 'bg-green-50 text-green-700' :
+                      employee.latest_rating >= 3.0 ? 'bg-yellow-100 text-yellow-800' :
+                      employee.latest_rating >= 2.0 ? 'bg-orange-100 text-orange-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {employee.latest_rating.toFixed(1)}/5.0
+                    </span>
+                  )}
+                  {employee.latest_review_date && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Latest: {new Date(employee.latest_review_date).toLocaleDateString()})
+                    </span>
+                  )}
+                </div>
+              )}
               {employee.termination_reason && (
                 <div className="text-xs text-red-600 mt-2 italic">
                   {employee.termination_reason}
