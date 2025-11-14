@@ -39,19 +39,25 @@ class EmployeeAgent:
         
         if self.employee.role == "CEO":
             options = [
-                "Launch a new strategic project",
-                "Analyze market opportunities",
-                "Review company performance",
-                "Make a major business decision",
-                "Plan for growth"
+                "Focus on increasing profitability and revenue",
+                "Review financial performance and make strategic decisions",
+                "Analyze business metrics and optimize operations",
+                "Make decisions to improve business success",
+                "Prioritize profitable projects and initiatives",
+                "Review company performance and profitability",
+                "Make strategic decisions for business growth",
+                "Focus on making the business successful"
             ]
         elif self.employee.role == "Manager":
             options = [
-                "Assign tasks to team members",
-                "Review project progress",
-                "Plan project milestones",
-                "Coordinate with other departments",
-                "Optimize resource allocation"
+                "Focus on business operations and profitability",
+                "Review team performance and optimize workflow",
+                "Make decisions to improve business success",
+                "Coordinate operations to maximize efficiency",
+                "Prioritize profitable work and business outcomes",
+                "Ensure everything is working smoothly",
+                "Focus on what's best for the business",
+                "Review and improve operational effectiveness"
             ]
         else:  # Employee
             options = [

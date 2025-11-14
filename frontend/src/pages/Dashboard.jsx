@@ -58,6 +58,18 @@ function Dashboard() {
             departments: {},
             role_distribution: {},
             products_services: []
+          },
+          leadership_insights: {
+            leadership_team: [],
+            recent_decisions: [],
+            recent_activities: [],
+            metrics: {
+              total_leadership_count: 0,
+              ceo_count: 0,
+              manager_count: 0,
+              strategic_decisions_count: 0,
+              projects_led_by_leadership: 0
+            }
           }
         })
         setLoading(false)
@@ -77,7 +89,19 @@ function Dashboard() {
         employee_count: 0,
         recent_activities: [],
         goals: [],
-        goal_progress: {}
+        goal_progress: {},
+        leadership_insights: {
+          leadership_team: [],
+          recent_decisions: [],
+          recent_activities: [],
+          metrics: {
+            total_leadership_count: 0,
+            ceo_count: 0,
+            manager_count: 0,
+            strategic_decisions_count: 0,
+            projects_led_by_leadership: 0
+          }
+        }
       })
       setLoading(false)
     }
@@ -163,6 +187,16 @@ function Dashboard() {
             }`}
           >
             Company Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('leadership')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'leadership'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Leadership
           </button>
         </nav>
       </div>
@@ -421,6 +455,214 @@ function Dashboard() {
               ) : (
                 <p className="text-gray-500 text-center py-8">No products or services available yet</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leadership Tab Content */}
+      {activeTab === 'leadership' && (
+        <div className="space-y-6">
+          {/* Leadership Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Leadership Team</div>
+              <div className="mt-2 text-3xl font-bold text-blue-600">
+                {dashboardData?.leadership_insights?.metrics?.total_leadership_count || 0}
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Total leaders
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">CEOs</div>
+              <div className="mt-2 text-3xl font-bold text-purple-600">
+                {dashboardData?.leadership_insights?.metrics?.ceo_count || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Managers</div>
+              <div className="mt-2 text-3xl font-bold text-green-600">
+                {dashboardData?.leadership_insights?.metrics?.manager_count || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Strategic Decisions</div>
+              <div className="mt-2 text-3xl font-bold text-orange-600">
+                {dashboardData?.leadership_insights?.metrics?.strategic_decisions_count || 0}
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Recent strategic moves
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Projects Led</div>
+              <div className="mt-2 text-3xl font-bold text-indigo-600">
+                {dashboardData?.leadership_insights?.metrics?.projects_led_by_leadership || 0}
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Leadership-driven projects
+              </div>
+            </div>
+          </div>
+
+          {/* Leadership Team */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Leadership Team</h3>
+              <p className="text-sm text-gray-500 mt-1">The executives and managers driving the company forward</p>
+            </div>
+            <div className="px-6 py-4">
+              {dashboardData?.leadership_insights?.leadership_team && dashboardData.leadership_insights.leadership_team.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {dashboardData.leadership_insights.leadership_team.map((leader) => (
+                    <div key={leader.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-900">{leader.name}</h4>
+                          <p className="text-sm text-gray-600">{leader.title}</p>
+                        </div>
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${
+                          leader.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
+                          leader.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {leader.role}
+                        </span>
+                      </div>
+                      {leader.department && (
+                        <p className="text-sm text-gray-500 mb-2">Department: {leader.department}</p>
+                      )}
+                      {leader.hired_at && (
+                        <p className="text-xs text-gray-400">
+                          Hired: {new Date(leader.hired_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No leadership team members found</p>
+              )}
+            </div>
+          </div>
+
+          {/* Strategic Decisions and Activities */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent Strategic Decisions */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Strategic Decisions</h3>
+                <p className="text-sm text-gray-500 mt-1">Key decisions shaping the company's future</p>
+              </div>
+              <div className="px-6 py-4 max-h-96 overflow-y-auto">
+                {dashboardData?.leadership_insights?.recent_decisions && dashboardData.leadership_insights.recent_decisions.length > 0 ? (
+                  <div className="space-y-4">
+                    {dashboardData.leadership_insights.recent_decisions.map((decision) => (
+                      <div key={decision.id} className="border-l-4 border-orange-500 pl-4 py-2">
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold text-gray-900">{decision.employee_name}</div>
+                            <div className="text-xs text-gray-500">{decision.employee_role}</div>
+                          </div>
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${
+                            decision.decision_type === 'strategic' ? 'bg-orange-100 text-orange-800' :
+                            decision.decision_type === 'tactical' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {decision.decision_type}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-700 mt-2">{decision.description}</div>
+                        {decision.reasoning && (
+                          <div className="text-xs text-gray-500 mt-1 italic">"{decision.reasoning}"</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-2">
+                          {formatTimestamp(decision.timestamp)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No strategic decisions recorded yet</p>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Leadership Activities */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Leadership Activities</h3>
+                <p className="text-sm text-gray-500 mt-1">Recent actions and initiatives from leadership</p>
+              </div>
+              <div className="px-6 py-4 max-h-96 overflow-y-auto">
+                {dashboardData?.leadership_insights?.recent_activities && dashboardData.leadership_insights.recent_activities.length > 0 ? (
+                  <div className="space-y-4">
+                    {dashboardData.leadership_insights.recent_activities.map((activity) => (
+                      <div key={activity.id} className="border-l-4 border-blue-500 pl-4 py-2">
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold text-gray-900">{activity.employee_name}</div>
+                            <div className="text-xs text-gray-500">{activity.employee_role}</div>
+                          </div>
+                          <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
+                            {activity.activity_type}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-700 mt-2">{activity.description || activity.activity_type}</div>
+                        <div className="text-xs text-gray-400 mt-2">
+                          {formatTimestamp(activity.timestamp)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No leadership activities recorded yet</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Leadership Impact Summary */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow p-6 border border-blue-100">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">How Leadership is Driving the Company Forward</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Strategic Vision</h4>
+                <p className="text-sm text-gray-600">
+                  Our leadership team is making {dashboardData?.leadership_insights?.metrics?.strategic_decisions_count || 0} strategic decisions 
+                  that are shaping the company's direction and ensuring long-term success. 
+                  {dashboardData?.leadership_insights?.metrics?.ceo_count > 0 && (
+                    <> With {dashboardData.leadership_insights.metrics.ceo_count} CEO{dashboardData.leadership_insights.metrics.ceo_count > 1 ? 's' : ''} 
+                    and {dashboardData.leadership_insights.metrics.manager_count} manager{dashboardData.leadership_insights.metrics.manager_count > 1 ? 's' : ''} 
+                    at the helm, we have strong executive guidance.</>
+                  )}
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Project Leadership</h4>
+                <p className="text-sm text-gray-600">
+                  Leadership is actively involved in {dashboardData?.leadership_insights?.metrics?.projects_led_by_leadership || 0} projects, 
+                  ensuring strategic alignment and successful execution. This hands-on approach from executives 
+                  demonstrates commitment to delivering results and maintaining high standards.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Organizational Growth</h4>
+                <p className="text-sm text-gray-600">
+                  With a leadership team of {dashboardData?.leadership_insights?.metrics?.total_leadership_count || 0} members, 
+                  we have the expertise and vision needed to scale operations, drive innovation, and maintain 
+                  competitive advantage in the market.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Continuous Improvement</h4>
+                <p className="text-sm text-gray-600">
+                  Leadership activities show ongoing engagement with {dashboardData?.leadership_insights?.recent_activities?.length || 0} recent actions, 
+                  indicating active management and continuous improvement initiatives that keep the company 
+                  moving forward.
+                </p>
+              </div>
             </div>
           </div>
         </div>

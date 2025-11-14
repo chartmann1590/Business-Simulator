@@ -7,13 +7,17 @@ A fully autonomous office simulation where AI employees make decisions, work on 
 - **Fully Autonomous**: The office runs completely on its own - no user interaction required
 - **AI-Powered Employees**: Each employee uses LLM to make decisions based on their role, personality, and backstory
 - **Employee Hierarchy**: CEO, Managers, and Employees with different decision-making capabilities
+- **Multi-Floor Office System**: 4 floors with specialized rooms and intelligent room assignment
+- **Smart Room Management**: Room capacity tracking, overflow handling, and intelligent movement
 - **Real-time Web Interface**: Watch the office operate in real-time through a modern web dashboard
 - **Rich Observability**: 
-  - Dashboard with key metrics
-  - Employee details with backstories
-  - Project tracking
-  - Financial reports
-  - Activity feed
+  - Dashboard with key metrics and business goals
+  - Employee details with backstories, activities, and room locations
+  - Project tracking with progress and financial data
+  - Comprehensive financial analytics with payroll breakdowns
+  - Office layout visualization across all floors
+  - Communication hub (email and chat)
+  - Activity feed with real-time updates
 
 ## Prerequisites
 
@@ -119,14 +123,25 @@ DATABASE_URL=sqlite+aiosqlite:///./office.db
 
 ## How It Works
 
-1. **Simulation Loop**: Every 8 seconds, the system processes employees
+1. **Simulation Loop**: Every 8 seconds, the system processes up to 3 employees per tick
 2. **Decision Making**: Each employee evaluates their situation and uses the LLM to make decisions
 3. **Role-Based Behavior**:
-   - **CEO**: Makes strategic decisions, creates new projects
-   - **Managers**: Plan projects, assign tasks, coordinate teams
-   - **Employees**: Execute tasks, solve problems, collaborate
-4. **Business Growth**: Projects generate revenue, employees complete tasks, business metrics update
-5. **Real-time Updates**: All activities are broadcast via WebSocket to the frontend
+   - **CEO**: Makes strategic decisions, creates new projects, sets business goals
+   - **Managers**: Plan projects, assign tasks, coordinate teams, make tactical decisions
+   - **Employees**: Execute tasks, solve problems, collaborate, make operational decisions
+4. **Room Assignment**: Employees are intelligently assigned to rooms across 4 floors based on:
+   - Role and hierarchy (CEO gets corner executive office on floor 3)
+   - Department (Sales → Sales Room, HR → HR Room, IT → IT Room)
+   - Specialized needs (Design → Design Studio, R&D → Innovation Lab)
+   - Capacity balancing across floors
+5. **Movement System**: Employees move between rooms based on activities:
+   - Meetings → Conference Rooms, Huddle Rooms, or War Room
+   - Breaks → Breakrooms, Lounges, HR Wellness, or Theater
+   - Training → Training Rooms (with overflow to floor 4)
+   - Work → Home rooms or overflow to cubicles if full
+   - Room capacity is respected - employees wait if rooms are full
+6. **Business Growth**: Projects generate revenue, employees complete tasks, business metrics update
+7. **Real-time Updates**: All activities are broadcast via WebSocket to the frontend
 
 ## Employee System
 
@@ -135,18 +150,33 @@ Each employee has:
 - **Title**: Job title (e.g., "Chief Executive Officer")
 - **Backstory**: Personal history that influences decision-making
 - **Personality Traits**: Affects how they make decisions
-- **Role**: Determines decision-making capabilities
+- **Role**: Determines decision-making capabilities (CEO, Manager, Employee)
+- **Floor Assignment**: Employees are assigned to floors 1-4 based on their role and department
+- **Home Room**: Assigned workspace based on role, title, and department
+- **Current Room**: Tracks real-time location as employees move between rooms
+- **Activity State**: idle, working, walking, meeting, break, training, waiting
 
 ## Observing the Simulation
 
 The web interface provides several views:
 
 - **Dashboard**: Overview of business metrics, recent activities, and goals
-- **Employees**: Browse all employees, click to see details, backstories, and activities
-- **Projects**: View all projects, their progress, and details
-- **Financials**: Comprehensive financial analytics with charts, payroll details, expense breakdowns, and income sources
+- **Employees**: Browse all employees, click to see details, backstories, activities, and room locations
+- **Projects**: View all projects, their progress, tasks, and financial details
+- **Financials**: Comprehensive financial analytics with:
+  - Income, expenses, and profit trends
+  - Payroll breakdowns by role and department
+  - Expense category analysis
+  - Income source tracking
+  - Period-based filtering (30, 60, 90, 180, 365 days)
+- **Office View**: Visual representation of all 4 floors with:
+  - Room layouts with employee locations
+  - Room capacity and occupancy
+  - Floor-by-floor navigation
+  - Room detail modals
+- **Communications**: Email and chat message hub with filtering
 
-All views update in real-time as the simulation runs.
+All views update in real-time as the simulation runs via WebSocket.
 
 ## Architecture
 

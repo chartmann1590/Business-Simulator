@@ -1,6 +1,6 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from database.models import Employee, Activity, BusinessMetric, Financial
 from database.database import async_session_maker
 from employees.roles import create_employee_agent
@@ -162,7 +162,8 @@ class OfficeSimulator:
                             continue
                         
                         # Update business metrics and goals more frequently (use separate session)
-                        if random.random() < 0.3:  # 30% chance per tick
+                        # Increased frequency to better track workload
+                        if random.random() < 0.4:  # 40% chance per tick (increased from 30%)
                             async with async_session_maker() as metrics_db:
                                 try:
                                     goal_system = GoalSystem(metrics_db)
@@ -215,6 +216,9 @@ class OfficeSimulator:
                 # Handle employee hiring/firing based on business performance (use separate session)
                 async with async_session_maker() as manage_db:
                     try:
+                        # Import Task model for task overload checking
+                        from database.models import Task
+                        
                         # Check more frequently if we're below minimum staffing or over capacity
                         result = await manage_db.execute(select(Employee).where(Employee.status == "active"))
                         active_check = result.scalars().all()
@@ -228,11 +232,26 @@ class OfficeSimulator:
                         max_projects = max(1, int(active_count_check / 3))
                         is_over_capacity = project_count > max_projects
                         
-                        # Always check if below minimum or over capacity, otherwise check occasionally
+                        # Check for extreme task overload - always check if severe
+                        result = await manage_db.execute(
+                            select(Task).where(
+                                Task.employee_id.is_(None),
+                                Task.status.in_(["pending", "in_progress"])
+                            )
+                        )
+                        unassigned_check = result.scalars().all()
+                        unassigned_count_check = len(unassigned_check)
+                        tasks_per_employee_check = unassigned_count_check / max(1, active_count_check)
+                        
+                        # Always check if below minimum, over capacity, or extreme task overload
                         if active_count_check < 15:
                             check_interval = 0.5  # 50% chance if below min
-                        elif is_over_capacity:
-                            check_interval = 0.6  # 60% chance if over capacity - hire aggressively!
+                        elif tasks_per_employee_check > 10:  # Extreme overload - always check!
+                            check_interval = 1.0  # 100% chance - emergency situation
+                        elif is_over_capacity or tasks_per_employee_check > 5:
+                            check_interval = 0.8  # 80% chance if over capacity or severe task overload
+                        elif tasks_per_employee_check > 2:
+                            check_interval = 0.6  # 60% chance if moderate task overload
                         else:
                             check_interval = 0.1  # 10% otherwise
                         
@@ -408,6 +427,8 @@ class OfficeSimulator:
         
         # Minimum staffing requirement: Office needs at least 15 employees to run
         MIN_EMPLOYEES = 15
+        # Maximum staffing cap: Don't hire beyond 215 employees
+        MAX_EMPLOYEES = 215
         
         # Firing logic: Can fire employees with cause (performance issues, budget cuts, etc.)
         # But we must maintain minimum staffing
@@ -434,14 +455,16 @@ class OfficeSimulator:
                 active_count = len(active_employees_after)
         
         # Priority 1: Hire to meet minimum staffing requirement (including replacing fired employees)
-        if active_count < MIN_EMPLOYEES:
+        if active_count < MIN_EMPLOYEES and active_count < MAX_EMPLOYEES:
             # Hire multiple employees if we're far below minimum
             employees_needed = MIN_EMPLOYEES - active_count
+            # Don't exceed max cap
+            employees_needed = min(employees_needed, MAX_EMPLOYEES - active_count)
             # Hire 1-3 employees per tick until we reach minimum
             hires_this_tick = min(employees_needed, random.randint(1, 3))
             for _ in range(hires_this_tick):
                 await self._hire_employee(db, business_context)
-            print(f"Hiring to meet minimum staffing: {hires_this_tick} new employee(s) hired. Current: {active_count}, Target: {MIN_EMPLOYEES}")
+            print(f"Hiring to meet minimum staffing: {hires_this_tick} new employee(s) hired. Current: {active_count}, Target: {MIN_EMPLOYEES}, Max: {MAX_EMPLOYEES}")
         
         # Priority 2: Project-based hiring (if we have many projects/tasks, hire to support them)
         else:
@@ -480,46 +503,96 @@ class OfficeSimulator:
             projects_per_employee = project_count / max(1, active_count)
             
             # AGGRESSIVE HIRING: If over capacity, hire immediately and multiple employees
-            if is_over_capacity:
+            if is_over_capacity and active_count < MAX_EMPLOYEES:
                 # Calculate how many employees we need
                 # Each project needs ~3 employees, so if we have N projects, we need N*3 employees
                 employees_needed_for_projects = project_count * 3
                 employees_short = max(0, employees_needed_for_projects - active_count)
+                # Don't exceed max cap
+                employees_short = min(employees_short, MAX_EMPLOYEES - active_count)
                 
                 # Hire aggressively: 2-4 employees per tick when over capacity
-                hires_needed = min(employees_short, random.randint(2, 4))
-                hires_needed = min(hires_needed, 50 - active_count)  # Don't exceed max of 50
+                # For severe overload, hire more aggressively
+                if employees_short > 20:  # Very short on employees
+                    hires_needed = min(employees_short, random.randint(5, 8))  # Hire 5-8
+                else:
+                    hires_needed = min(employees_short, random.randint(2, 4))  # Hire 2-4
                 
-                if hires_needed > 0 and active_count < 50:  # Increased max to 50
+                if hires_needed > 0:
                     for _ in range(hires_needed):
                         await self._hire_employee(db, business_context)
-                    print(f"AGGRESSIVE HIRING: Hired {hires_needed} employee(s) to handle {project_count} projects (capacity: {max_projects}, current: {active_count})")
+                    print(f"AGGRESSIVE HIRING: Hired {hires_needed} employee(s) to handle {project_count} projects (capacity: {max_projects}, current: {active_count}, short: {employees_short}, max: {MAX_EMPLOYEES})")
+            
+            # PROACTIVE HIRING: Hire to maintain strong workload even when not over capacity
+            # If we have capacity for more projects, hire to enable growth
+            elif project_count < max_projects * 0.7 and active_count < MAX_EMPLOYEES:  # If we're using less than 70% of capacity
+                # We have room for more projects - hire to enable growth
+                capacity_available = max_projects - project_count
+                if capacity_available >= 2:
+                    # Hire 1-2 employees to enable project growth (don't exceed max)
+                    hire_chance = 0.4 if profit > 0 else 0.2
+                    if random.random() < hire_chance:
+                        hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))
+                        if hires > 0:
+                            for _ in range(hires):
+                                await self._hire_employee(db, business_context)
+                            print(f"PROACTIVE HIRING: Hired {hires} employee(s) to enable growth (capacity: {max_projects}, current projects: {project_count}, employees: {active_count}, max: {MAX_EMPLOYEES})")
+            
+            # EMERGENCY HIRING: If extreme task overload, hire aggressively (but respect max cap)
+            # With 1032 tasks and 51 employees, that's ~20 tasks per employee - need to hire NOW!
+            if unassigned_count > active_count * 10 and active_count < MAX_EMPLOYEES:  # More than 10 tasks per employee = emergency
+                # EMERGENCY: Hire 5-10 employees immediately, but don't exceed max
+                hires_needed = min(unassigned_count // 20, 10)  # Hire up to 10 at once
+                hires_needed = max(3, hires_needed)  # At least 3
+                hires_needed = min(hires_needed, MAX_EMPLOYEES - active_count)  # Don't exceed max
+                if hires_needed > 0:
+                    for _ in range(hires_needed):
+                        await self._hire_employee(db, business_context)
+                    print(f"🚨 EMERGENCY HIRING: Hired {hires_needed} employee(s) for extreme task overload ({unassigned_count} tasks, {active_count} employees, {unassigned_count/active_count:.1f} tasks/employee, max: {MAX_EMPLOYEES})")
             
             # Also hire if we have many unassigned tasks
             should_hire_for_tasks = False
             if unassigned_count > 3 and available_count < 2:
                 # Many unassigned tasks, few available employees
                 should_hire_for_tasks = True
-            elif tasks_per_employee > 1.5 and active_count < 50:  # Lowered threshold, increased max
+            elif tasks_per_employee > 1.5:  # Removed employee limit check - always hire if overloaded
                 # More than 1.5 tasks per employee on average
                 should_hire_for_tasks = True
             
-            if should_hire_for_tasks and active_count < 50:  # Increased max to 50
+            if should_hire_for_tasks and active_count < MAX_EMPLOYEES:
                 # Higher chance to hire if we're profitable, but still possible if breaking even
-                hire_chance = 0.6 if profit > 0 else 0.4  # Increased chances
-                if random.random() < hire_chance:
-                    # Hire 1-2 employees for task overload
-                    hires = random.randint(1, 2)
+                # More aggressive hiring for severe overload
+                if tasks_per_employee > 5:  # Severe overload
+                    hire_chance = 1.0  # 100% chance - always hire
+                    hires = min(MAX_EMPLOYEES - active_count, random.randint(3, 5))  # Hire 3-5 employees
+                elif tasks_per_employee > 2:  # Moderate overload
+                    hire_chance = 0.9 if profit > 0 else 0.7
+                    hires = min(MAX_EMPLOYEES - active_count, random.randint(2, 4))  # Hire 2-4 employees
+                else:  # Mild overload
+                    hire_chance = 0.7 if profit > 0 else 0.5
+                    hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))  # Hire 1-2 employees
+                
+                if random.random() < hire_chance and hires > 0:
                     for _ in range(hires):
                         await self._hire_employee(db, business_context)
-                    print(f"Hiring for task workload: {unassigned_count} unassigned tasks, {available_count} available employees")
+                    print(f"Hiring for task workload: {unassigned_count} unassigned tasks ({tasks_per_employee:.1f} per employee), {available_count} available employees, hired {hires}, max: {MAX_EMPLOYEES}")
             
             # Also hire if projects per employee ratio is high (even if not over capacity)
-            if projects_per_employee > 0.25 and active_count < 50:  # Lowered threshold
-                hire_chance = 0.5 if profit > 0 else 0.3
+            if projects_per_employee > 0.25 and active_count < MAX_EMPLOYEES:
+                hire_chance = 0.6 if profit > 0 else 0.4  # Increased chances
                 if random.random() < hire_chance:
                     await self._hire_employee(db, business_context)
-                    print(f"Hiring for project ratio: {projects_per_employee:.2f} projects per employee")
+                    print(f"Hiring for project ratio: {projects_per_employee:.2f} projects per employee (current: {active_count}, max: {MAX_EMPLOYEES})")
+            
+            # ENSURE WORKLOAD: If many employees are idle, we need more projects or tasks
+            # This is a signal that we should create more projects or hire more strategically
+            idle_ratio = available_count / max(1, active_count)
+            if idle_ratio > 0.3 and active_count < MAX_EMPLOYEES:
+                # Either create more projects (handled by CEO) or hire to balance workload
+                # For now, we'll note this - CEO should create more projects
+                if random.random() < 0.3:  # 30% chance to hire anyway to build capacity
+                    await self._hire_employee(db, business_context)
+                    print(f"Hiring to reduce idle workforce: {available_count}/{active_count} employees idle ({idle_ratio:.1%}), max: {MAX_EMPLOYEES}")
         
         # Priority 3: Ensure we have essential staff (IT, Reception, and Storage) on each floor
         # Count IT employees
@@ -563,47 +636,159 @@ class OfficeSimulator:
         storage_floor2 = sum(1 for e in storage_employees if e.floor == 2 or (e.home_room and e.home_room.endswith('_floor2')))
         
         # Ensure we have at least 1-2 IT employees (hire if we have 0)
-        if it_count == 0 and active_count < 50:
+        # Essential roles - always ensure we have them, but respect max cap
+        if it_count == 0 and active_count < MAX_EMPLOYEES:
             # Force hire IT employee
             await self._hire_employee_specific(db, business_context, department="IT", role="Employee")
-            print(f"Hired IT employee to ensure IT coverage")
+            print(f"Hired IT employee to ensure IT coverage (current: {active_count}, max: {MAX_EMPLOYEES})")
         
         # Ensure we have at least one Reception employee on each floor
-        if reception_floor1 == 0 and active_count < 50:
+        if reception_floor1 == 0 and active_count < MAX_EMPLOYEES:
             # Force hire Reception employee for floor 1
             await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
-            print(f"Hired Reception employee for floor 1")
-        elif reception_floor2 == 0 and active_count < 50:
+            print(f"Hired Reception employee for floor 1 (current: {active_count}, max: {MAX_EMPLOYEES})")
+        elif reception_floor2 == 0 and active_count < MAX_EMPLOYEES:
             # Force hire Reception employee for floor 2
             await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
-            print(f"Hired Reception employee for floor 2")
+            print(f"Hired Reception employee for floor 2 (current: {active_count}, max: {MAX_EMPLOYEES})")
         
         # Ensure we have at least one Storage employee on each floor
-        if storage_floor1 == 0 and active_count < 50:
+        if storage_floor1 == 0 and active_count < MAX_EMPLOYEES:
             # Force hire Storage employee for floor 1
             await self._hire_employee_specific(db, business_context, department="Operations", title="Storage Coordinator", role="Employee")
-            print(f"Hired Storage employee for floor 1")
-        elif storage_floor2 == 0 and active_count < 50:
+            print(f"Hired Storage employee for floor 1 (current: {active_count}, max: {MAX_EMPLOYEES})")
+        elif storage_floor2 == 0 and active_count < MAX_EMPLOYEES:
             # Force hire Storage employee for floor 2
             await self._hire_employee_specific(db, business_context, department="Operations", title="Storage Coordinator", role="Employee")
-            print(f"Hired Storage employee for floor 2")
+            print(f"Hired Storage employee for floor 2 (current: {active_count}, max: {MAX_EMPLOYEES})")
         
         # If we have many employees but no IT, hire one
-        if it_count == 0 and active_count >= 10 and active_count < 50:
+        if it_count == 0 and active_count >= 10 and active_count < MAX_EMPLOYEES:
             if random.random() < 0.5:  # 50% chance
                 await self._hire_employee_specific(db, business_context, department="IT", role="Employee")
-                print(f"Hired IT employee (office has {active_count} employees but no IT)")
+                print(f"Hired IT employee (office has {active_count} employees but no IT, max: {MAX_EMPLOYEES})")
         
         # If we have many employees but no Reception, hire one
-        if reception_count == 0 and active_count >= 10 and active_count < 50:
+        if reception_count == 0 and active_count >= 10 and active_count < MAX_EMPLOYEES:
             if random.random() < 0.5:  # 50% chance
                 await self._hire_employee_specific(db, business_context, department="Administration", title="Receptionist", role="Employee")
-                print(f"Hired Reception employee (office has {active_count} employees but no reception)")
+                print(f"Hired Reception employee (office has {active_count} employees but no reception, max: {MAX_EMPLOYEES})")
+        
+        # Count HR employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%HR%") | Employee.title.ilike("%Human Resources%") | 
+                 Employee.department.ilike("%HR%"))
+            )
+        )
+        hr_employees = result.scalars().all()
+        hr_count = len(hr_employees)
+        
+        # Count Sales employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Sales%") | Employee.department.ilike("%Sales%"))
+            )
+        )
+        sales_employees = result.scalars().all()
+        sales_count = len(sales_employees)
+        
+        # Count Design employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                (Employee.title.ilike("%Design%") | Employee.title.ilike("%Designer%") | 
+                 Employee.department.ilike("%Design%"))
+            )
+        )
+        design_employees = result.scalars().all()
+        design_count = len(design_employees)
+        
+        # Count Leadership (Managers, Executives, Directors, VPs)
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                or_(
+                    Employee.role == "Manager",
+                    Employee.title.ilike("%Director%"),
+                    Employee.title.ilike("%VP%"),
+                    Employee.title.ilike("%Vice President%"),
+                    Employee.title.ilike("%Executive%"),
+                    Employee.title.ilike("%Chief%")
+                )
+            )
+        )
+        leadership_employees = result.scalars().all()
+        leadership_count = len(leadership_employees)
+        
+        # Ensure we have at least one HR employee (hire if we have 0 or very few)
+        # Respect max cap but ensure essential roles
+        if hr_count == 0 and active_count < MAX_EMPLOYEES:
+            # Force hire HR employee
+            await self._hire_employee_specific(db, business_context, department="HR", role="Employee")
+            print(f"Hired HR employee (office has {active_count} employees but no HR, max: {MAX_EMPLOYEES})")
+        elif hr_count == 1 and active_count >= 20 and active_count < MAX_EMPLOYEES:
+            # If we have 20+ employees but only 1 HR, hire another
+            if random.random() < 0.5:  # 50% chance
+                await self._hire_employee_specific(db, business_context, department="HR", role="Employee")
+                print(f"Hired additional HR employee (office has {active_count} employees, {hr_count} HR, max: {MAX_EMPLOYEES})")
+        
+        # Ensure we have Sales employees (hire if we have 0 or very few)
+        if sales_count == 0 and active_count < MAX_EMPLOYEES:
+            # Force hire Sales employee
+            await self._hire_employee_specific(db, business_context, department="Sales", role="Employee")
+            print(f"Hired Sales employee (office has {active_count} employees but no Sales, max: {MAX_EMPLOYEES})")
+        elif sales_count < 2 and active_count >= 15 and active_count < MAX_EMPLOYEES:
+            # If we have 15+ employees but less than 2 Sales, hire more
+            if random.random() < 0.6:  # 60% chance
+                await self._hire_employee_specific(db, business_context, department="Sales", role="Employee")
+                print(f"Hired Sales employee (office has {active_count} employees, {sales_count} Sales, max: {MAX_EMPLOYEES})")
+        
+        # Ensure we have Design employees (hire if we have 0 or very few)
+        if design_count == 0 and active_count < MAX_EMPLOYEES:
+            # Force hire Design employee
+            await self._hire_employee_specific(db, business_context, department="Design", role="Employee")
+            print(f"Hired Design employee (office has {active_count} employees but no Design, max: {MAX_EMPLOYEES})")
+        elif design_count < 2 and active_count >= 15 and active_count < MAX_EMPLOYEES:
+            # If we have 15+ employees but less than 2 Design, hire more
+            if random.random() < 0.5:  # 50% chance
+                await self._hire_employee_specific(db, business_context, department="Design", role="Employee")
+                print(f"Hired Design employee (office has {active_count} employees, {design_count} Design, max: {MAX_EMPLOYEES})")
+        
+        # Ensure we have adequate leadership (hire managers if we have too few)
+        # Need at least 1 manager per 10 employees, or at least 2-3 managers minimum
+        managers_needed = max(2, int(active_count / 10))
+        if leadership_count < managers_needed and active_count >= 10 and active_count < MAX_EMPLOYEES:
+            if random.random() < 0.7:  # 70% chance to hire manager
+                # Hire a manager - could be any department
+                departments_with_managers = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "HR", "Design"]
+                dept = random.choice(departments_with_managers)
+                await self._hire_employee_specific(db, business_context, department=dept, role="Manager")
+                print(f"Hired Manager for {dept} (office has {active_count} employees, {leadership_count} leaders, need {managers_needed}, max: {MAX_EMPLOYEES})")
         
         # Priority 4: Growth hiring (if profitable and growing, can hire beyond minimum)
-        if profit > 50000 and revenue > 100000 and active_count < 50:  # Increased max to 50
-            if random.random() < 0.3:  # 30% chance to hire
+        # More aggressive growth hiring to ensure strong workforce
+        if profit > 50000 and revenue > 100000 and active_count < MAX_EMPLOYEES:
+            # Higher chance to hire when profitable - build strong team
+            hire_chance = 0.5 if profit > 100000 else 0.3  # 50% chance if very profitable
+            if random.random() < hire_chance:
+                # Hire 1-2 employees for growth (don't exceed max)
+                hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))
+                if hires > 0:
+                    for _ in range(hires):
+                        await self._hire_employee(db, business_context)
+                    print(f"Growth hiring: Hired {hires} employee(s) (profit: ${profit:,.2f}, revenue: ${revenue:,.2f}, current: {active_count}, max: {MAX_EMPLOYEES})")
+        
+        # Priority 5: Ensure minimum project workload
+        # If we have many employees but few projects, we should have more projects
+        # This is handled by CEO creating projects, but we can also hire to prepare for growth
+        if active_count >= 20 and project_count < 5 and active_count < MAX_EMPLOYEES:
+            # Many employees but few projects - hire strategically to prepare for more projects
+            if random.random() < 0.2:  # 20% chance
                 await self._hire_employee(db, business_context)
+                print(f"Strategic hiring: Preparing for project growth ({active_count} employees, {project_count} projects, max: {MAX_EMPLOYEES})")
     
     async def _hire_employee(self, db: AsyncSession, business_context: dict):
         """Hire a new employee."""
@@ -611,7 +796,7 @@ class OfficeSimulator:
         from datetime import datetime
         import random
         
-        departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration"]
+        departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration", "HR", "Design"]
         roles = ["Employee", "Manager"]
         
         # Generate employee data
@@ -621,11 +806,12 @@ class OfficeSimulator:
             "Employee": [
                 "Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", 
                 "Operations Coordinator", "IT Specialist", "IT Support Technician", "Receptionist", 
-                "Administrative Assistant"
+                "Administrative Assistant", "HR Specialist", "HR Coordinator", "Human Resources Specialist",
+                "Designer", "UI Designer", "UX Designer", "Graphic Designer"
             ],
             "Manager": [
                 "Engineering Manager", "Product Manager", "Marketing Manager", "Sales Manager", 
-                "Operations Manager", "IT Manager"
+                "Operations Manager", "IT Manager", "HR Manager", "Human Resources Manager", "Design Manager"
             ]
         }
         
@@ -675,10 +861,35 @@ class OfficeSimulator:
         new_employee.floor = floor
         
         # New hires start in training room on their assigned floor
-        # Determine training room based on floor
+        # Determine training room based on floor - check capacity and use floor 4 for overflow
         from employees.room_assigner import ROOM_TRAINING_ROOM
-        if floor == 2:
+        from engine.movement_system import get_room_occupancy, get_room_capacity
+        
+        # Check if training rooms on floors 1-2 are full, use floor 4 for overflow
+        floor1_occupancy = await get_room_occupancy(ROOM_TRAINING_ROOM, db)
+        floor1_capacity = get_room_capacity(ROOM_TRAINING_ROOM)
+        floor2_occupancy = await get_room_occupancy(f"{ROOM_TRAINING_ROOM}_floor2", db)
+        floor2_capacity = get_room_capacity(f"{ROOM_TRAINING_ROOM}_floor2")
+        
+        # If floors 1-2 training rooms are near capacity, use floor 4
+        if floor1_occupancy >= floor1_capacity - 2 or floor2_occupancy >= floor2_capacity - 2:
+            training_room = f"{ROOM_TRAINING_ROOM}_floor4"
+            new_employee.floor = 4  # Update floor to 4 for training
+        elif floor == 2:
             training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+        elif floor == 3:
+            # Floor 3 doesn't have a training room, use floor 1, 2, or 4
+            # Check which has space
+            if floor1_occupancy < floor1_capacity:
+                training_room = ROOM_TRAINING_ROOM
+            elif floor2_occupancy < floor2_capacity:
+                training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+                new_employee.floor = 2
+            else:
+                training_room = f"{ROOM_TRAINING_ROOM}_floor4"
+                new_employee.floor = 4
+        elif floor == 4:
+            training_room = f"{ROOM_TRAINING_ROOM}_floor4"
         else:
             training_room = ROOM_TRAINING_ROOM
         
@@ -760,10 +971,59 @@ class OfficeSimulator:
         new_employee.floor = floor
         
         # New hires start in training room on their assigned floor
-        # Determine training room based on floor
+        # Determine training room based on floor - check capacity and use floor 4 for overflow
         from employees.room_assigner import ROOM_TRAINING_ROOM
-        if floor == 2:
+        from engine.movement_system import get_room_occupancy, get_room_capacity
+        
+        # Check if training rooms on floors 1-2 are full, use floor 4 for overflow
+        floor1_occupancy = await get_room_occupancy(ROOM_TRAINING_ROOM, db)
+        floor1_capacity = get_room_capacity(ROOM_TRAINING_ROOM)
+        floor2_occupancy = await get_room_occupancy(f"{ROOM_TRAINING_ROOM}_floor2", db)
+        floor2_capacity = get_room_capacity(f"{ROOM_TRAINING_ROOM}_floor2")
+        
+        # Helper function to find best available training room on floor 4
+        async def find_best_floor4_training_room():
+            floor4_training_rooms = [
+                f"{ROOM_TRAINING_ROOM}_floor4",
+                f"{ROOM_TRAINING_ROOM}_floor4_2",
+                f"{ROOM_TRAINING_ROOM}_floor4_3",
+                f"{ROOM_TRAINING_ROOM}_floor4_4",
+                f"{ROOM_TRAINING_ROOM}_floor4_5"
+            ]
+            
+            best_room = None
+            most_space = -1
+            
+            for room_id in floor4_training_rooms:
+                occupancy = await get_room_occupancy(room_id, db)
+                capacity = get_room_capacity(room_id)
+                available_space = capacity - occupancy
+                
+                if available_space > most_space:
+                    most_space = available_space
+                    best_room = room_id
+            
+            return best_room if best_room else f"{ROOM_TRAINING_ROOM}_floor4"  # Fallback
+        
+        # If floors 1-2 training rooms are near capacity, use floor 4
+        if floor1_occupancy >= floor1_capacity - 2 or floor2_occupancy >= floor2_capacity - 2:
+            training_room = await find_best_floor4_training_room()
+            new_employee.floor = 4  # Update floor to 4 for training
+        elif floor == 2:
             training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+        elif floor == 3:
+            # Floor 3 doesn't have a training room, use floor 1, 2, or 4
+            # Check which has space
+            if floor1_occupancy < floor1_capacity:
+                training_room = ROOM_TRAINING_ROOM
+            elif floor2_occupancy < floor2_capacity:
+                training_room = f"{ROOM_TRAINING_ROOM}_floor2"
+                new_employee.floor = 2
+            else:
+                training_room = await find_best_floor4_training_room()
+                new_employee.floor = 4
+        elif floor == 4:
+            training_room = await find_best_floor4_training_room()
         else:
             training_room = ROOM_TRAINING_ROOM
         
@@ -925,12 +1185,20 @@ class OfficeSimulator:
             max_projects = overload_info.get("max_projects", 0)
             
             # Hire 2-3 employees per check when over capacity
-            if employees_short > 0 and employee_count < 50:
-                hires_needed = min(employees_short, random.randint(2, 3))
+            # Respect max cap of 215 employees
+            if employees_short > 0 and employee_count < MAX_EMPLOYEES:
+                # For severe overload, hire more aggressively
+                if employees_short > 20:
+                    hires_needed = min(employees_short, random.randint(5, 8))  # Hire 5-8
+                else:
+                    hires_needed = min(employees_short, random.randint(2, 3))  # Hire 2-3
+                # Don't exceed max cap
+                hires_needed = min(hires_needed, MAX_EMPLOYEES - employee_count)
                 business_context = await self.get_business_context(db)
                 
-                for _ in range(hires_needed):
-                    await self._hire_employee(db, business_context)
+                if hires_needed > 0:
+                    for _ in range(hires_needed):
+                        await self._hire_employee(db, business_context)
                 
                 # Create activity for hiring
                 activity = Activity(

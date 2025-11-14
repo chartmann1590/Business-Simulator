@@ -26,12 +26,14 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Fully Autonomous Operation**: The office runs completely independently without user interaction
 - **AI-Powered Employees**: Each employee uses LLM to make contextual decisions based on role, personality, and backstory
 - **Employee Hierarchy**: CEO, Managers, and Employees with different decision-making capabilities
+- **Multi-Floor Office System**: 4 floors with specialized rooms and intelligent distribution
+- **Smart Room Management**: Room capacity tracking, overflow handling, and intelligent movement
 - **Real-time Web Interface**: Modern React dashboard with live updates via WebSocket
-- **Office Layout System**: Visual representation of employees moving between rooms
+- **Office Layout System**: Visual representation of employees moving between rooms across all floors
 - **Communication System**: Email and chat messaging between employees
-- **Project Management**: Employees create, plan, and execute projects
-- **Financial System**: Revenue, expenses, and profit tracking
-- **Goal System**: Business goals with progress tracking
+- **Project Management**: Employees create, plan, and execute projects with progress tracking
+- **Financial System**: Comprehensive revenue, expenses, profit tracking with detailed analytics
+- **Goal System**: Business goals with progress tracking and completion evaluation
 
 ---
 
@@ -129,15 +131,31 @@ Employee agent system for decision-making:
 - `evaluate_situation()`: Uses LLM to evaluate current situation
 - `execute_decision()`: Executes the decision and creates activities
 - Handles task completion, project work, communication
+- Integrates with movement system for room transitions
 
 **`roles.py`**: Role-specific agents
-- `CEOAgent`: Strategic decisions, project creation
-- `ManagerAgent`: Tactical decisions, task assignment
-- `EmployeeAgent`: Operational decisions, task execution
+- `CEOAgent`: Strategic decisions, project creation, goal setting
+- `ManagerAgent`: Tactical decisions, task assignment, team coordination
+- `EmployeeAgent`: Operational decisions, task execution, problem solving
 
 **`room_assigner.py`**: Room assignment logic
-- Assigns home rooms based on role/title/department
+- Assigns home rooms and floors based on role/title/department
+- Distributes employees across 4 floors for optimal space utilization
+- Specialized room assignments:
+  - CEO → Corner Executive Office (Floor 3)
+  - Executives → Executive Suite (Floor 2) or Corner Executive (Floor 3)
+  - Sales → Sales Room (Floor 2)
+  - HR → HR Room (Floor 2)
+  - Design → Design Studio or Innovation Lab (Floor 3)
+  - IT → IT Room (Floors 1-2, balanced)
+  - Reception → Reception (Floors 1-2, balanced)
+  - Storage → Storage (Floors 1-2, balanced)
+  - Training → Training Rooms (Floors 1-2, with Floor 4 overflow)
+  - Engineering → Focus Pods (Floor 3) or traditional spaces
+  - Product → Collaboration Lounge, War Room (Floor 3), or traditional spaces
+  - Marketing → Hotdesk (Floor 3), Collaboration Lounge, or traditional spaces
 - Manages room assignments for existing employees
+- Balances capacity across floors and room types
 
 #### 4. `business/`
 Business logic managers:
@@ -208,32 +226,67 @@ Ollama LLM client:
 - Handles errors and retries
 
 #### 8. `engine/movement_system.py`
-Employee movement system:
-- Determines target room based on activity
-- Updates employee location
-- Manages room transitions
+Employee movement system with capacity management:
+- `determine_target_room()`: Determines target room based on activity type and description
+  - Meetings → Conference Rooms (balanced across floors), Huddle Rooms (Floor 3), or War Room (Floor 3)
+  - Breaks → Breakrooms, Lounges, HR Wellness (Floor 3), or Theater (Floor 3)
+  - Training → Training Rooms (with Floor 4 overflow support)
+  - Storage needs → Storage rooms (on employee's floor)
+  - IT work → IT rooms (on employee's assigned floor)
+  - Reception work → Reception (on employee's assigned floor)
+  - Collaboration → Collaboration Lounge (Floor 3), Conference Rooms, Open Office, or Cubicles
+  - Respects employee's floor assignment
+- `get_room_capacity()`: Returns capacity for each room (varies by room type and floor)
+- `check_room_has_space()`: Checks if a room has available space before allowing entry
+- `get_room_occupancy()`: Gets current number of employees in a room
+- `update_employee_location()`: Updates employee location with capacity checks
+  - Employees wait if target room is full (activity_state = "waiting")
+  - Updates floor assignment when moving between floors
+  - Handles overflow to cubicles when home rooms are full
+- `process_employee_movement()`: Main movement processing function
+  - Handles training room time limits (1 hour max)
+  - Enforces work area requirements for IT, Reception, and Storage employees
+  - Manages random movement for office liveliness
+  - Processes waiting employees when rooms become available
+- `should_move_to_home_room()`: Determines if employee should return to home room
+- `get_random_movement()`: Generates occasional random movement (reduced for IT/Reception/Storage)
 
 ### Simulation Flow
 
-1. **Startup**: Database initialized, employees loaded, simulation started
+1. **Startup**: 
+   - Database initialized
+   - Employees loaded and assigned to rooms/floors if not already assigned
+   - Simulation started
 2. **Simulation Loop** (every 8 seconds):
-   - Gather business context (revenue, projects, employees)
+   - Gather business context (revenue, projects, employees, goals)
    - Process up to 3 employees per tick
    - For each employee:
-     - Create employee agent
+     - Create employee agent based on role
      - Evaluate situation using LLM
-     - Execute decision
-     - Process movement
-     - Record activity
+     - Execute decision (task work, communication, project creation, etc.)
+     - Process movement based on activity:
+       - Determine target room based on activity type
+       - Check room capacity
+       - Update location (or set to waiting if room full)
+       - Update floor if moving between floors
+     - Record activity in database
    - Broadcast updates via WebSocket
 3. **Employee Decision Making**:
-   - Employee agent evaluates current situation
-   - LLM generates decision based on role, personality, backstory
+   - Employee agent evaluates current situation (tasks, projects, business state)
+   - LLM generates decision based on role, personality, backstory, and context
    - Decision executed (task work, communication, project creation, etc.)
    - Activity recorded in database
-4. **Real-time Updates**:
+4. **Room Movement**:
+   - Activity type determines target room
+   - Room capacity checked before movement
+   - Employees wait if target room is full
+   - Floor updated when moving between floors
+   - Special handling for IT, Reception, and Storage employees (must stay in work areas)
+   - Training room time limits enforced (1 hour max)
+5. **Real-time Updates**:
    - All activities broadcast to connected WebSocket clients
    - Frontend receives updates and refreshes UI
+   - Room occupancy updates in real-time
 
 ---
 
@@ -300,11 +353,18 @@ Employee detail view:
 
 #### `pages/OfficeView.jsx`
 Office layout visualization:
-- All rooms with images
-- Employees in each room
-- Room capacity
-- Click room to see details
+- Multi-floor navigation (Floors 1-4)
+- All rooms with images organized by floor
+- Employees in each room with real-time location tracking
+- Room capacity and current occupancy
+- Floor-specific rooms:
+  - **Floor 1**: Open Office, Cubicles, Conference Room, Breakroom, Reception, IT Room, Manager Office, Training Room, Lounge, Storage
+  - **Floor 2**: Executive Suite, Cubicles, Breakroom, Conference Room, Training Room, IT Room, Storage, Lounge, HR Room, Sales Room
+  - **Floor 3**: Innovation Lab, Hotdesk, Focus Pods, Collaboration Lounge, War Room, Design Studio, HR Wellness, Theater, Huddle, Corner Executive
+  - **Floor 4**: Training overflow floor with 5 Training Rooms and 5 Cubicle areas
+- Click room to see details (employees, capacity, recent activities)
 - Terminated employees section
+- Real-time updates as employees move between rooms
 
 #### `pages/Projects.jsx`
 Project management:
@@ -364,9 +424,10 @@ WebSocket hook for real-time updates:
 - `personality_traits`: JSON array
 - `backstory`: Text description
 - `avatar_path`: Path to avatar image
-- `current_room`: Current room location
-- `home_room`: Assigned home room
-- `activity_state`: idle, working, walking, meeting, break
+- `current_room`: Current room location (with floor suffix if applicable)
+- `home_room`: Assigned home room (with floor suffix if applicable)
+- `floor`: Floor number (1, 2, 3, or 4)
+- `activity_state`: idle, working, walking, meeting, break, training, waiting
 - `hired_at`: Timestamp
 - `fired_at`: Timestamp (nullable)
 - `created_at`: Timestamp
@@ -773,6 +834,50 @@ Simulation settings can be modified in `backend/engine/office_simulator.py`:
 - `EMPLOYEES_PER_TICK`: Number of employees processed per tick (default: 3)
 - `MIN_EMPLOYEES`: Minimum number of employees required (default: 15)
 
+### Room Capacity Settings
+
+Room capacity settings are defined in `backend/engine/movement_system.py` in the `get_room_capacity()` function:
+
+**Floor 1:**
+- Open Office: 20
+- Cubicles: 15
+- Conference Room: 10
+- Breakroom: 8
+- Reception: 3
+- IT Room: 5
+- Manager Office: 6
+- Training Room: 12
+- Lounge: 10
+- Storage: 2
+
+**Floor 2:**
+- Executive Suite: 8
+- Cubicles: 20
+- Breakroom: 10
+- Conference Room: 12
+- Training Room: 15
+- IT Room: 6
+- Storage: 3
+- Lounge: 12
+- HR Room: 6
+- Sales Room: 10
+
+**Floor 3:**
+- Innovation Lab: 12
+- Hotdesk: 18
+- Focus Pods: 8
+- Collaboration Lounge: 15
+- War Room: 10
+- Design Studio: 8
+- HR Wellness: 6
+- Theater: 20
+- Huddle: 6
+- Corner Executive: 4
+
+**Floor 4 (Training Overflow):**
+- Training Room 1-5: 20 each
+- Cubicles 1-5: 25 each
+
 ---
 
 ## Development Guide
@@ -941,6 +1046,10 @@ A Docker setup can be created with:
 - Verify room assignments in database
 - Check activity types triggering movement
 - Review employee `activity_state` field
+- Check if employees are in "waiting" state (room might be full)
+- Verify floor assignments are correct
+- Check if IT/Reception/Storage employees are correctly restricted to work areas
+- Review room capacity settings
 
 #### Simulation Not Running
 
@@ -999,5 +1108,66 @@ For issues and questions:
 
 ---
 
-*Last updated: 2024*
+*Last updated: December 2024*
+
+## Office Layout Details
+
+### Floor 1 (Main Floor)
+- **Open Office**: 20 capacity - General workspace
+- **Cubicles**: 15 capacity - Individual workspaces
+- **Conference Room**: 10 capacity - Meetings
+- **Breakroom**: 8 capacity - Breaks and meals
+- **Reception**: 3 capacity - Front desk
+- **IT Room**: 5 capacity - IT operations
+- **Manager Office**: 6 capacity - Management workspace
+- **Training Room**: 12 capacity - Training sessions
+- **Lounge**: 10 capacity - Relaxation area
+- **Storage**: 2 capacity - Storage and supplies
+
+### Floor 2 (Executive & Department Floor)
+- **Executive Suite**: 8 capacity - Senior executives
+- **Cubicles**: 20 capacity - Individual workspaces
+- **Breakroom**: 10 capacity - Breaks and meals
+- **Conference Room**: 12 capacity - Larger meetings
+- **Training Room**: 15 capacity - Training sessions
+- **IT Room**: 6 capacity - IT operations
+- **Storage**: 3 capacity - Storage and supplies
+- **Lounge**: 12 capacity - Relaxation area
+- **HR Room**: 6 capacity - Human Resources
+- **Sales Room**: 10 capacity - Sales department
+
+### Floor 3 (Innovation & Collaboration Floor)
+- **Innovation Lab**: 12 capacity - Research and development
+- **Hotdesk**: 18 capacity - Flexible workspace
+- **Focus Pods**: 8 capacity - Quiet individual work
+- **Collaboration Lounge**: 15 capacity - Team collaboration
+- **War Room**: 10 capacity - Strategic planning
+- **Design Studio**: 8 capacity - Design work
+- **HR Wellness**: 6 capacity - Wellness and relaxation
+- **Theater**: 20 capacity - Presentations and events
+- **Huddle**: 6 capacity - Quick meetings
+- **Corner Executive**: 4 capacity - CEO and top executives
+
+### Floor 4 (Training Overflow Floor)
+- **Training Room 1-5**: 20 capacity each - Training overflow
+- **Cubicles 1-5**: 25 capacity each - Workspace overflow
+
+### Room Assignment Logic
+
+Employees are assigned to rooms based on:
+1. **Role**: CEO → Corner Executive, Executives → Executive Suite
+2. **Department**: Sales → Sales Room, HR → HR Room, IT → IT Room
+3. **Specialization**: Design → Design Studio, R&D → Innovation Lab
+4. **Capacity Balancing**: System distributes employees across floors to balance occupancy
+5. **Floor Preference**: Certain roles prefer specific floors (e.g., executives on floors 2-3)
+
+### Movement Rules
+
+- **Meetings**: Automatically routed to Conference Rooms (balanced across floors), Huddle Rooms (small meetings), or War Room (strategic meetings)
+- **Breaks**: Can use Breakrooms, Lounges, HR Wellness (Floor 3), or Theater (Floor 3)
+- **Training**: Assigned to Training Rooms, with automatic overflow to Floor 4 when needed
+- **Work**: Employees work in their home rooms, with overflow to cubicles if home room is full
+- **Capacity Enforcement**: Employees wait if target room is full (activity_state = "waiting")
+- **Special Employees**: IT, Reception, and Storage employees must stay in their work areas (only leave for breaks/meetings)
+- **Floor Transitions**: Employee floor is automatically updated when moving between floors
 

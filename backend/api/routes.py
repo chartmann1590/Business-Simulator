@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
@@ -429,6 +429,75 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         projects_with_budget = [p for p in all_projects if p.budget and p.budget > 0]
         avg_project_budget = sum(p.budget for p in projects_with_budget) / len(projects_with_budget) if projects_with_budget else 0.0
         
+        # Get leadership team (CEO, Managers, and executives)
+        leadership_roles = ["CEO", "Manager"]
+        leadership_employees = [emp for emp in active_employees if emp.role in leadership_roles or emp.hierarchy_level <= 2]
+        
+        # Get recent leadership decisions
+        leadership_employee_ids = [emp.id for emp in leadership_employees]
+        leadership_decisions = []
+        if leadership_employee_ids:
+            result = await db.execute(
+                select(Decision)
+                .where(Decision.employee_id.in_(leadership_employee_ids))
+                .order_by(desc(Decision.timestamp))
+                .limit(10)
+            )
+            decisions = result.scalars().all()
+            leadership_decisions = [
+                {
+                    "id": d.id,
+                    "employee_id": d.employee_id,
+                    "employee_name": next((emp.name for emp in leadership_employees if emp.id == d.employee_id), "Unknown"),
+                    "employee_role": next((emp.role for emp in leadership_employees if emp.id == d.employee_id), "Unknown"),
+                    "decision_type": d.decision_type,
+                    "description": d.description,
+                    "reasoning": d.reasoning,
+                    "timestamp": (d.timestamp or datetime.utcnow()).isoformat()
+                }
+                for d in decisions
+            ]
+        
+        # Get recent leadership activities
+        leadership_activities = []
+        if leadership_employee_ids:
+            result = await db.execute(
+                select(Activity)
+                .where(Activity.employee_id.in_(leadership_employee_ids))
+                .order_by(desc(Activity.timestamp))
+                .limit(15)
+            )
+            activities = result.scalars().all()
+            leadership_activities = [
+                {
+                    "id": act.id,
+                    "employee_id": act.employee_id,
+                    "employee_name": next((emp.name for emp in leadership_employees if emp.id == act.employee_id), "Unknown"),
+                    "employee_role": next((emp.role for emp in leadership_employees if emp.id == act.employee_id), "Unknown"),
+                    "activity_type": act.activity_type,
+                    "description": act.description,
+                    "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+                }
+                for act in activities
+            ]
+        
+        # Calculate leadership metrics
+        # Get projects with leadership involvement
+        leadership_employee_ids_set = set(leadership_employee_ids)
+        result = await db.execute(
+            select(Task).where(Task.employee_id.in_(leadership_employee_ids_set))
+        )
+        leadership_tasks = result.scalars().all()
+        projects_with_leadership = set(task.project_id for task in leadership_tasks if task.project_id)
+        
+        leadership_metrics = {
+            "total_leadership_count": len(leadership_employees),
+            "ceo_count": len([emp for emp in leadership_employees if emp.role == "CEO"]),
+            "manager_count": len([emp for emp in leadership_employees if emp.role == "Manager"]),
+            "strategic_decisions_count": len([d for d in leadership_decisions if d["decision_type"] == "strategic"]),
+            "projects_led_by_leadership": len(projects_with_leadership)
+        }
+        
         return {
             "business_name": business_name,
             "revenue": revenue or 0.0,
@@ -476,6 +545,25 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     }
                     for p in all_projects[:20]  # Limit to 20 most recent projects
                 ]
+            },
+            # Leadership insights
+            "leadership_insights": {
+                "leadership_team": [
+                    {
+                        "id": emp.id,
+                        "name": emp.name,
+                        "title": emp.title,
+                        "role": emp.role,
+                        "department": emp.department,
+                        "hierarchy_level": emp.hierarchy_level,
+                        "status": emp.status,
+                        "hired_at": emp.hired_at.isoformat() if emp.hired_at else None
+                    }
+                    for emp in sorted(leadership_employees, key=lambda x: (x.hierarchy_level, x.name))
+                ],
+                "recent_decisions": leadership_decisions,
+                "recent_activities": leadership_activities,
+                "metrics": leadership_metrics
             }
         }
     except Exception as e:
@@ -509,6 +597,18 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "departments": {},
                 "role_distribution": {},
                 "products_services": []
+            },
+            "leadership_insights": {
+                "leadership_team": [],
+                "recent_decisions": [],
+                "recent_activities": [],
+                "metrics": {
+                    "total_leadership_count": 0,
+                    "ceo_count": 0,
+                    "manager_count": 0,
+                    "strategic_decisions_count": 0,
+                    "projects_led_by_leadership": 0
+                }
             }
         }
 
@@ -839,7 +939,7 @@ async def get_all_chats(limit: int = 200, db: AsyncSession = Depends(get_db)):
 
 @router.get("/office-layout")
 async def get_office_layout(db: AsyncSession = Depends(get_db)):
-    """Get office layout with all rooms and employees in each room for both floors."""
+    """Get office layout with all rooms and employees in each room for all floors."""
     # Define room metadata (outside try block so it's always available)
     ROOM_OPEN_OFFICE = "open_office"
     ROOM_CUBICLES = "cubicles"
@@ -851,6 +951,19 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
     ROOM_TRAINING_ROOM = "training_room"
     ROOM_LOUNGE = "lounge"
     ROOM_STORAGE = "storage"
+    ROOM_EXECUTIVE_SUITE = "executive_suite"
+    ROOM_HR_ROOM = "hr_room"
+    ROOM_SALES_ROOM = "sales_room"
+    ROOM_INNOVATION_LAB = "innovation_lab"
+    ROOM_HOTDESK = "hotdesk"
+    ROOM_FOCUS_PODS = "focus_pods"
+    ROOM_COLLAB_LOUNGE = "collab_lounge"
+    ROOM_WAR_ROOM = "war_room"
+    ROOM_DESIGN_STUDIO = "design_studio"
+    ROOM_HR_WELLNESS = "hr_wellness"
+    ROOM_THEATER = "theater"
+    ROOM_HUDDLE = "huddle"
+    ROOM_CORNER_EXEC = "corner_exec"
     
     # Floor 1 layout (original)
     floor1_rooms = [
@@ -926,82 +1039,230 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             }
         ]
     
-    # Floor 2 layout (different arrangement - same 10 rooms but different layout)
+    # Floor 2 layout (using new floor 2 models)
     floor2_rooms = [
             {
-                "id": f"{ROOM_OPEN_OFFICE}_floor2",
-                "name": "Open Office",
-                "image_path": "/office_layout/layout01_open_office.png",
-                "capacity": 25,
+                "id": f"{ROOM_EXECUTIVE_SUITE}_floor2",
+                "name": "Executive Suite",
+                "image_path": "/office_layout/floor2_room01_execsuite.png",
+                "capacity": 8,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_CUBICLES}_floor2",
                 "name": "Cubicles",
-                "image_path": "/office_layout/layout02_cubicles.png",
+                "image_path": "/office_layout/floor2_room02_cubicles.png",
                 "capacity": 20,
-                "floor": 2
-            },
-            {
-                "id": f"{ROOM_CONFERENCE_ROOM}_floor2",
-                "name": "Conference Room",
-                "image_path": "/office_layout/layout03_conference_room.png",
-                "capacity": 12,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_BREAKROOM}_floor2",
                 "name": "Breakroom",
-                "image_path": "/office_layout/layout04_breakroom.png",
+                "image_path": "/office_layout/floor2_room03_breakroom.png",
                 "capacity": 10,
                 "floor": 2
             },
             {
-                "id": f"{ROOM_RECEPTION}_floor2",
-                "name": "Reception",
-                "image_path": "/office_layout/layout05_reception.png",
-                "capacity": 3,
-                "floor": 2
-            },
-            {
-                "id": f"{ROOM_IT_ROOM}_floor2",
-                "name": "IT Room",
-                "image_path": "/office_layout/layout06_it_room.png",
-                "capacity": 6,
-                "floor": 2
-            },
-            {
-                "id": f"{ROOM_MANAGER_OFFICE}_floor2",
-                "name": "Manager Office",
-                "image_path": "/office_layout/layout07_manager_office.png",
-                "capacity": 8,
+                "id": f"{ROOM_CONFERENCE_ROOM}_floor2",
+                "name": "Conference Room",
+                "image_path": "/office_layout/floor2_room04_conference.png",
+                "capacity": 12,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_TRAINING_ROOM}_floor2",
                 "name": "Training Room",
-                "image_path": "/office_layout/layout08_training_room.png",
+                "image_path": "/office_layout/floor2_room05_training.png",
                 "capacity": 15,
                 "floor": 2
             },
             {
-                "id": f"{ROOM_LOUNGE}_floor2",
-                "name": "Lounge",
-                "image_path": "/office_layout/layout09_lounge.png",
-                "capacity": 12,
+                "id": f"{ROOM_IT_ROOM}_floor2",
+                "name": "IT Room",
+                "image_path": "/office_layout/floor2_room06_itroom.png",
+                "capacity": 6,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_STORAGE}_floor2",
                 "name": "Storage",
-                "image_path": "/office_layout/layout10_storage.png",
+                "image_path": "/office_layout/floor2_room07_storage.png",
                 "capacity": 3,
+                "floor": 2
+            },
+            {
+                "id": f"{ROOM_LOUNGE}_floor2",
+                "name": "Lounge",
+                "image_path": "/office_layout/floor2_room08_lounge.png",
+                "capacity": 12,
+                "floor": 2
+            },
+            {
+                "id": f"{ROOM_HR_ROOM}_floor2",
+                "name": "HR Room",
+                "image_path": "/office_layout/floor2_room09_hr.png",
+                "capacity": 6,
+                "floor": 2
+            },
+            {
+                "id": f"{ROOM_SALES_ROOM}_floor2",
+                "name": "Sales Room",
+                "image_path": "/office_layout/floor2_room10_sales.png",
+                "capacity": 10,
                 "floor": 2
             }
         ]
     
+    # Floor 3 layout (using floor 3 models)
+    floor3_rooms = [
+            {
+                "id": f"{ROOM_INNOVATION_LAB}_floor3",
+                "name": "Innovation Lab",
+                "image_path": "/office_layout/floor3_room01_innovation_lab.png",
+                "capacity": 12,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_HOTDESK}_floor3",
+                "name": "Hotdesk",
+                "image_path": "/office_layout/floor3_room02_hotdesk.png",
+                "capacity": 18,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_FOCUS_PODS}_floor3",
+                "name": "Focus Pods",
+                "image_path": "/office_layout/floor3_room03_focus_pods.png",
+                "capacity": 8,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_COLLAB_LOUNGE}_floor3",
+                "name": "Collaboration Lounge",
+                "image_path": "/office_layout/floor3_room04_collab_lounge.png",
+                "capacity": 15,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_WAR_ROOM}_floor3",
+                "name": "War Room",
+                "image_path": "/office_layout/floor3_room05_war_room.png",
+                "capacity": 10,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_DESIGN_STUDIO}_floor3",
+                "name": "Design Studio",
+                "image_path": "/office_layout/floor3_room06_design_studio.png",
+                "capacity": 8,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_HR_WELLNESS}_floor3",
+                "name": "HR Wellness",
+                "image_path": "/office_layout/floor3_room07_hr_wellness.png",
+                "capacity": 6,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_THEATER}_floor3",
+                "name": "Theater",
+                "image_path": "/office_layout/floor3_room08_theater.png",
+                "capacity": 20,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_HUDDLE}_floor3",
+                "name": "Huddle",
+                "image_path": "/office_layout/floor3_room09_huddle.png",
+                "capacity": 6,
+                "floor": 3
+            },
+            {
+                "id": f"{ROOM_CORNER_EXEC}_floor3",
+                "name": "Corner Executive",
+                "image_path": "/office_layout/floor3_room10_corner_exec.png",
+                "capacity": 4,
+                "floor": 3
+            }
+        ]
+    
+    # Floor 4 layout - Training overflow floor (5 training rooms and 5 cubicles)
+    floor4_rooms = [
+        {
+            "id": f"{ROOM_TRAINING_ROOM}_floor4",
+            "name": "Training Room 1",
+            "image_path": "/office_layout/layout08_training_room.png",
+            "capacity": 20,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_CUBICLES}_floor4",
+            "name": "Cubicles 1",
+            "image_path": "/office_layout/layout02_cubicles.png",
+            "capacity": 25,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_TRAINING_ROOM}_floor4_2",
+            "name": "Training Room 2",
+            "image_path": "/office_layout/layout08_training_room.png",
+            "capacity": 20,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_CUBICLES}_floor4_2",
+            "name": "Cubicles 2",
+            "image_path": "/office_layout/layout02_cubicles.png",
+            "capacity": 25,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_TRAINING_ROOM}_floor4_3",
+            "name": "Training Room 3",
+            "image_path": "/office_layout/layout08_training_room.png",
+            "capacity": 18,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_CUBICLES}_floor4_3",
+            "name": "Cubicles 3",
+            "image_path": "/office_layout/layout02_cubicles.png",
+            "capacity": 22,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_TRAINING_ROOM}_floor4_4",
+            "name": "Training Room 4",
+            "image_path": "/office_layout/layout08_training_room.png",
+            "capacity": 20,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_CUBICLES}_floor4_4",
+            "name": "Cubicles 4",
+            "image_path": "/office_layout/layout02_cubicles.png",
+            "capacity": 25,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_TRAINING_ROOM}_floor4_5",
+            "name": "Training Room 5",
+            "image_path": "/office_layout/layout08_training_room.png",
+            "capacity": 18,
+            "floor": 4
+        },
+        {
+            "id": f"{ROOM_CUBICLES}_floor4_5",
+            "name": "Cubicles 5",
+            "image_path": "/office_layout/layout02_cubicles.png",
+            "capacity": 22,
+            "floor": 4
+        }
+    ]
+    
     # Combine all rooms
-    rooms = floor1_rooms + floor2_rooms
+    rooms = floor1_rooms + floor2_rooms + floor3_rooms + floor4_rooms
     
     try:
         # Get ALL employees
@@ -1066,14 +1327,24 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             room = current_room or home_room
             if room:
                 # Create room key with floor suffix if needed
-                # If room already has _floor2 suffix, use it as-is
-                if room.endswith('_floor2'):
+                # If room already has _floor2, _floor3, or _floor4 suffix, use it as-is
+                if room.endswith('_floor2') or room.endswith('_floor3') or room.endswith('_floor4'):
                     room_key = room
                 # For floor 2, add _floor2 suffix if not already present
                 elif floor == 2:
                     # Check if this is a base room that should be on floor 2
                     base_room = room
                     room_key = f"{base_room}_floor2"
+                # For floor 3, add _floor3 suffix if not already present
+                elif floor == 3:
+                    # Check if this is a base room that should be on floor 3
+                    base_room = room
+                    room_key = f"{base_room}_floor3"
+                # For floor 4, add _floor4 suffix if not already present
+                elif floor == 4:
+                    # Check if this is a base room that should be on floor 4
+                    base_room = room
+                    room_key = f"{base_room}_floor4"
                 # For floor 1, use room as-is (no suffix)
                 elif floor == 1:
                     room_key = room
@@ -1354,13 +1625,15 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
         # Group rooms by floor
         rooms_by_floor = {
             1: [r for r in rooms if r["floor"] == 1],
-            2: [r for r in rooms if r["floor"] == 2]
+            2: [r for r in rooms if r["floor"] == 2],
+            3: [r for r in rooms if r["floor"] == 3],
+            4: [r for r in rooms if r["floor"] == 4]
         }
         
         return {
             "rooms": rooms,
             "rooms_by_floor": rooms_by_floor,
-            "floors": [1, 2],
+            "floors": [1, 2, 3, 4],
             "terminated_employees": terminated_list,
             "total_employees": len(active_with_rooms),
             "total_terminated": len(terminated_employees),
