@@ -187,6 +187,14 @@ Business logic managers:
 - Tracks review ratings and feedback
 - Generates review recommendations
 
+**`boardroom_manager.py`**:
+- Manages boardroom executive rotation and discussions
+- Rotates executives every 30 minutes (up to 7 executives, CEO always stays)
+- Generates strategic boardroom discussions every 2 minutes
+- Uses LLM to create contextual discussions between executives
+- Tracks boardroom state and executive assignments
+- Supports 40+ strategic discussion topics
+
 #### 5. `database/`
 Database layer:
 
@@ -296,6 +304,12 @@ Employee movement system with capacity management:
        - Update location (or set to waiting if room full)
        - Update floor if moving between floors
      - Record activity in database
+   - **Boardroom Discussions** (every 2 minutes / 15 ticks):
+     - Check if rotation is needed (every 30 minutes)
+     - Select up to 7 executives for boardroom (CEO always included)
+     - Generate 3-6 strategic discussions between executive pairs
+     - Use LLM to create contextual business discussions
+     - Create chat messages with thread IDs
    - Broadcast updates via WebSocket
 3. **Employee Decision Making**:
    - Employee agent evaluates current situation (tasks, projects, business state)
@@ -309,10 +323,23 @@ Employee movement system with capacity management:
    - Floor updated when moving between floors
    - Special handling for IT, Reception, and Storage employees (must stay in work areas)
    - Training room time limits enforced (1 hour max)
-5. **Real-time Updates**:
+5. **Boardroom System**:
+   - Executive rotation occurs every 30 minutes
+   - Up to 7 executives selected (CEO always stays, others rotate)
+   - Strategic discussions generated every 2 minutes
+   - 40+ discussion topics covering business strategy, operations, growth, etc.
+   - LLM generates contextual messages based on:
+     - Executive personalities and roles
+     - Current business metrics (revenue, profit, projects, employees)
+     - Discussion topic
+     - Other executives present in the room
+   - Boardroom mood calculated from discussion sentiment
+   - Discussions stored as chat messages with thread IDs
+6. **Real-time Updates**:
    - All activities broadcast to connected WebSocket clients
    - Frontend receives updates and refreshes UI
    - Room occupancy updates in real-time
+   - Boardroom discussions appear in real-time
 
 ---
 
@@ -428,6 +455,16 @@ Communication hub:
 - Chat messages view
 - Filter by employee
 - Message threads
+
+#### `components/BoardroomView.jsx`
+Boardroom visualization and management:
+- Visual boardroom scene with executives positioned around a table
+- Executive rotation display (up to 7 executives, CEO always present)
+- Real-time boardroom mood indicator based on discussion sentiment
+- Discussion log showing all boardroom conversations
+- Auto-generation of strategic discussions every 2 minutes
+- Executive selection and rotation tracking (30-minute intervals)
+- Chat bubble animations for live discussions
 
 #### `pages/Tasks.jsx`
 Task management:
@@ -846,6 +883,31 @@ Marks all notifications as read.
 **POST `/api/boardroom/generate-discussions`**
 Generates boardroom discussions for strategic planning.
 
+**Request Body (optional):**
+```json
+{
+  "executive_ids": [1, 2, 3, 4, 5, 6, 7]
+}
+```
+
+If `executive_ids` is not provided, the system automatically selects executives from the current boardroom rotation.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Generated 5 boardroom discussions",
+  "chats_created": 5
+}
+```
+
+**How it works:**
+- Selects executives currently in the boardroom (rotated every 30 minutes)
+- Generates 3-6 strategic discussions between random executive pairs
+- Uses LLM to create contextual, business-focused messages
+- Covers 40+ strategic topics including revenue growth, market expansion, resource allocation, etc.
+- Creates chat messages with thread IDs for conversation tracking
+
 #### Employee Management
 
 **GET `/api/employees/waiting-status`**
@@ -1258,6 +1320,83 @@ For issues and questions:
 ---
 
 *Last updated: January 2025*
+
+## Boardroom System
+
+The boardroom system provides a continuous strategic planning environment where executives (CEO and Managers) engage in AI-generated discussions about business strategy and operations.
+
+### Executive Rotation
+
+- **Rotation Schedule**: Executives rotate every 30 minutes
+- **Room Capacity**: Up to 7 executives can be in the boardroom at once
+- **CEO Status**: The CEO always remains in the boardroom (does not rotate out)
+- **Selection Logic**: 
+  - CEO is always included
+  - Remaining 6 slots filled by random selection from available Managers
+  - On rotation, current executives (except CEO) are excluded from selection to ensure variety
+  - If fewer than 7 executives available, all are included
+
+### Discussion Generation
+
+- **Frequency**: Strategic discussions are generated every 2 minutes (15 simulation ticks)
+- **Volume**: 3-6 discussions per generation cycle
+- **Pair Selection**: Random pairs of executives are selected for each discussion
+- **Topic Variety**: 40+ strategic topics including:
+  - Strategic planning for revenue growth
+  - Resource allocation for projects
+  - Market expansion opportunities
+  - Operational efficiency improvements
+  - Team performance and productivity
+  - Budget optimization strategies
+  - Technology investment priorities
+  - Customer acquisition initiatives
+  - Competitive positioning analysis
+  - Risk management and mitigation
+  - And 30+ more strategic business topics
+
+### LLM-Powered Discussions
+
+Each discussion message is generated using the LLM with the following context:
+- **Sender Information**: Name, title, role, personality traits
+- **Recipient Information**: Name, title, role, personality traits
+- **Room Context**: All executives currently in the boardroom
+- **Business Context**: Current revenue, profit, active projects, employee count
+- **Discussion Topic**: The specific strategic topic being discussed
+- **Tone**: Conversational and direct, as if speaking face-to-face in a boardroom
+
+### Boardroom Mood
+
+The system calculates a "boardroom mood" based on recent discussion sentiment:
+- **Positive Mood**: Discussions indicate optimism, growth, success
+- **Neutral Mood**: Balanced discussions with mixed sentiment
+- **Negative Mood**: Discussions indicate concerns, challenges, risks
+- Mood is calculated from the last 20 boardroom messages
+- Visual indicator shows mood with emoji and color coding
+
+### Frontend Visualization
+
+The boardroom view (`BoardroomView.jsx`) provides:
+- **Visual Scene**: Executives positioned around a boardroom table
+- **Executive Display**: Shows current executives in the room with avatars
+- **Rotation Timer**: Countdown to next executive rotation
+- **Mood Indicator**: Real-time mood display with emoji and description
+- **Discussion Log**: Chronological list of all boardroom conversations
+- **Chat Bubbles**: Animated chat bubbles appearing above executives during discussions
+- **Auto-refresh**: Automatically updates as new discussions are generated
+
+### API Integration
+
+The boardroom system integrates with:
+- **Chat Messages**: Discussions are stored as `ChatMessage` records with thread IDs
+- **Employee System**: Uses employee data for executive selection and context
+- **Business Context**: Pulls current business metrics for discussion context
+- **WebSocket**: Boardroom updates broadcast in real-time to connected clients
+
+### Configuration
+
+Boardroom behavior can be adjusted in:
+- `backend/business/boardroom_manager.py`: Rotation interval, room capacity, discussion topics
+- `backend/engine/office_simulator.py`: Discussion generation frequency (currently every 15 ticks = 2 minutes)
 
 ## Office Layout Details
 

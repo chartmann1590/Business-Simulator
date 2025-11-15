@@ -145,7 +145,12 @@ DATABASE_URL=sqlite+aiosqlite:///./office.db
    - Work → Home rooms or overflow to cubicles if full
    - Room capacity is respected - employees wait if rooms are full
 6. **Business Growth**: Projects generate revenue, employees complete tasks, business metrics update
-7. **Real-time Updates**: All activities are broadcast via WebSocket to the frontend
+7. **Boardroom System**: 
+   - Executives (CEO and Managers) rotate into boardroom every 30 minutes
+   - Strategic discussions generated every 2 minutes using LLM
+   - Discussions cover 40+ strategic topics (revenue growth, market expansion, resource allocation, etc.)
+   - Boardroom mood calculated from discussion sentiment
+8. **Real-time Updates**: All activities are broadcast via WebSocket to the frontend
 
 ## Employee System
 
@@ -182,6 +187,11 @@ The web interface provides several views:
 - **Tasks**: View all tasks across projects with filtering and detailed task information
 - **Notifications**: Real-time notifications for reviews, raises, terminations, and other events
 - **Boardroom**: Strategic discussions and decision-making sessions
+  - Executive rotation every 30 minutes (up to 7 executives, CEO always present)
+  - AI-generated strategic discussions every 2 minutes
+  - Real-time boardroom mood tracking based on discussion sentiment
+  - Visual boardroom view with executives positioned around a table
+  - Discussion log with all boardroom conversations
 
 All views update in real-time as the simulation runs via WebSocket.
 

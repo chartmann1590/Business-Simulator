@@ -1,7 +1,7 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from database.models import Employee, Activity, BusinessMetric, Financial
+from database.models import Employee, Activity, BusinessMetric, Financial, EmployeeReview
 from database.database import async_session_maker
 from employees.roles import create_employee_agent
 from employees.room_assigner import assign_home_room, assign_rooms_to_existing_employees
@@ -43,6 +43,7 @@ class OfficeSimulator:
         self.running = False
         self.websocket_connections: Set = set()
         self.review_tick_counter = 0  # Counter for periodic reviews
+        self.boardroom_discussion_counter = 0  # Counter for boardroom discussions (every 15 ticks = 2 minutes)
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -118,22 +119,51 @@ class OfficeSimulator:
                 from business.review_manager import ReviewManager
                 review_manager = ReviewManager(review_db)
                 reviews_created = await review_manager.conduct_periodic_reviews(hours_since_last_review=6.0)
+                # Commit is handled inside conduct_periodic_reviews, but ensure session stays open
                 if reviews_created:
                     print(f"✅ Conducted {len(reviews_created)} employee performance reviews")
+                    # Verify reviews are in the database by querying them
                     for review in reviews_created:
-                        # Get employee and manager names for logging
-                        emp_result = await review_db.execute(
-                            select(Employee).where(Employee.id == review.employee_id)
+                        # Query back to verify persistence
+                        verify_result = await review_db.execute(
+                            select(EmployeeReview).where(EmployeeReview.id == review.id)
                         )
-                        emp = emp_result.scalar_one_or_none()
-                        mgr_result = await review_db.execute(
-                            select(Employee).where(Employee.id == review.manager_id)
-                        )
-                        mgr = mgr_result.scalar_one_or_none()
-                        if emp and mgr:
-                            print(f"   📝 {mgr.name} reviewed {emp.name} - Rating: {review.overall_rating}/5.0")
+                        verified = verify_result.scalar_one_or_none()
+                        if verified:
+                            # Get employee and manager names for logging
+                            emp_result = await review_db.execute(
+                                select(Employee).where(Employee.id == review.employee_id)
+                            )
+                            emp = emp_result.scalar_one_or_none()
+                            mgr_result = await review_db.execute(
+                                select(Employee).where(Employee.id == review.manager_id)
+                            )
+                            mgr = mgr_result.scalar_one_or_none()
+                            if emp and mgr:
+                                print(f"   📝 {mgr.name} reviewed {emp.name} - Rating: {review.overall_rating}/5.0 (Review ID: {review.id})")
+                        else:
+                            print(f"   ⚠️  WARNING: Review {review.id} not found after commit!")
         except Exception as e:
+            import traceback
             print(f"❌ Error conducting periodic reviews: {e}")
+            print(f"Traceback: {traceback.format_exc()}")
+        
+        # Generate boardroom discussions every 2 minutes (120 seconds)
+        # Check every tick (8 seconds), so every 15 ticks = 2 minutes
+        self.boardroom_discussion_counter += 1
+        if self.boardroom_discussion_counter >= 15:  # 15 * 8 seconds = 120 seconds = 2 minutes
+            self.boardroom_discussion_counter = 0
+            try:
+                async with async_session_maker() as boardroom_db:
+                    from business.boardroom_manager import BoardroomManager
+                    boardroom_manager = BoardroomManager(boardroom_db)
+                    chats_created = await boardroom_manager.generate_boardroom_discussions()
+                    if chats_created > 0:
+                        print(f"💼 Generated {chats_created} boardroom discussions")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error generating boardroom discussions: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
         
         # Use a separate session to get employee list (read-only)
         async with async_session_maker() as read_db:

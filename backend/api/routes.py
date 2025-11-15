@@ -64,10 +64,10 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
     review_counts = {row.employee_id: row.review_count for row in review_count_result.all()}
     
     # Get latest review info for each employee (using subquery to get the most recent review)
-    # We'll get all reviews ordered by date and then pick the latest for each employee
+    # Order by created_at as fallback if review_date is None
     all_reviews_result = await db.execute(
         select(EmployeeReview)
-        .order_by(desc(EmployeeReview.review_date))
+        .order_by(desc(EmployeeReview.created_at))
     )
     all_reviews = all_reviews_result.scalars().all()
     
@@ -77,7 +77,9 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
     seen_employees = set()
     for review in all_reviews:
         if review.employee_id not in seen_employees:
-            latest_review_dates[review.employee_id] = review.review_date
+            # Use review_date if available, otherwise use created_at
+            review_date = review.review_date if review.review_date else review.created_at
+            latest_review_dates[review.employee_id] = review_date
             latest_ratings[review.employee_id] = review.overall_rating
             seen_employees.add(review.employee_id)
     
@@ -322,12 +324,17 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/employees/{employee_id}/reviews")
 async def get_employee_reviews(employee_id: int, db: AsyncSession = Depends(get_db)):
     """Get all reviews for a specific employee."""
+    # Query all reviews for this employee, including those without review_date
     result = await db.execute(
         select(EmployeeReview)
         .where(EmployeeReview.employee_id == employee_id)
-        .order_by(desc(EmployeeReview.review_date))
+        .order_by(desc(EmployeeReview.created_at))
     )
     reviews = result.scalars().all()
+    
+    print(f"📋 API: Found {len(reviews)} review(s) for employee {employee_id}")
+    for review in reviews:
+        print(f"   - Review ID {review.id}, Date: {review.review_date}, Rating: {review.overall_rating}, Comments: {bool(review.comments)}")
     
     # Get employee names
     result = await db.execute(select(Employee))
@@ -354,6 +361,43 @@ async def get_employee_reviews(employee_id: int, db: AsyncSession = Depends(get_
         }
         for review in reviews
     ]
+
+@router.get("/reviews/debug")
+async def debug_reviews(db: AsyncSession = Depends(get_db)):
+    """Debug endpoint to see all reviews in the database."""
+    result = await db.execute(
+        select(EmployeeReview)
+        .order_by(desc(EmployeeReview.created_at))
+        .limit(50)
+    )
+    all_reviews = result.scalars().all()
+    
+    # Get employee names
+    result = await db.execute(select(Employee))
+    all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    
+    return {
+        "total_reviews": len(all_reviews),
+        "reviews": [
+            {
+                "id": review.id,
+                "employee_id": review.employee_id,
+                "employee_name": all_employees.get(review.employee_id, "Unknown"),
+                "manager_id": review.manager_id,
+                "manager_name": all_employees.get(review.manager_id, "Unknown"),
+                "review_date": review.review_date.isoformat() if review.review_date else None,
+                "created_at": review.created_at.isoformat() if review.created_at else None,
+                "overall_rating": review.overall_rating,
+                "has_comments": bool(review.comments),
+                "has_strengths": bool(review.strengths),
+                "has_areas": bool(review.areas_for_improvement),
+                "comments_length": len(review.comments or ""),
+                "strengths_length": len(review.strengths or ""),
+                "areas_length": len(review.areas_for_improvement or "")
+            }
+            for review in all_reviews
+        ]
+    }
 
 @router.post("/employees/{employee_id}/reviews")
 async def create_employee_review(employee_id: int, review_data: CreateReviewRequest, db: AsyncSession = Depends(get_db)):
@@ -1047,30 +1091,46 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         
         # Get employee review statistics
         # Completed reviews: reviews with all fields filled (comments, strengths, areas_for_improvement)
+        # Check for both not None and not empty strings
+        from sqlalchemy import and_, or_
         result = await db.execute(
             select(EmployeeReview)
             .where(
-                EmployeeReview.comments.isnot(None),
-                EmployeeReview.strengths.isnot(None),
-                EmployeeReview.areas_for_improvement.isnot(None)
+                and_(
+                    EmployeeReview.comments.isnot(None),
+                    EmployeeReview.comments != '',
+                    EmployeeReview.strengths.isnot(None),
+                    EmployeeReview.strengths != '',
+                    EmployeeReview.areas_for_improvement.isnot(None),
+                    EmployeeReview.areas_for_improvement != ''
+                )
             )
         )
         completed_reviews = result.scalars().all()
         completed_reviews_count = len(completed_reviews)
         
         # In progress reviews: reviews that exist but are missing some optional fields
+        # Or reviews that have empty strings
         result = await db.execute(
             select(EmployeeReview)
             .where(
                 or_(
                     EmployeeReview.comments.is_(None),
+                    EmployeeReview.comments == '',
                     EmployeeReview.strengths.is_(None),
-                    EmployeeReview.areas_for_improvement.is_(None)
+                    EmployeeReview.strengths == '',
+                    EmployeeReview.areas_for_improvement.is_(None),
+                    EmployeeReview.areas_for_improvement == ''
                 )
             )
         )
         in_progress_reviews = result.scalars().all()
         in_progress_reviews_count = len(in_progress_reviews)
+        
+        # Also get total review count for debugging
+        total_reviews_result = await db.execute(select(func.count(EmployeeReview.id)))
+        total_reviews_count = total_reviews_result.scalar() or 0
+        print(f"📊 Review Statistics: Total={total_reviews_count}, Completed={completed_reviews_count}, In Progress={in_progress_reviews_count}")
         
         leadership_metrics = {
             "total_leadership_count": len(leadership_employees),

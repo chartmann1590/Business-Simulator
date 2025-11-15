@@ -47,17 +47,9 @@ function BoardroomView({ leadershipTeam, chats, onChatsUpdate }) {
       }
     }
 
-    // Initial generation immediately, then again after 10 seconds
-    generateDiscussions() // Generate immediately
-    const initialTimer = setTimeout(generateDiscussions, 10000)
-    
-    // Then every 2 minutes
-    const interval = setInterval(generateDiscussions, 2 * 60 * 1000)
-
-    return () => {
-      clearTimeout(initialTimer)
-      clearInterval(interval)
-    }
+    // Backend handles continuous generation, but we can trigger one on mount
+    // to ensure discussions start immediately when viewing the boardroom
+    generateDiscussions() // Generate immediately when viewing
   }, [visibleExecutives, onChatsUpdate])
 
   // Rotate executives in the room every 30 minutes (CEO always stays)

@@ -29,16 +29,25 @@ class ReviewManager:
         )
         all_employees = result.scalars().all()
         
-        # Get employees who need reviews (non-managers, non-CEO)
+        # Get employees who need reviews (non-managers, non-executives)
+        # Be more lenient - include all employees except executives
         employees_to_review = [
             emp for emp in all_employees 
-            if emp.role not in ["CEO", "Manager", "CTO", "COO", "CFO"] and emp.hierarchy_level >= 3
+            if emp.role not in ["CEO", "Manager", "CTO", "COO", "CFO"]
         ]
+        
+        if not employees_to_review:
+            print("⚠️  No employees eligible for reviews found")
+            return []
+        
+        print(f"🔍 Checking {len(employees_to_review)} employees for reviews...")
         
         reviews_created = []
         overdue_count = 0
+        checked_count = 0
         
         for employee in employees_to_review:
+            checked_count += 1
             # Check if employee has been reviewed recently
             result = await self.db.execute(
                 select(EmployeeReview)
@@ -62,6 +71,11 @@ class ReviewManager:
                         # Consider overdue if more than 6.5 hours (30 min buffer)
                         if hours_since_hire >= hours_since_last_review + 0.5:
                             is_overdue = True
+                else:
+                    # Employee has no hire date - review them anyway if they've been active
+                    # This handles edge cases where hired_at might be null
+                    needs_review = True
+                    print(f"  ⚠️  Employee {employee.name} has no hire date - scheduling review anyway")
             else:
                 # Check if last review was before cutoff
                 if last_review.review_date:
@@ -75,18 +89,52 @@ class ReviewManager:
             
             if needs_review:
                 try:
+                    print(f"  📋 Generating review for {employee.name} (hired: {employee.hired_at}, role: {employee.role}, hierarchy: {employee.hierarchy_level})")
                     review = await self._generate_review(employee)
                     if review:
                         reviews_created.append(review)
                         if is_overdue:
                             overdue_count += 1
+                        print(f"  ✅ Successfully created review for {employee.name}")
+                    else:
+                        print(f"  ❌ Failed to create review for {employee.name} - no manager available or generation failed")
                 except Exception as e:
-                    print(f"⚠️  Error generating review for {employee.name}: {e}")
+                    import traceback
+                    print(f"  ❌ Error generating review for {employee.name}: {e}")
+                    print(f"  Traceback: {traceback.format_exc()}")
         
         if reviews_created:
-            await self.db.commit()
-            if overdue_count > 0:
-                print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
+            try:
+                # Flush first to ensure all objects are in the session
+                await self.db.flush()
+                
+                # Now commit
+                await self.db.commit()
+                print(f"✅ Committed {len(reviews_created)} review(s) to database")
+                
+                # Verify reviews were actually saved by querying them back
+                for review in reviews_created:
+                    # Query the review back to verify it was saved
+                    verify_result = await self.db.execute(
+                        select(EmployeeReview).where(EmployeeReview.id == review.id)
+                    )
+                    verified_review = verify_result.scalar_one_or_none()
+                    if verified_review:
+                        print(f"  ✓ Verified Review ID {verified_review.id} for employee {verified_review.employee_id} - Date: {verified_review.review_date}, Rating: {verified_review.overall_rating}")
+                        print(f"    Comments: {len(verified_review.comments or '')} chars, Strengths: {len(verified_review.strengths or '')} chars")
+                    else:
+                        print(f"  ❌ WARNING: Review ID {review.id} not found in database after commit!")
+                
+                if overdue_count > 0:
+                    print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error committing reviews: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+                await self.db.rollback()
+        else:
+            if checked_count > 0:
+                print(f"ℹ️  No reviews needed at this time (checked {checked_count} employees)")
         
         return reviews_created
     
@@ -104,12 +152,15 @@ class ReviewManager:
         managers = result.scalars().all()
         
         if not managers:
+            print(f"  ⚠️  No active managers found to review {employee.name}")
             return None
         
         # Prefer manager in same department
         manager = next((m for m in managers if m.department == employee.department), None)
         if not manager:
             manager = managers[0]
+        
+        print(f"  👤 Found {len(managers)} manager(s) - assigning to {manager.name}")
         
         # Determine review period (last 6 hours or since last review)
         review_period_end = datetime.utcnow()
@@ -156,10 +207,12 @@ class ReviewManager:
             communication_rating, productivity_rating, metrics, review_period_start, review_period_end
         )
         
-        # Create review
+        # Create review with explicit review_date
+        review_date = datetime.utcnow()
         review = EmployeeReview(
             employee_id=employee.id,
             manager_id=manager.id,
+            review_date=review_date,
             overall_rating=overall_rating,
             performance_rating=performance_rating,
             teamwork_rating=teamwork_rating,
@@ -173,6 +226,15 @@ class ReviewManager:
         )
         
         self.db.add(review)
+        # Flush to get the review ID before using it in activities/notifications
+        await self.db.flush()
+        
+        # Verify the review was added and has an ID
+        if not review.id:
+            print(f"  ⚠️  Warning: Review for {employee.name} has no ID after flush")
+            await self.db.flush()  # Try again
+        else:
+            print(f"  ✓ Review ID {review.id} created for {employee.name}")
         
         # Create activity log
         from database.models import Activity
@@ -536,22 +598,30 @@ Be professional, fair, and constructive. Match your personality traits when writ
                 strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
                 areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
             
-            # Ensure we have values
-            if not comments:
+            # Ensure we have values - never return empty strings or None
+            if not comments or (isinstance(comments, str) and comments.strip() == ""):
                 comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
-            if not strengths:
+            if not strengths or (isinstance(strengths, str) and strengths.strip() == ""):
                 strengths = "Consistent performance" if overall_rating >= 3.0 else "Room for growth"
-            if not areas_for_improvement:
+            if not areas_for_improvement or (isinstance(areas_for_improvement, str) and areas_for_improvement.strip() == ""):
                 areas_for_improvement = "Continue to develop skills" if overall_rating < 4.0 else "Maintain current excellence"
+            
+            # Strip whitespace and ensure non-empty
+            comments = comments.strip() if comments else "Performance review completed."
+            strengths = strengths.strip() if strengths else "Ongoing development"
+            areas_for_improvement = areas_for_improvement.strip() if areas_for_improvement else "Continue professional growth"
+            
+            print(f"  📝 Generated review content - Comments: {len(comments)} chars, Strengths: {len(strengths)} chars, Areas: {len(areas_for_improvement)} chars")
             
             return comments, strengths, areas_for_improvement
             
         except Exception as e:
-            print(f"Error generating review with Ollama: {e}")
-            # Fallback to simple review
+            print(f"  ⚠️  Error generating review with Ollama: {e}")
+            # Fallback to simple review - ensure non-empty values
             comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
             strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
             areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
+            print(f"  📝 Using fallback review content")
             return comments, strengths, areas_for_improvement
     
     async def get_average_rating(self, employee_id: int) -> Optional[float]:
