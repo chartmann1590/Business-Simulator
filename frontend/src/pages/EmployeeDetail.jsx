@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAvatarPath } from '../utils/avatarMapper'
 import EmployeeChatModal from '../components/EmployeeChatModal'
+import PerformanceAwardModal from '../components/PerformanceAwardModal'
 
 function EmployeeDetail() {
   const { id } = useParams()
@@ -12,6 +13,9 @@ function EmployeeDetail() {
   const [loading, setLoading] = useState(true)
   const [showChatModal, setShowChatModal] = useState(false)
   const [timeUntilReview, setTimeUntilReview] = useState(null)
+  const [thoughts, setThoughts] = useState(null)
+  const [loadingThoughts, setLoadingThoughts] = useState(false)
+  const [showAwardModal, setShowAwardModal] = useState(false)
 
   useEffect(() => {
     fetchEmployee()
@@ -62,6 +66,10 @@ function EmployeeDetail() {
       const emailsData = await emailsRes.json()
       const chatsData = await chatsRes.json()
       const reviewsData = await reviewsRes.json()
+      // Debug: Check award status
+      if (employeeData.has_performance_award) {
+        console.log('Employee has award:', employeeData.name, employeeData.has_performance_award)
+      }
       setEmployee(employeeData)
       setEmails(emailsData)
       setChats(chatsData)
@@ -74,6 +82,40 @@ function EmployeeDetail() {
       setLoading(false)
     }
   }
+
+  const fetchThoughts = useCallback(async () => {
+    setLoadingThoughts(true)
+    try {
+      const response = await fetch(`/api/employees/${id}/thoughts`)
+      if (response.ok) {
+        const data = await response.json()
+        setThoughts(data.thoughts)
+      } else {
+        console.error('Error fetching thoughts:', response.statusText)
+        setThoughts("Unable to generate thoughts at this time.")
+      }
+    } catch (error) {
+      console.error('Error fetching thoughts:', error)
+      setThoughts("Unable to generate thoughts at this time.")
+    } finally {
+      setLoadingThoughts(false)
+    }
+  }, [id])
+
+  // Fetch thoughts only once when employee profile first loads (when id changes)
+  useEffect(() => {
+    // Reset thoughts when employee ID changes
+    setThoughts(null)
+    setLoadingThoughts(false)
+    
+    // Fetch thoughts only once when the employee ID changes
+    if (id) {
+      fetchThoughts()
+    }
+    
+    // Cleanup: don't refetch when component unmounts or id changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]) // Only depend on id - fetchThoughts is stable due to useCallback
 
   if (loading) {
     return <div className="text-center py-12">Loading employee details...</div>
@@ -114,15 +156,48 @@ function EmployeeDetail() {
                   Terminated: {new Date(employee.fired_at).toLocaleDateString()}
                 </p>
               )}
+              {employee.has_performance_award === true && (
+                <div 
+                  onClick={() => setShowAwardModal(true)}
+                  className="mt-3 flex items-center gap-2 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg px-4 py-2 cursor-pointer hover:from-yellow-100 hover:to-amber-100 transition-colors"
+                >
+                  <span className="text-3xl">🏆</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-yellow-800">Performance Award Winner</p>
+                    <p className="text-xs text-yellow-600">
+                      Highest performance review rating
+                      {employee.performance_award_wins > 0 && (
+                        <span className="ml-2 font-semibold">
+                          • {employee.performance_award_wins} time{employee.performance_award_wins !== 1 ? 's' : ''} winner
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              )}
             </div>
           </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            employee.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
-            employee.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {employee.role}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              employee.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
+              employee.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {employee.role}
+            </span>
+            {employee.has_performance_award === true && (
+              <button
+                onClick={() => setShowAwardModal(true)}
+                className="text-2xl hover:scale-110 transition-transform cursor-pointer"
+                title="View Performance Award Details"
+              >
+                🏆
+              </button>
+            )}
+          </div>
         </div>
 
         {employee.backstory && (
@@ -144,6 +219,42 @@ function EmployeeDetail() {
             </div>
           </div>
         )}
+
+        {/* AI-Generated Thoughts */}
+        <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              What {employee.name} is Thinking
+            </h3>
+            <button
+              onClick={fetchThoughts}
+              disabled={loadingThoughts}
+              className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1"
+              title="Refresh thoughts"
+            >
+              <svg className={`w-4 h-4 ${loadingThoughts ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {loadingThoughts ? 'Generating...' : 'Refresh'}
+            </button>
+          </div>
+          {loadingThoughts ? (
+            <div className="flex items-center gap-2 text-gray-600">
+              <svg className="animate-spin h-5 w-5 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Generating thoughts...</span>
+            </div>
+          ) : thoughts ? (
+            <p className="text-gray-700 leading-relaxed italic">"{thoughts}"</p>
+          ) : (
+            <p className="text-gray-500">Click refresh to generate thoughts.</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
@@ -455,6 +566,16 @@ function EmployeeDetail() {
             />
           )}
         </>
+      )}
+
+      {/* Award Modal - Available for all employees with award */}
+      {employee && employee.has_performance_award === true && (
+        <PerformanceAwardModal
+          employeeId={parseInt(id)}
+          employee={employee}
+          isOpen={showAwardModal}
+          onClose={() => setShowAwardModal(false)}
+        />
       )}
     </div>
   )

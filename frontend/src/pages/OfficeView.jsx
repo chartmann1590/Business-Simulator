@@ -1,8 +1,79 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import OfficeLayout from '../components/OfficeLayout'
 import RoomDetailModal from '../components/RoomDetailModal'
 import { useNavigate } from 'react-router-dom'
+
+// Animated number component
+function AnimatedNumber({ value, duration = 500 }) {
+  const numValue = Number(value) || 0
+  const [displayValue, setDisplayValue] = useState(numValue)
+  const prevValueRef = useRef(numValue)
+  const animationFrameRef = useRef(null)
+  
+  useEffect(() => {
+    if (prevValueRef.current !== numValue) {
+      // Cancel any ongoing animation
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      
+      const startValue = prevValueRef.current
+      const endValue = numValue
+      const startTime = Date.now()
+      
+      const animate = () => {
+        const now = Date.now()
+        const elapsed = now - startTime
+        const progress = Math.min(elapsed / duration, 1)
+        
+        // Easing function for smooth animation
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+        const currentValue = Math.round(startValue + (endValue - startValue) * easeOutQuart)
+        
+        setDisplayValue(currentValue)
+        
+        if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(animate)
+        } else {
+          setDisplayValue(endValue)
+          prevValueRef.current = numValue
+        }
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(animate)
+    }
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [numValue, duration])
+  
+  return <span>{displayValue}</span>
+}
+
+// Loading skeleton component
+function LoadingSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
+      {[...Array(10)].map((_, i) => (
+        <div
+          key={i}
+          className="relative bg-gray-200 rounded-lg overflow-hidden border-2 border-gray-200"
+          style={{ minHeight: '200px' }}
+        >
+          <div className="absolute inset-0 animate-pulse">
+            <div className="h-full bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200" />
+          </div>
+          <div className="absolute top-2 left-2 bg-gray-400 h-6 w-24 rounded animate-pulse" />
+          <div className="absolute top-2 right-2 bg-gray-400 h-6 w-12 rounded-full animate-pulse" />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function OfficeView() {
   const [officeData, setOfficeData] = useState(null)
@@ -10,10 +81,50 @@ function OfficeView() {
   const [employees, setEmployees] = useState([])
   const [selectedRoom, setSelectedRoom] = useState(null)
   const [selectedFloor, setSelectedFloor] = useState(1)  // Default to floor 1
+  const [soundEnabled, setSoundEnabled] = useState(false) // Muted by default
   const navigate = useNavigate()
+  const audioContextRef = useRef(null)
   
   // Get WebSocket messages for real-time updates
   const wsMessages = useWebSocket()
+  
+  // Simple sound effect generator - defined early so it can be used in useEffects
+  const playSound = useCallback((type) => {
+    if (!audioContextRef.current) return
+    
+    try {
+      const ctx = audioContextRef.current
+      const oscillator = ctx.createOscillator()
+      const gainNode = ctx.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      
+      switch (type) {
+        case 'move':
+          oscillator.frequency.value = 440
+          oscillator.type = 'sine'
+          gainNode.gain.setValueAtTime(0.1, ctx.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1)
+          oscillator.start(ctx.currentTime)
+          oscillator.stop(ctx.currentTime + 0.1)
+          break
+        case 'click':
+          oscillator.frequency.value = 800
+          oscillator.type = 'sine'
+          gainNode.gain.setValueAtTime(0.05, ctx.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05)
+          oscillator.start(ctx.currentTime)
+          oscillator.stop(ctx.currentTime + 0.05)
+          break
+        default:
+          break
+      }
+    } catch (e) {
+      // Silently fail if audio context is not available
+      console.warn('Sound playback failed:', e)
+    }
+  }, [])
   
   const fetchOfficeLayout = useCallback(async () => {
     try {
@@ -50,34 +161,107 @@ function OfficeView() {
     return () => clearInterval(interval)
   }, [fetchOfficeLayout])
   
+  // Initialize audio context for sound effects
+  useEffect(() => {
+    if (soundEnabled && !audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      } catch (e) {
+        console.warn('Audio context not supported:', e)
+      }
+    }
+  }, [soundEnabled])
+  
   // Handle WebSocket location updates - trigger a refresh
   useEffect(() => {
     const hasLocationUpdate = wsMessages.some(msg => msg.type === 'location_update')
     if (hasLocationUpdate) {
       // Refresh office layout to get updated positions
       fetchOfficeLayout()
+      
+      // Play sound effect if enabled
+      if (soundEnabled && audioContextRef.current) {
+        playSound('move')
+      }
     }
-  }, [wsMessages, fetchOfficeLayout])
+  }, [wsMessages, fetchOfficeLayout, soundEnabled, playSound])
   
-  const handleEmployeeClick = (employee) => {
-    navigate(`/employees/${employee.id}`)
-  }
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't handle keyboard shortcuts if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return
+      }
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          setSelectedFloor(prev => {
+            const floors = officeData?.floors || [1]
+            const currentIndex = floors.indexOf(prev)
+            return currentIndex > 0 ? floors[currentIndex - 1] : prev
+          })
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          setSelectedFloor(prev => {
+            const floors = officeData?.floors || [1]
+            const currentIndex = floors.indexOf(prev)
+            return currentIndex < floors.length - 1 ? floors[currentIndex + 1] : prev
+          })
+          break
+        case 'Escape':
+          if (selectedRoom) {
+            setSelectedRoom(null)
+          }
+          break
+        default:
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedFloor, officeData, selectedRoom])
   
   const handleRoomClick = (room) => {
     setSelectedRoom(room)
+    if (soundEnabled) {
+      playSound('click')
+    }
+  }
+  
+  const handleEmployeeClick = (employee) => {
+    navigate(`/employees/${employee.id}`)
+    if (soundEnabled) {
+      playSound('click')
+    }
   }
   
   const handleCloseRoomModal = () => {
     setSelectedRoom(null)
   }
   
+  const handleFloorChange = (floor) => {
+    setSelectedFloor(floor)
+    if (soundEnabled) {
+      playSound('click')
+    }
+  }
+  
   if (loading && !officeData) {
     return (
       <div className="px-4 py-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading office layout...</p>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="h-9 w-48 bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-5 w-64 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
         </div>
+        <LoadingSkeleton />
       </div>
     )
   }
@@ -112,28 +296,64 @@ function OfficeView() {
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Office View</h2>
             <p className="text-gray-600">
-              {officeData?.total_employees || 0} active employees across {officeData?.rooms?.length || 0} rooms
-              {hasTerminated && ` • ${officeData?.total_terminated || 0} terminated`}
+              <AnimatedNumber value={officeData?.total_employees || 0} /> active employees across{' '}
+              <AnimatedNumber value={officeData?.rooms?.length || 0} /> rooms
+              {hasTerminated && (
+                <>
+                  {' • '}
+                  <AnimatedNumber value={officeData?.total_terminated || 0} /> terminated
+                </>
+              )}
             </p>
           </div>
           
-          {/* Floor Selector */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Floor:</span>
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              {availableFloors.map((floor) => (
-                <button
-                  key={floor}
-                  onClick={() => setSelectedFloor(floor)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    selectedFloor === floor
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                  }`}
-                >
-                  Floor {floor}
-                </button>
-              ))}
+          {/* Controls */}
+          <div className="flex items-center space-x-4">
+            {/* Sound Toggle */}
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`p-2 rounded-lg transition-colors ${
+                soundEnabled
+                  ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={soundEnabled ? 'Sound enabled (click to disable)' : 'Sound disabled (click to enable)'}
+            >
+              {soundEnabled ? (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.383 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.383l4.617-3.793a1 1 0 011.383.07zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.383 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.383l4.617-3.793a1 1 0 011.383.07zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                  <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06L3.28 2.22z" />
+                </svg>
+              )}
+            </button>
+            
+            {/* Floor Selector */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">Floor:</span>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                {availableFloors.map((floor) => (
+                  <button
+                    key={floor}
+                    onClick={() => handleFloorChange(floor)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      selectedFloor === floor
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                    }`}
+                  >
+                    Floor {floor}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Keyboard hint */}
+            <div className="text-xs text-gray-500 hidden md:block">
+              <kbd className="px-2 py-1 bg-gray-200 rounded">←</kbd> / <kbd className="px-2 py-1 bg-gray-200 rounded">→</kbd> to navigate
             </div>
           </div>
         </div>

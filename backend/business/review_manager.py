@@ -127,6 +127,9 @@ class ReviewManager:
                 
                 if overdue_count > 0:
                     print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
+                
+                # Update performance award after reviews are committed
+                await self._update_performance_award()
             except Exception as e:
                 import traceback
                 print(f"❌ Error committing reviews: {e}")
@@ -646,4 +649,170 @@ Be professional, fair, and constructive. Match your personality traits when writ
             .limit(limit)
         )
         return result.scalars().all()
+    
+    async def _update_performance_award(self):
+        """
+        Update the performance award to the employee with the highest recent review rating.
+        If multiple employees have the same highest rating, use tiebreaker logic:
+        1. Most recent review date (newer review wins)
+        2. Employee ID (lower ID wins as final tiebreaker)
+        Only one employee can have the award at a time.
+        """
+        # Get all active employees who have received reviews
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        all_employees = result.scalars().all()
+        
+        # Get the most recent review for each employee
+        employee_reviews = []
+        for employee in all_employees:
+            # Get most recent review (order by review_date, fallback to created_at)
+            review_result = await self.db.execute(
+                select(EmployeeReview)
+                .where(EmployeeReview.employee_id == employee.id)
+                .order_by(desc(EmployeeReview.review_date), desc(EmployeeReview.created_at))
+                .limit(1)
+            )
+            latest_review = review_result.scalar_one_or_none()
+            
+            if latest_review:
+                # Use review_date if available, otherwise use created_at
+                review_date = latest_review.review_date if latest_review.review_date else latest_review.created_at
+                employee_reviews.append({
+                    "employee": employee,
+                    "review": latest_review,
+                    "rating": latest_review.overall_rating,
+                    "review_date": review_date
+                })
+        
+        if not employee_reviews:
+            print("  ℹ️  No reviews found - cannot assign performance award")
+            return
+        
+        # Find the highest rating
+        max_rating = max(er["rating"] for er in employee_reviews)
+        
+        # Get all employees with the highest rating
+        top_employees = [er for er in employee_reviews if er["rating"] == max_rating]
+        
+        # Apply tiebreaker logic: most recent review date, then employee ID
+        # Sort by review_date descending (newer first), then by employee ID ascending (lower ID first)
+        # Python's sort with a tuple key sorts by first element, then second, etc.
+        # For descending date order, we negate the timestamp; for ascending ID, we use positive ID
+        def sort_key(x):
+            review_date = x["review_date"] if x["review_date"] else datetime.min
+            try:
+                # Get timestamp for sorting (works for both naive and timezone-aware datetimes)
+                timestamp = review_date.timestamp()
+                # Negate timestamp so newer dates (higher timestamp) come first
+                return (-timestamp, x["employee"].id)
+            except (OSError, OverflowError, AttributeError):
+                # Fallback: if timestamp() fails, use a simple numeric representation
+                # Use year/month/day as a sortable number (newer dates have larger numbers)
+                date_value = review_date.year * 10000 + review_date.month * 100 + review_date.day
+                return (-date_value, x["employee"].id)
+        
+        top_employees.sort(key=sort_key)
+        
+        # The winner is the first one after sorting
+        winner = top_employees[0]["employee"]
+        
+        # Find current award holder
+        result = await self.db.execute(
+            select(Employee).where(
+                Employee.has_performance_award == True,
+                Employee.status == "active"
+            )
+        )
+        current_holder = result.scalar_one_or_none()
+        
+        # If the winner is already the holder, no change needed
+        if current_holder and current_holder.id == winner.id:
+            print(f"  [AWARD] {winner.name} already holds the performance award (rating: {max_rating:.1f}/5.0)")
+            return
+        
+        # Remove award from current holder if different
+        if current_holder:
+            current_holder.has_performance_award = False
+            print(f"  [AWARD] Performance award transferred from {current_holder.name} to {winner.name}")
+            
+            # Create notification for previous holder
+            from database.models import Notification
+            prev_notification = Notification(
+                notification_type="award_transferred",
+                title="Performance Award Transferred",
+                message=f"The performance award has been transferred to {winner.name} who received a higher review rating ({max_rating:.1f}/5.0).",
+                employee_id=current_holder.id,
+                read=False
+            )
+            self.db.add(prev_notification)
+            
+            # Create activity log for previous holder
+            from database.models import Activity
+            prev_activity = Activity(
+                employee_id=current_holder.id,
+                activity_type="award_transferred",
+                description=f"The performance award was transferred from {current_holder.name} to {winner.name}.",
+                activity_metadata={
+                    "previous_holder_id": current_holder.id,
+                    "new_holder_id": winner.id,
+                    "new_holder_rating": max_rating
+                }
+            )
+            self.db.add(prev_activity)
+        else:
+            print(f"  [AWARD] Performance award assigned to {winner.name} (rating: {max_rating:.1f}/5.0)")
+        
+        # Assign award to winner
+        winner.has_performance_award = True
+        # Increment award wins count
+        if not hasattr(winner, 'performance_award_wins') or winner.performance_award_wins is None:
+            winner.performance_award_wins = 0
+        winner.performance_award_wins += 1
+        print(f"  [AWARD] {winner.name} now has {winner.performance_award_wins} award win(s)")
+        
+        # Create notification for winner
+        from database.models import Notification
+        winner_notification = Notification(
+            notification_type="performance_award",
+            title="🏆 Performance Award Earned!",
+            message=f"Congratulations! You have earned the Performance Award for having the highest review rating ({max_rating:.1f}/5.0) among all employees. Keep up the excellent work!",
+            employee_id=winner.id,
+            read=False
+        )
+        self.db.add(winner_notification)
+        
+        # Create activity log for winner
+        from database.models import Activity
+        winner_activity = Activity(
+            employee_id=winner.id,
+            activity_type="performance_award_earned",
+            description=f"{winner.name} earned the Performance Award for having the highest review rating ({max_rating:.1f}/5.0).",
+            activity_metadata={
+                "rating": max_rating,
+                "award_type": "performance_award"
+            }
+        )
+        self.db.add(winner_activity)
+        
+        # Create a general notification for all employees (acknowledgment)
+        all_employees_result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        all_active_employees = all_employees_result.scalars().all()
+        
+        for emp in all_active_employees:
+            if emp.id != winner.id:  # Don't duplicate the winner's notification
+                acknowledgment = Notification(
+                    notification_type="award_announcement",
+                    title="🏆 Performance Award Announcement",
+                    message=f"{winner.name} has earned the Performance Award for having the highest review rating ({max_rating:.1f}/5.0). Congratulations!",
+                    employee_id=emp.id,
+                    read=False
+                )
+                self.db.add(acknowledgment)
+        
+        await self.db.flush()
+        print(f"  [AWARD] Performance award system updated - {winner.name} is the new award holder")
 

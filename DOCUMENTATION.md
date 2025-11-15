@@ -36,8 +36,11 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Financial System**: Comprehensive revenue, expenses, profit tracking with detailed analytics
 - **Goal System**: Business goals with progress tracking and completion evaluation
 - **Employee Reviews**: Performance review system with ratings and feedback
+- **Performance Awards**: Recognition system for top-performing employees with AI-generated congratulatory messages
 - **Notification System**: Real-time notifications for important events (reviews, raises, terminations)
 - **Boardroom Discussions**: Strategic planning and decision-making sessions
+- **Meeting Management**: Meeting scheduling, calendar views, and live meeting transcripts with AI-generated content
+- **Customer Reviews**: AI-generated customer reviews for completed projects with ratings and statistics
 
 ---
 
@@ -186,6 +189,23 @@ Business logic managers:
 - Manages employee performance reviews
 - Tracks review ratings and feedback
 - Generates review recommendations
+- Updates performance awards based on review ratings
+
+**`customer_review_manager.py`**:
+- Generates AI-powered customer reviews for completed projects
+- Creates realistic customer profiles (name, title, company)
+- Generates review text using LLM based on project details and rating
+- Manages review statistics and aggregations
+- Reviews generated 24 hours after project completion (configurable)
+
+**`meeting_manager.py`**:
+- Generates and manages meetings with employees
+- Creates meeting schedules (3-8 meetings per day)
+- Generates AI-powered meeting agendas and outlines
+- Manages meeting status (scheduled → in_progress → completed)
+- Generates live meeting transcripts with real-time updates
+- Creates meeting content every 5 seconds for active meetings
+- Supports multiple meeting types (standup, review, strategy, etc.)
 
 **`boardroom_manager.py`**:
 - Manages boardroom executive rotation and discussions
@@ -216,6 +236,8 @@ Database layer:
 - `BusinessSettings`: Business configuration
 - `EmployeeReview`: Employee performance reviews
 - `Notification`: System notifications
+- `CustomerReview`: Customer reviews for completed projects
+- `Meeting`: Meeting records with schedules, attendees, agendas, and transcripts
 
 #### 6. `api/`
 API endpoints:
@@ -246,6 +268,13 @@ API endpoints:
 - `/api/notifications/{id}/read` (POST): Mark notification as read
 - `/api/notifications/read-all` (POST): Mark all notifications as read
 - `/api/boardroom/generate-discussions` (POST): Generate boardroom discussions
+- `/api/customer-reviews`: Get customer reviews (with optional project filter)
+- `/api/customer-reviews/generate` (POST): Generate customer reviews for completed projects
+- `/api/customer-reviews/stats`: Get customer review statistics
+- `/api/meetings`: Get all meetings
+- `/api/meetings/{meeting_id}`: Get specific meeting details
+- `/api/employees/{employee_id}/award-message`: Get performance award message for employee
+- `/api/employees/initialize-award` (POST): Initialize performance award system
 
 **`websocket.py`**: WebSocket handler
 - Manages WebSocket connections
@@ -456,6 +485,46 @@ Communication hub:
 - Filter by employee
 - Message threads
 
+#### `pages/CustomerReviews.jsx`
+Customer reviews dashboard:
+- Summary cards (total reviews, average rating, products reviewed, verified purchases)
+- Rating distribution pie chart
+- Reviews by product bar chart
+- Filter by rating and project
+- Detailed review cards with customer information and ratings
+
+#### `components/CalendarView.jsx`
+Meeting calendar view:
+- Day, week, and month views
+- Meeting scheduling and status tracking
+- Click to view meeting details
+- Join live meetings directly from calendar
+- Color-coded meeting status (scheduled, in-progress, completed)
+
+#### `components/LiveMeetingView.jsx`
+Live meeting interface:
+- Video-style grid layout with attendee avatars
+- Real-time transcript sidebar
+- Live message bubbles appearing above speakers
+- Active speaker highlighting
+- Auto-scrolling transcript
+- Meeting metadata and status
+
+#### `components/MeetingDetail.jsx`
+Meeting detail view:
+- Meeting information (title, description, agenda, outline)
+- Attendee list with avatars
+- Meeting transcript (live or final)
+- Meeting status and timing
+
+#### `components/PerformanceAwardModal.jsx`
+Performance award display:
+- Award winner information
+- Performance rating badge
+- AI-generated congratulatory message from manager
+- Award win statistics
+- Visual award presentation
+
 #### `components/BoardroomView.jsx`
 Boardroom visualization and management:
 - Visual boardroom scene with executives positioned around a table
@@ -510,6 +579,8 @@ WebSocket hook for real-time updates:
 - `home_room`: Assigned home room (with floor suffix if applicable)
 - `floor`: Floor number (1, 2, 3, or 4)
 - `activity_state`: idle, working, walking, meeting, break, training, waiting
+- `has_performance_award`: Boolean (whether employee currently holds performance award)
+- `performance_award_wins`: Integer (number of times employee has won the award)
 - `hired_at`: Timestamp
 - `fired_at`: Timestamp (nullable)
 - `created_at`: Timestamp
@@ -586,6 +657,35 @@ WebSocket hook for real-time updates:
 - `review_period_start`: Start of review period (nullable)
 - `review_period_end`: End of review period (nullable)
 - `created_at`: Timestamp
+
+#### `customer_reviews`
+- `id`: Primary key
+- `project_id`: Foreign key to projects
+- `customer_name`: Customer name
+- `customer_title`: Customer job title
+- `company_name`: Customer company name
+- `rating`: Rating (1.0 to 5.0)
+- `review_text`: Review text content
+- `verified_purchase`: Boolean (verified purchase status)
+- `helpful_count`: Number of helpful votes
+- `created_at`: Timestamp
+
+#### `meetings`
+- `id`: Primary key
+- `title`: Meeting title
+- `description`: Meeting description
+- `organizer_id`: Foreign key to employees (meeting organizer)
+- `attendee_ids`: JSON array of employee IDs
+- `start_time`: Meeting start time
+- `end_time`: Meeting end time
+- `status`: scheduled, in_progress, completed, cancelled
+- `agenda`: Meeting agenda (text)
+- `outline`: Meeting outline (text)
+- `transcript`: Final meeting transcript (text, nullable)
+- `live_transcript`: Live meeting transcript (text, nullable)
+- `meeting_metadata`: JSON metadata (live_messages, last_content_update, etc.)
+- `created_at`: Timestamp
+- `updated_at`: Timestamp
 
 #### `notifications`
 - `id`: Primary key
@@ -907,6 +1007,127 @@ If `executive_ids` is not provided, the system automatically selects executives 
 - Uses LLM to create contextual, business-focused messages
 - Covers 40+ strategic topics including revenue growth, market expansion, resource allocation, etc.
 - Creates chat messages with thread IDs for conversation tracking
+
+#### Customer Reviews
+
+**GET `/api/customer-reviews?limit=100&project_id=1`**
+Returns customer reviews, optionally filtered by project.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "project_id": 1,
+    "project_name": "Project Alpha",
+    "customer_name": "Sarah Johnson",
+    "customer_title": "VP of Engineering",
+    "company_name": "Acme Tech",
+    "rating": 4.5,
+    "review_text": "Great product! We've been using it for 3 months...",
+    "verified_purchase": true,
+    "helpful_count": 5,
+    "created_at": "2024-01-01T12:00:00Z"
+  }
+]
+```
+
+**POST `/api/customer-reviews/generate?hours_since_completion=24.0`**
+Generates customer reviews for completed projects. Reviews are generated 24 hours after project completion by default.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Generated 12 customer review(s)",
+  "reviews_created": 12
+}
+```
+
+**GET `/api/customer-reviews/stats`**
+Returns statistics about customer reviews.
+
+**Response:**
+```json
+{
+  "total_reviews": 50,
+  "average_rating": 4.2,
+  "rating_distribution": {
+    "5.0": 20,
+    "4.0": 15,
+    "3.0": 10,
+    "2.0": 3,
+    "1.0": 2
+  },
+  "reviews_by_project": {
+    "Project Alpha": {
+      "count": 8,
+      "average_rating": 4.5
+    }
+  }
+}
+```
+
+#### Meetings
+
+**GET `/api/meetings`**
+Returns all meetings ordered by start time.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "title": "Team Standup: Engineering",
+    "description": "Daily team synchronization and progress updates",
+    "organizer_id": 1,
+    "organizer_name": "John Doe",
+    "attendee_ids": [1, 2, 3],
+    "attendee_names": ["John Doe", "Jane Smith", "Bob Johnson"],
+    "start_time": "2024-01-01T09:00:00Z",
+    "end_time": "2024-01-01T09:30:00Z",
+    "status": "in_progress",
+    "agenda": "1. Review yesterday's progress\n2. Discuss blockers\n3. Plan today's work",
+    "outline": "I. Introduction\nII. Progress Review\nIII. Action Items",
+    "transcript": null,
+    "live_transcript": "[09:00:15] John Doe: Let's start the standup...",
+    "meeting_metadata": {
+      "live_messages": [
+        {
+          "sender_id": 1,
+          "sender_name": "John Doe",
+          "message": "Let's start the standup",
+          "timestamp": "2024-01-01T09:00:15Z"
+        }
+      ],
+      "last_content_update": "2024-01-01T09:00:20Z"
+    }
+  }
+]
+```
+
+**GET `/api/meetings/{meeting_id}`**
+Returns detailed information about a specific meeting.
+
+#### Performance Awards
+
+**GET `/api/employees/{employee_id}/award-message`**
+Returns the performance award message for an employee who currently holds the award.
+
+**Response:**
+```json
+{
+  "employee_name": "Jane Smith",
+  "manager_name": "John Doe",
+  "manager_title": "VP of Engineering",
+  "rating": 4.8,
+  "award_wins": 2,
+  "message": "Congratulations, Jane! Your exceptional performance..."
+}
+```
+
+**POST `/api/employees/initialize-award`**
+Initializes the performance award system by assigning the award to the employee with the highest review rating.
 
 #### Employee Management
 
@@ -1320,6 +1541,124 @@ For issues and questions:
 ---
 
 *Last updated: January 2025*
+
+## Customer Reviews System
+
+The customer reviews system automatically generates realistic customer reviews for completed projects, providing feedback on products and services.
+
+### Features
+
+- **Automatic Generation**: Reviews are generated 24 hours after project completion (configurable)
+- **AI-Powered Content**: Review text is generated using LLM based on project details and rating
+- **Realistic Profiles**: Each review includes customer name, title, and company name
+- **Rating Distribution**: Reviews use a realistic rating distribution (60% 4-5 stars, 30% 3-4 stars, 10% 1-3 stars)
+- **Multiple Reviews**: 2-5 reviews generated per project
+- **Statistics**: Comprehensive statistics including rating distribution and reviews by project
+
+### How It Works
+
+1. When a project is completed, the system tracks the completion time
+2. After 24 hours (configurable), reviews are automatically generated
+3. For each review:
+   - Customer profile is generated (name, title, company)
+   - Rating is assigned based on weighted distribution
+   - Review text is generated using LLM with project context
+   - Review is saved to database
+4. Reviews can be viewed in the Customer Reviews page with filtering and statistics
+
+### API Usage
+
+Generate reviews manually:
+```bash
+POST /api/customer-reviews/generate?hours_since_completion=0
+```
+
+Get all reviews:
+```bash
+GET /api/customer-reviews?limit=100&project_id=1
+```
+
+## Meeting Management System
+
+The meeting management system provides comprehensive meeting scheduling, tracking, and live transcript generation.
+
+### Features
+
+- **Meeting Generation**: Automatically generates 3-8 meetings per day
+- **Multiple Meeting Types**: Team Standup, Project Review, Strategy Session, One-on-One, Department Meeting, Client Presentation, Sprint Planning, Retrospective, Budget Review, Performance Review, All-Hands, Training Session
+- **AI-Generated Agendas**: Meeting agendas and outlines generated using LLM
+- **Live Transcripts**: Real-time meeting transcripts with messages generated every 5 seconds
+- **Status Management**: Automatic status updates (scheduled → in_progress → completed)
+- **Calendar Views**: Day, week, and month calendar views
+- **Live Meeting View**: Video-style interface with attendee avatars and real-time transcripts
+
+### How It Works
+
+1. **Meeting Generation**:
+   - Meetings are generated automatically (3-8 per day)
+   - Organizer is selected (prefer managers/executives)
+   - Attendees are selected (2-8 people including organizer)
+   - Meeting type and description are randomly selected
+   - Agenda and outline are generated using LLM
+
+2. **Status Updates**:
+   - Meetings transition from "scheduled" to "in_progress" at start time
+   - Live content is generated every 5 seconds for active meetings
+   - Meetings transition to "completed" at end time
+   - Final transcript is generated for completed meetings
+
+3. **Live Content Generation**:
+   - For in-progress meetings, new messages are generated every 5 seconds
+   - Messages are created between random attendee pairs
+   - LLM generates contextual messages based on:
+     - Meeting agenda
+     - Attendee personalities and roles
+     - Business context
+     - Recent conversation history
+   - Messages are stored in `meeting_metadata.live_messages`
+   - Live transcript is updated in real-time
+
+### Frontend Components
+
+- **CalendarView**: Calendar interface with day/week/month views
+- **LiveMeetingView**: Video-style meeting interface with live transcripts
+- **MeetingDetail**: Detailed meeting information view
+
+## Performance Awards System
+
+The performance awards system recognizes top-performing employees based on their review ratings.
+
+### Features
+
+- **Automatic Award Assignment**: Award is assigned to employee with highest review rating
+- **Award Tracking**: Tracks number of times each employee has won the award
+- **AI-Generated Messages**: Congratulatory messages generated by manager using LLM
+- **Visual Presentation**: Award modal with employee information and rating badge
+
+### How It Works
+
+1. When a review is completed, the system checks if the employee's rating qualifies for the award
+2. The award is assigned to the employee with the highest current review rating
+3. If a new employee earns a higher rating, the award is transferred
+4. Award wins are tracked per employee
+5. Managers can generate congratulatory messages using the award API
+
+### Database Fields
+
+- `has_performance_award`: Boolean indicating if employee currently holds the award
+- `performance_award_wins`: Integer tracking number of award wins
+
+### API Usage
+
+Initialize award system:
+```bash
+POST /api/employees/initialize-award
+```
+
+Get award message:
+```bash
+GET /api/employees/{employee_id}/award-message
+```
 
 ## Boardroom System
 

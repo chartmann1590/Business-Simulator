@@ -24,6 +24,8 @@ class Employee(Base):
     hired_at = Column(DateTime(timezone=True), server_default=func.now())
     fired_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    has_performance_award = Column(Boolean, default=False)  # Tracks if employee has the highest performance review award
+    performance_award_wins = Column(Integer, default=0)  # Tracks how many times employee has won the performance award
     
     tasks = relationship("Task", back_populates="employee", foreign_keys="Task.employee_id")
     decisions = relationship("Decision", back_populates="employee")
@@ -52,6 +54,7 @@ class Project(Base):
     
     tasks = relationship("Task", back_populates="project")
     financials = relationship("Financial", back_populates="project")
+    customer_reviews = relationship("CustomerReview", foreign_keys="CustomerReview.project_id", back_populates="project")
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -185,4 +188,41 @@ class Notification(Base):
     
     employee = relationship("Employee", foreign_keys=[employee_id])
     review = relationship("EmployeeReview", foreign_keys=[review_id])
+
+class CustomerReview(Base):
+    __tablename__ = "customer_reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)  # Which product/service this review is for
+    customer_name = Column(String, nullable=False)  # AI-generated customer name
+    customer_title = Column(String, nullable=True)  # AI-generated customer title/role
+    company_name = Column(String, nullable=True)  # AI-generated company name
+    rating = Column(Float, nullable=False)  # 1.0 to 5.0
+    review_text = Column(Text, nullable=False)  # The actual review content
+    verified_purchase = Column(Boolean, default=True)  # Whether this is a verified purchase
+    helpful_count = Column(Integer, default=0)  # Number of "helpful" votes
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    project = relationship("Project", foreign_keys=[project_id])
+
+class Meeting(Base):
+    __tablename__ = "meetings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    organizer_id = Column(Integer, ForeignKey("employees.id"), nullable=False)  # Meeting organizer
+    attendee_ids = Column(JSON, default=list)  # List of employee IDs attending
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String, default="scheduled")  # scheduled, in_progress, completed, cancelled
+    agenda = Column(Text, nullable=True)  # Meeting agenda
+    outline = Column(Text, nullable=True)  # Meeting outline
+    transcript = Column(Text, nullable=True)  # Full meeting transcript (for completed meetings)
+    live_transcript = Column(Text, nullable=True)  # Live transcript (for in-progress meetings)
+    meeting_metadata = Column(JSON, default=dict)  # Additional metadata (live messages, etc.)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    organizer = relationship("Employee", foreign_keys=[organizer_id])
 

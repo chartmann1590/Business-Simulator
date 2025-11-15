@@ -44,6 +44,8 @@ class OfficeSimulator:
         self.websocket_connections: Set = set()
         self.review_tick_counter = 0  # Counter for periodic reviews
         self.boardroom_discussion_counter = 0  # Counter for boardroom discussions (every 15 ticks = 2 minutes)
+        self.customer_review_counter = 0  # Counter for customer reviews (every 450 ticks = 60 minutes)
+        self.meeting_generation_counter = 0  # Counter for meeting generation (every 900 ticks = 2 hours)
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -164,6 +166,55 @@ class OfficeSimulator:
                 import traceback
                 print(f"❌ Error generating boardroom discussions: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
+        
+        # Generate customer reviews every 60 minutes (3600 seconds)
+        # Check every tick (8 seconds), so every 450 ticks = 60 minutes
+        self.customer_review_counter += 1
+        if self.customer_review_counter >= 450:  # 450 * 8 seconds = 3600 seconds = 60 minutes
+            self.customer_review_counter = 0
+            try:
+                async with async_session_maker() as customer_review_db:
+                    from business.customer_review_manager import CustomerReviewManager
+                    customer_review_manager = CustomerReviewManager(customer_review_db)
+                    reviews_created = await customer_review_manager.generate_reviews_for_completed_projects(
+                        hours_since_completion=24.0
+                    )
+                    if reviews_created:
+                        print(f"⭐ Generated {len(reviews_created)} customer review(s) for completed projects")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error generating customer reviews: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+        
+        # Generate meetings every 2 hours (7200 seconds)
+        # Check every tick (8 seconds), so every 900 ticks = 2 hours
+        self.meeting_generation_counter += 1
+        if self.meeting_generation_counter >= 900:  # 900 * 8 seconds = 7200 seconds = 2 hours
+            self.meeting_generation_counter = 0
+            try:
+                async with async_session_maker() as meeting_db:
+                    from business.meeting_manager import MeetingManager
+                    meeting_manager = MeetingManager(meeting_db)
+                    meetings_created = await meeting_manager.generate_meetings()
+                    if meetings_created > 0:
+                        print(f"📅 Generated {meetings_created} meetings for the day")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error generating meetings: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+        
+        # Update meeting statuses every tick (check for in_progress and completed)
+        # This MUST run every tick to keep meetings active
+        try:
+            async with async_session_maker() as meeting_status_db:
+                from business.meeting_manager import MeetingManager
+                meeting_manager = MeetingManager(meeting_status_db)
+                await meeting_manager.update_meeting_status()
+        except Exception as e:
+            # Log errors but don't crash - but make them visible
+            print(f"❌ CRITICAL: Error updating meeting status: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Use a separate session to get employee list (read-only)
         async with async_session_maker() as read_db:

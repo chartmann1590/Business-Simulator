@@ -19,8 +19,11 @@ A fully autonomous office simulation where AI employees make decisions, work on 
   - Office layout visualization across all floors
   - Communication hub (email and chat)
   - Employee performance reviews and ratings
+  - Performance awards system recognizing top performers
   - Notification system for important events
   - Boardroom discussions for strategic planning
+  - Meeting management with calendar view and live transcripts
+  - Customer reviews for completed projects
   - Activity feed with real-time updates
 
 ## Prerequisites
@@ -192,6 +195,21 @@ The web interface provides several views:
   - Real-time boardroom mood tracking based on discussion sentiment
   - Visual boardroom view with executives positioned around a table
   - Discussion log with all boardroom conversations
+- **Meetings**: Calendar view with meeting scheduling and live meeting transcripts
+  - Day, week, and month calendar views
+  - Scheduled, in-progress, and completed meetings
+  - Live meeting view with real-time transcripts and video-style layout
+  - AI-generated meeting agendas and outlines
+  - Automatic meeting status updates
+- **Customer Reviews**: Reviews from customers for completed projects
+  - AI-generated realistic customer reviews
+  - Rating distribution and statistics
+  - Reviews by product/project
+  - Filtering by rating and project
+- **Performance Awards**: Recognition system for top-performing employees
+  - Award based on highest performance review rating
+  - AI-generated congratulatory messages from managers
+  - Award win tracking
 
 All views update in real-time as the simulation runs via WebSocket.
 

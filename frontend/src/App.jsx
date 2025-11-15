@@ -9,6 +9,7 @@ import TaskDetail from './pages/TaskDetail'
 import Financials from './pages/Financials'
 import Communications from './pages/Communications'
 import OfficeView from './pages/OfficeView'
+import CustomerReviews from './pages/CustomerReviews'
 import Notifications from './components/Notifications'
 
 function NavLink({ to, children, icon }) {
@@ -53,6 +54,7 @@ function App() {
             <NavLink to="/tasks" icon="✅">Tasks</NavLink>
             <NavLink to="/communications" icon="💬">Communications</NavLink>
             <NavLink to="/financials" icon="💰">Financials</NavLink>
+            <NavLink to="/customer-reviews" icon="⭐">Customer Reviews</NavLink>
           </nav>
         </aside>
 
@@ -69,6 +71,7 @@ function App() {
             <Route path="/tasks/:id" element={<TaskDetail />} />
             <Route path="/communications" element={<Communications />} />
             <Route path="/financials" element={<Financials />} />
+            <Route path="/customer-reviews" element={<CustomerReviews />} />
           </Routes>
         </main>
       </div>

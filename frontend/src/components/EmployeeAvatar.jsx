@@ -1,8 +1,29 @@
+import { useEffect, useRef } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
 
 function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }) {
   const isWalking = employee.activity_state === 'walking'
   const activityState = employee.activity_state || 'idle'
+  const prevPositionRef = useRef(position)
+  const isMovingRef = useRef(false)
+  
+  // Track position changes for smooth transitions
+  useEffect(() => {
+    const prevPos = prevPositionRef.current
+    const hasMoved = prevPos.x !== position.x || prevPos.y !== position.y
+    
+    if (hasMoved) {
+      isMovingRef.current = true
+      prevPositionRef.current = position
+      
+      // Reset moving flag after animation
+      const timer = setTimeout(() => {
+        isMovingRef.current = false
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [position])
   
   // Activity indicator icons
   const getActivityIcon = () => {
@@ -21,17 +42,19 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }
   }
   
   const activityIcon = getActivityIcon()
+  const isMoving = isMovingRef.current || isWalking
   
   return (
     <div
       className={`absolute transition-all duration-500 ease-in-out cursor-pointer group ${
-        isWalking ? 'animate-pulse' : ''
+        isMoving ? 'animate-pulse' : ''
       }`}
       style={{
         left: `${position.x}%`,
         top: `${position.y}%`,
         transform: 'translate(-50%, -50%)',
-        zIndex: 10
+        zIndex: 10,
+        transition: 'left 0.5s ease-in-out, top 0.5s ease-in-out'
       }}
       onClick={() => onEmployeeClick && onEmployeeClick(employee)}
       title={`${employee.name} - ${employee.title}\n${activityState}`}
@@ -40,8 +63,8 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }
         <img
           src={getAvatarPath(employee)}
           alt={employee.name}
-          className={`w-12 h-12 rounded-full border-2 border-white shadow-lg object-cover ${
-            isWalking ? 'animate-bounce' : ''
+          className={`w-12 h-12 rounded-full border-2 border-white shadow-lg object-cover transition-transform duration-300 ${
+            isMoving ? 'animate-bounce scale-110' : 'hover:scale-110'
           }`}
           onError={(e) => {
             e.target.src = '/avatars/office_char_01_manager.png'

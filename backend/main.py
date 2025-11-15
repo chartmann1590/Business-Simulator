@@ -80,6 +80,96 @@ async def lifespan(app: FastAPI):
                         print(f"Warning: Could not hire employees on startup: {hire_error}")
                         import traceback
                         traceback.print_exc()
+                
+                # Generate initial customer reviews for existing completed projects
+                print("Generating initial customer reviews for completed projects...")
+                try:
+                    from business.customer_review_manager import CustomerReviewManager
+                    from database.models import Project
+                    from sqlalchemy import select
+                    
+                    # Get all completed projects
+                    result = await db.execute(select(Project).where(Project.status == "completed"))
+                    completed_projects = result.scalars().all()
+                    
+                    if completed_projects:
+                        customer_review_manager = CustomerReviewManager(db)
+                        # Generate reviews for all completed projects (ignore hours_since_completion for initial generation)
+                        # We'll call the method with 0 hours to generate for all completed projects
+                        reviews_created = await customer_review_manager.generate_reviews_for_completed_projects(
+                            hours_since_completion=0.0  # 0 means generate for all completed projects
+                        )
+                        if reviews_created:
+                            print(f"⭐ Generated {len(reviews_created)} initial customer review(s) for {len(completed_projects)} completed project(s)")
+                        else:
+                            print(f"ℹ️  No new reviews needed (projects may already have reviews)")
+                    else:
+                        print("ℹ️  No completed projects found for initial review generation")
+                except Exception as review_error:
+                    print(f"Warning: Could not generate initial customer reviews: {review_error}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # Generate initial meetings for the day and past week
+                print("Generating initial meetings for today and last week...")
+                try:
+                    from business.meeting_manager import MeetingManager
+                    from database.models import Meeting
+                    from sqlalchemy import select
+                    
+                    meeting_manager = MeetingManager(db)
+                    now = datetime.utcnow()
+                    
+                    # Generate meetings for last week (7 days ago to today)
+                    last_week_start = now - timedelta(days=7)
+                    last_week_start = last_week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+                    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    tomorrow_start = today_start + timedelta(days=1)
+                    
+                    # Check existing meetings in this range
+                    result = await db.execute(
+                        select(Meeting).where(
+                            Meeting.start_time >= last_week_start,
+                            Meeting.start_time < tomorrow_start
+                        )
+                    )
+                    existing_meetings = result.scalars().all()
+                    
+                    if len(existing_meetings) == 0:
+                        # Generate meetings for last week
+                        print("Generating meetings for the past week...")
+                        past_meetings = await meeting_manager.generate_meetings_for_date_range(
+                            last_week_start, today_start
+                        )
+                        print(f"📅 Generated {past_meetings} meetings for the past week")
+                        
+                        # Generate meetings for today
+                        print("Generating meetings for today...")
+                        today_meetings = await meeting_manager.generate_meetings()
+                        print(f"📅 Generated {today_meetings} meetings for today")
+                    else:
+                        print(f"ℹ️  {len(existing_meetings)} meetings already exist in the date range")
+                    
+                    # Always generate an in-progress meeting if one doesn't exist
+                    result = await db.execute(
+                        select(Meeting).where(Meeting.status == "in_progress")
+                    )
+                    in_progress_meetings = result.scalars().all()
+                    
+                    if len(in_progress_meetings) == 0:
+                        print("Generating an in-progress meeting...")
+                        in_progress_meeting = await meeting_manager.generate_in_progress_meeting()
+                        if in_progress_meeting:
+                            print(f"📅 Generated in-progress meeting: {in_progress_meeting.title}")
+                        else:
+                            print("ℹ️  Could not generate in-progress meeting (may need more employees)")
+                    else:
+                        print(f"ℹ️  {len(in_progress_meetings)} in-progress meeting(s) already exist")
+                        
+                except Exception as meeting_error:
+                    print(f"Warning: Could not generate initial meetings: {meeting_error}")
+                    import traceback
+                    traceback.print_exc()
     except Exception as e:
         print(f"Warning: Database initialization had issues: {e}")
         import traceback

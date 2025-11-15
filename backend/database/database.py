@@ -52,7 +52,8 @@ Base = declarative_base()
 # Import all models to ensure they're registered with Base
 from database.models import (
     Employee, Project, Task, Decision, Financial, 
-    Activity, BusinessMetric, Email, ChatMessage, BusinessSettings
+    Activity, BusinessMetric, Email, ChatMessage, BusinessSettings,
+    EmployeeReview, Notification, CustomerReview
 )
 
 async def get_db():
@@ -65,10 +66,44 @@ async def init_db():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         print("Database tables created successfully.")
+        
+        # Run migrations for existing databases
+        await _run_migrations()
     except Exception as e:
         print(f"Error initializing database: {e}")
         import traceback
         traceback.print_exc()
         # Don't raise - allow the app to continue
         # The tables might already exist or will be created on next startup
+
+async def _run_migrations():
+    """Run database migrations for existing databases."""
+    try:
+        from sqlalchemy import text, inspect
+        
+        # Check if employees table exists
+        inspector = inspect(engine.sync_engine)
+        tables = inspector.get_table_names()
+        
+        if 'employees' not in tables:
+            # Table doesn't exist yet, skip migration (it will be created with the column)
+            return
+        
+        # Check columns and add missing ones
+        async with engine.begin() as conn:
+            # Check if employees table exists and get its columns
+            result = await conn.execute(text("PRAGMA table_info(employees)"))
+            columns = await result.fetchall()
+            column_names = [col[1] for col in columns]
+            
+            # Migration: Add has_performance_award column if it doesn't exist
+            if 'has_performance_award' not in column_names:
+                print("Running migration: Adding has_performance_award column...")
+                await conn.execute(text("ALTER TABLE employees ADD COLUMN has_performance_award BOOLEAN DEFAULT 0"))
+                print("Migration completed: has_performance_award column added.")
+    except Exception as e:
+        print(f"Warning: Migration failed: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't raise - allow the app to continue
 

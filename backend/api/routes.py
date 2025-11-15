@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
@@ -116,7 +116,9 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
             "created_at": emp.created_at.isoformat() if emp.created_at else None,
             "review_count": review_count,
             "latest_review_date": latest_review_date.isoformat() if latest_review_date else None,
-            "latest_rating": float(latest_rating) if latest_rating else None
+            "latest_rating": float(latest_rating) if latest_rating else None,
+            "has_performance_award": bool(emp.has_performance_award) if hasattr(emp, 'has_performance_award') else False,
+            "performance_award_wins": int(emp.performance_award_wins) if hasattr(emp, 'performance_award_wins') else 0
         })
     
     return employee_list
@@ -299,6 +301,8 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "activity_state": emp.activity_state if hasattr(emp, 'activity_state') else "idle",
         "hired_at": emp.hired_at.isoformat() if hasattr(emp, 'hired_at') and emp.hired_at else None,
         "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
+        "has_performance_award": bool(emp.has_performance_award) if hasattr(emp, 'has_performance_award') else False,
+        "performance_award_wins": int(emp.performance_award_wins) if hasattr(emp, 'performance_award_wins') else 0,
         "activities": [
             {
                 "id": act.id,
@@ -361,6 +365,158 @@ async def get_employee_reviews(employee_id: int, db: AsyncSession = Depends(get_
         }
         for review in reviews
     ]
+
+@router.get("/employees/{employee_id}/thoughts")
+async def get_employee_thoughts(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get AI-generated thoughts from the employee's perspective."""
+    from llm.ollama_client import OllamaClient
+    from engine.office_simulator import get_business_context
+    
+    # Get employee
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    emp = result.scalar_one_or_none()
+    
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Get recent activities
+    result = await db.execute(
+        select(Activity)
+        .where(Activity.employee_id == employee_id)
+        .order_by(desc(Activity.timestamp))
+        .limit(5)
+    )
+    activities = result.scalars().all()
+    
+    # Get recent decisions
+    result = await db.execute(
+        select(Decision)
+        .where(Decision.employee_id == employee_id)
+        .order_by(desc(Decision.timestamp))
+        .limit(3)
+    )
+    decisions = result.scalars().all()
+    
+    # Get recent emails
+    try:
+        result = await db.execute(
+            select(Email)
+            .where((Email.sender_id == employee_id) | (Email.recipient_id == employee_id))
+            .order_by(desc(Email.timestamp))
+            .limit(3)
+        )
+        emails = result.scalars().all()
+    except Exception:
+        emails = []
+    
+    # Get recent chats
+    try:
+        result = await db.execute(
+            select(ChatMessage)
+            .where((ChatMessage.sender_id == employee_id) | (ChatMessage.recipient_id == employee_id))
+            .order_by(desc(ChatMessage.timestamp))
+            .limit(3)
+        )
+        chats = result.scalars().all()
+    except Exception:
+        chats = []
+    
+    # Get recent reviews
+    result = await db.execute(
+        select(EmployeeReview)
+        .where(EmployeeReview.employee_id == employee_id)
+        .order_by(desc(EmployeeReview.created_at))
+        .limit(2)
+    )
+    reviews = result.scalars().all()
+    
+    # Get current task if available
+    current_task = None
+    if emp.current_task_id:
+        result = await db.execute(
+            select(Task).where(Task.id == emp.current_task_id)
+        )
+        task = result.scalar_one_or_none()
+        if task:
+            current_task = task.description
+    
+    # Get business context
+    business_context = await get_business_context(db)
+    
+    # Prepare data for LLM
+    activities_data = [
+        {
+            "description": act.description,
+            "activity_type": act.activity_type,
+            "timestamp": act.timestamp.isoformat() if act.timestamp else None
+        }
+        for act in activities
+    ]
+    
+    decisions_data = [
+        {
+            "description": dec.description,
+            "reasoning": dec.reasoning,
+            "decision_type": dec.decision_type,
+            "timestamp": dec.timestamp.isoformat() if dec.timestamp else None
+        }
+        for dec in decisions
+    ]
+    
+    emails_data = [
+        {
+            "subject": email.subject,
+            "body": email.body[:100] if email.body else "",
+            "timestamp": email.timestamp.isoformat() if email.timestamp else None
+        }
+        for email in emails
+    ]
+    
+    chats_data = [
+        {
+            "message": chat.message,
+            "timestamp": chat.timestamp.isoformat() if chat.timestamp else None
+        }
+        for chat in chats
+    ]
+    
+    reviews_data = [
+        {
+            "overall_rating": rev.overall_rating,
+            "comments": rev.comments or "",
+            "review_date": rev.review_date.isoformat() if rev.review_date else None
+        }
+        for rev in reviews
+    ]
+    
+    # Generate thoughts using LLM
+    llm_client = OllamaClient()
+    try:
+        thoughts = await llm_client.generate_employee_thoughts(
+            employee_name=emp.name,
+            employee_title=emp.title,
+            employee_role=emp.role,
+            personality_traits=emp.personality_traits or [],
+            backstory=emp.backstory,
+            recent_activities=activities_data,
+            recent_decisions=decisions_data,
+            recent_emails=emails_data,
+            recent_chats=chats_data,
+            recent_reviews=reviews_data,
+            current_status=emp.status or "active",
+            current_task=current_task,
+            business_context=business_context
+        )
+    except Exception as e:
+        print(f"Error generating employee thoughts: {e}")
+        thoughts = "I'm focused on my current work and thinking about how to contribute effectively to the team."
+    finally:
+        await llm_client.close()
+    
+    return {
+        "thoughts": thoughts,
+        "generated_at": datetime.now().isoformat()
+    }
 
 @router.get("/reviews/debug")
 async def debug_reviews(db: AsyncSession = Depends(get_db)):
@@ -453,6 +609,12 @@ async def create_employee_review(employee_id: int, review_data: CreateReviewRequ
     await db.commit()
     await db.refresh(review)
     
+    # Update performance award after review is created
+    from business.review_manager import ReviewManager
+    review_manager = ReviewManager(db)
+    await review_manager._update_performance_award()
+    await db.commit()
+    
     return {
         "id": review.id,
         "employee_id": review.employee_id,
@@ -471,6 +633,151 @@ async def create_employee_review(employee_id: int, review_data: CreateReviewRequ
         "review_period_end": review.review_period_end.isoformat() if review.review_period_end else None,
         "created_at": review.created_at.isoformat() if review.created_at else None
     }
+
+@router.post("/reviews/initialize-award")
+async def initialize_performance_award(db: AsyncSession = Depends(get_db)):
+    """Initialize the performance award for existing reviews. Assigns award to employee with highest rating."""
+    from business.review_manager import ReviewManager
+    
+    review_manager = ReviewManager(db)
+    await review_manager._update_performance_award()
+    await db.commit()
+    
+    # Get the current award holder
+    result = await db.execute(
+        select(Employee).where(
+            Employee.has_performance_award == True,
+            Employee.status == "active"
+        )
+    )
+    award_holder = result.scalar_one_or_none()
+    
+    if award_holder:
+        return {
+            "success": True,
+            "message": f"Performance award initialized. Current holder: {award_holder.name}",
+            "award_holder": {
+                "id": award_holder.id,
+                "name": award_holder.name,
+                "title": award_holder.title
+            }
+        }
+    else:
+        return {
+            "success": True,
+            "message": "Performance award initialized. No award holder assigned (no reviews found or no eligible employees).",
+            "award_holder": None
+        }
+
+@router.get("/employees/{employee_id}/award-message")
+async def get_award_congratulatory_message(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Generate an AI congratulatory message from the manager for the employee's performance award."""
+    from business.review_manager import ReviewManager
+    from llm.ollama_client import OllamaClient
+    
+    # Get employee
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    employee = result.scalar_one_or_none()
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    if not employee.has_performance_award:
+        raise HTTPException(status_code=400, detail="Employee does not currently hold the performance award")
+    
+    # Get the employee's most recent review to find their manager
+    result = await db.execute(
+        select(EmployeeReview)
+        .where(EmployeeReview.employee_id == employee_id)
+        .order_by(desc(EmployeeReview.review_date), desc(EmployeeReview.created_at))
+        .limit(1)
+    )
+    latest_review = result.scalar_one_or_none()
+    
+    if not latest_review:
+        raise HTTPException(status_code=404, detail="No reviews found for this employee")
+    
+    # Get the manager
+    result = await db.execute(select(Employee).where(Employee.id == latest_review.manager_id))
+    manager = result.scalar_one_or_none()
+    
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    
+    # Get employee's latest rating
+    latest_rating = latest_review.overall_rating
+    award_wins = employee.performance_award_wins if hasattr(employee, 'performance_award_wins') else 1
+    
+    # Generate congratulatory message using Ollama
+    manager_personality = ", ".join(manager.personality_traits) if manager.personality_traits else "professional, supportive"
+    employee_personality = ", ".join(employee.personality_traits) if employee.personality_traits else "dedicated"
+    
+    prompt = f"""You are {manager.name}, {manager.title} at TechFlow Solutions. You are writing a congratulatory message to {employee.name}, {employee.title}, who has just earned the Performance Award for having the highest review rating ({latest_rating:.1f}/5.0) among all employees.
+
+This is {employee.name}'s {award_wins} time{'s' if award_wins > 1 else ''} winning this award.
+
+Your personality traits: {manager_personality}
+Your role: {manager.role}
+Your backstory: {manager.backstory or "Experienced manager focused on team development"}
+
+Employee being congratulated:
+- Name: {employee.name}
+- Title: {employee.title}
+- Department: {employee.department}
+- Personality: {employee_personality}
+- Backstory: {employee.backstory or "Team member"}
+- Latest Rating: {latest_rating:.1f}/5.0
+- Award Wins: {award_wins}
+
+Write a warm, professional, and personalized congratulatory message (2-3 sentences) from your perspective as {manager.name}. The message should:
+1. Congratulate {employee.name} on earning the Performance Award
+2. Acknowledge their excellent performance (rating: {latest_rating:.1f}/5.0)
+3. If this is not their first win, acknowledge their consistent excellence
+4. Express appreciation for their contributions
+5. Encourage them to continue their great work
+
+Write the message in a natural, conversational tone that matches your personality traits. Be genuine and specific."""
+
+    try:
+        llm_client = OllamaClient()
+        message = await llm_client.generate_response(prompt)
+        
+        # Clean up the message (remove any JSON formatting if present)
+        message = message.strip()
+        # Remove quotes if the entire message is wrapped in them
+        if message.startswith('"') and message.endswith('"'):
+            message = message[1:-1]
+        if message.startswith("'") and message.endswith("'"):
+            message = message[1:-1]
+        
+        return {
+            "employee_id": employee.id,
+            "employee_name": employee.name,
+            "manager_id": manager.id,
+            "manager_name": manager.name,
+            "manager_title": manager.title,
+            "rating": latest_rating,
+            "award_wins": award_wins,
+            "message": message,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        import traceback
+        print(f"Error generating award message: {e}")
+        traceback.print_exc()
+        # Fallback message
+        fallback_message = f"Congratulations, {employee.name}! You've earned the Performance Award with a rating of {latest_rating:.1f}/5.0. Your dedication and excellent work are truly appreciated. Keep up the outstanding performance!"
+        return {
+            "employee_id": employee.id,
+            "employee_name": employee.name,
+            "manager_id": manager.id,
+            "manager_name": manager.name,
+            "manager_title": manager.title,
+            "rating": latest_rating,
+            "award_wins": award_wins,
+            "message": fallback_message,
+            "generated_at": datetime.utcnow().isoformat()
+        }
 
 @router.get("/projects")
 async def get_projects(db: AsyncSession = Depends(get_db)):
@@ -2938,4 +3245,307 @@ async def mark_all_notifications_read(db: AsyncSession = Depends(get_db)):
     await db.commit()
     
     return {"success": True, "message": f"Marked {len(notifications)} notifications as read"}
+
+@router.get("/customer-reviews")
+async def get_customer_reviews(limit: int = 100, project_id: int = None, db: AsyncSession = Depends(get_db)):
+    """Get customer reviews, optionally filtered by project."""
+    from business.customer_review_manager import CustomerReviewManager
+    
+    review_manager = CustomerReviewManager(db)
+    
+    if project_id:
+        reviews = await review_manager.get_reviews_for_project(project_id)
+    else:
+        reviews = await review_manager.get_all_reviews(limit=limit)
+    
+    # Get project names
+    result = await db.execute(select(Project))
+    projects = {p.id: p.name for p in result.scalars().all()}
+    
+    return [
+        {
+            "id": review.id,
+            "project_id": review.project_id,
+            "project_name": projects.get(review.project_id, "Unknown Project"),
+            "customer_name": review.customer_name,
+            "customer_title": review.customer_title,
+            "company_name": review.company_name,
+            "rating": review.rating,
+            "review_text": review.review_text,
+            "verified_purchase": review.verified_purchase,
+            "helpful_count": review.helpful_count,
+            "created_at": review.created_at.isoformat() if review.created_at else None
+        }
+        for review in reviews
+    ]
+
+@router.post("/customer-reviews/generate")
+async def generate_customer_reviews(hours_since_completion: float = 24.0, db: AsyncSession = Depends(get_db)):
+    """Generate customer reviews for completed projects."""
+    from business.customer_review_manager import CustomerReviewManager
+    
+    try:
+        review_manager = CustomerReviewManager(db)
+        reviews_created = await review_manager.generate_reviews_for_completed_projects(
+            hours_since_completion=hours_since_completion
+        )
+        
+        return {
+            "success": True,
+            "message": f"Generated {len(reviews_created)} customer review(s)",
+            "reviews_created": len(reviews_created)
+        }
+    except Exception as e:
+        import traceback
+        print(f"Error generating customer reviews: {e}")
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "reviews_created": 0
+        }
+
+@router.get("/customer-reviews/stats")
+async def get_customer_review_stats(db: AsyncSession = Depends(get_db)):
+    """Get statistics about customer reviews."""
+    # Get all reviews
+    result = await db.execute(select(CustomerReview))
+    all_reviews = result.scalars().all()
+    
+    if not all_reviews:
+        return {
+            "total_reviews": 0,
+            "average_rating": 0.0,
+            "rating_distribution": {},
+            "reviews_by_project": {}
+        }
+    
+    # Calculate average rating
+    total_rating = sum(r.rating for r in all_reviews)
+    average_rating = round(total_rating / len(all_reviews), 1)
+    
+    # Rating distribution
+    rating_distribution = {}
+    for review in all_reviews:
+        rating_key = f"{int(review.rating)} stars"
+        rating_distribution[rating_key] = rating_distribution.get(rating_key, 0) + 1
+    
+    # Reviews by project
+    result = await db.execute(select(Project))
+    projects = {p.id: p.name for p in result.scalars().all()}
+    
+    reviews_by_project = {}
+    for review in all_reviews:
+        if review.project_id:
+            project_name = projects.get(review.project_id, "Unknown")
+            if project_name not in reviews_by_project:
+                reviews_by_project[project_name] = {
+                    "count": 0,
+                    "average_rating": 0.0,
+                    "total_rating": 0.0
+                }
+            reviews_by_project[project_name]["count"] += 1
+            reviews_by_project[project_name]["total_rating"] += review.rating
+    
+    # Calculate averages
+    for project_name in reviews_by_project:
+        data = reviews_by_project[project_name]
+        data["average_rating"] = round(data["total_rating"] / data["count"], 1)
+        del data["total_rating"]
+    
+    return {
+        "total_reviews": len(all_reviews),
+        "average_rating": average_rating,
+        "rating_distribution": rating_distribution,
+        "reviews_by_project": reviews_by_project
+    }
+
+@router.get("/meetings")
+async def get_meetings(db: AsyncSession = Depends(get_db)):
+    """Get all meetings."""
+    try:
+        result = await db.execute(
+            select(Meeting)
+            .order_by(Meeting.start_time)
+        )
+        meetings = result.scalars().all()
+        
+        # Get employee names
+        result = await db.execute(select(Employee))
+        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        
+        meeting_list = []
+        for meeting in meetings:
+            # Get attendee names
+            attendee_names = [all_employees.get(aid, "Unknown") for aid in (meeting.attendee_ids or [])]
+            
+            meeting_list.append({
+                "id": meeting.id,
+                "title": meeting.title,
+                "description": meeting.description,
+                "organizer_id": meeting.organizer_id,
+                "organizer_name": all_employees.get(meeting.organizer_id, "Unknown"),
+                "attendee_ids": meeting.attendee_ids or [],
+                "attendee_names": attendee_names,
+                "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
+                "end_time": meeting.end_time.isoformat() if meeting.end_time else None,
+                "status": meeting.status,
+                "agenda": meeting.agenda,
+                "outline": meeting.outline,
+                "transcript": meeting.transcript,
+                "live_transcript": meeting.live_transcript,
+                "meeting_metadata": meeting.meeting_metadata or {},
+                "created_at": meeting.created_at.isoformat() if meeting.created_at else None,
+                "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else None
+            })
+        
+        return meeting_list
+    except Exception as e:
+        print(f"Error fetching meetings: {e}")
+        return []
+
+@router.get("/meetings/{meeting_id}")
+async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific meeting by ID."""
+    try:
+        result = await db.execute(
+            select(Meeting).where(Meeting.id == meeting_id)
+        )
+        meeting = result.scalar_one_or_none()
+        
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        # Get employee names
+        result = await db.execute(select(Employee))
+        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        
+        # Get attendee details
+        attendee_details = []
+        for aid in (meeting.attendee_ids or []):
+            result = await db.execute(select(Employee).where(Employee.id == aid))
+            emp = result.scalar_one_or_none()
+            if emp:
+                attendee_details.append({
+                    "id": emp.id,
+                    "name": emp.name,
+                    "title": emp.title,
+                    "role": emp.role,
+                    "department": emp.department,
+                    "avatar_path": emp.avatar_path
+                })
+        
+        return {
+            "id": meeting.id,
+            "title": meeting.title,
+            "description": meeting.description,
+            "organizer_id": meeting.organizer_id,
+            "organizer_name": all_employees.get(meeting.organizer_id, "Unknown"),
+            "attendee_ids": meeting.attendee_ids or [],
+            "attendees": attendee_details,
+            "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
+            "end_time": meeting.end_time.isoformat() if meeting.end_time else None,
+            "status": meeting.status,
+            "agenda": meeting.agenda,
+            "outline": meeting.outline,
+            "transcript": meeting.transcript,
+            "live_transcript": meeting.live_transcript,
+            "meeting_metadata": meeting.meeting_metadata or {},
+            "created_at": meeting.created_at.isoformat() if meeting.created_at else None,
+            "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching meeting: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/meetings/generate")
+async def generate_meetings(db: AsyncSession = Depends(get_db)):
+    """Generate new meetings for the day."""
+    try:
+        from business.meeting_manager import MeetingManager
+        manager = MeetingManager(db)
+        meetings_created = await manager.generate_meetings()
+        return {
+            "success": True,
+            "message": f"Generated {meetings_created} meetings",
+            "meetings_created": meetings_created
+        }
+    except Exception as e:
+        print(f"Error generating meetings: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "meetings_created": 0
+        }
+
+@router.post("/meetings/generate-now")
+async def generate_meetings_now(db: AsyncSession = Depends(get_db)):
+    """Generate meetings for last week, today, and an in-progress meeting."""
+    try:
+        from business.meeting_manager import MeetingManager
+        from database.models import Meeting
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        
+        meeting_manager = MeetingManager(db)
+        now = datetime.utcnow()
+        
+        # Generate meetings for last week (7 days ago to today)
+        last_week_start = now - timedelta(days=7)
+        last_week_start = last_week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+        
+        # Check existing meetings in this range
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.start_time >= last_week_start,
+                Meeting.start_time < tomorrow_start
+            )
+        )
+        existing_meetings = result.scalars().all()
+        
+        # Generate meetings for last week
+        past_meetings = await meeting_manager.generate_meetings_for_date_range(
+            last_week_start, today_start
+        )
+        
+        # Generate meetings for today
+        today_meetings = await meeting_manager.generate_meetings()
+        
+        # Always generate an in-progress meeting if one doesn't exist
+        result = await db.execute(
+            select(Meeting).where(Meeting.status == "in_progress")
+        )
+        in_progress_meetings = result.scalars().all()
+        
+        in_progress_created = 0
+        if len(in_progress_meetings) == 0:
+            in_progress_meeting = await meeting_manager.generate_in_progress_meeting()
+            if in_progress_meeting:
+                in_progress_created = 1
+        
+        return {
+            "success": True,
+            "message": "Generated meetings successfully",
+            "past_meetings": past_meetings,
+            "today_meetings": today_meetings,
+            "in_progress_created": in_progress_created,
+            "total_existing": len(existing_meetings)
+        }
+    except Exception as e:
+        print(f"Error generating meetings: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "past_meetings": 0,
+            "today_meetings": 0,
+            "in_progress_created": 0
+        }
 

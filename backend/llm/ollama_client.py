@@ -566,6 +566,123 @@ Write only the chat message, nothing else."""
             # Fallback chat message
             return f"Hey {recipient_name}, quick question: {decision[:100]}"
     
+    async def generate_employee_thoughts(
+        self,
+        employee_name: str,
+        employee_title: str,
+        employee_role: str,
+        personality_traits: List[str],
+        backstory: Optional[str],
+        recent_activities: List[Dict],
+        recent_decisions: List[Dict],
+        recent_emails: List[Dict],
+        recent_chats: List[Dict],
+        recent_reviews: List[Dict],
+        current_status: str,
+        current_task: Optional[str],
+        business_context: Dict
+    ) -> str:
+        """Generate AI thoughts from the employee's perspective based on their context."""
+        personality_str = ", ".join(personality_traits) if personality_traits else "balanced"
+        
+        # Build recent activities summary
+        activities_summary = ""
+        if recent_activities:
+            activities_summary = "\nRecent activities:\n" + "\n".join([
+                f"- {act.get('description', 'N/A')}" for act in recent_activities[:5]
+            ])
+        
+        # Build recent decisions summary
+        decisions_summary = ""
+        if recent_decisions:
+            decisions_summary = "\nRecent decisions:\n" + "\n".join([
+                f"- {dec.get('description', 'N/A')}" for dec in recent_decisions[:3]
+            ])
+        
+        # Build recent communications summary
+        communications_summary = ""
+        if recent_emails or recent_chats:
+            comms = []
+            if recent_emails:
+                comms.extend([f"Email: {email.get('subject', 'N/A')}" for email in recent_emails[:3]])
+            if recent_chats:
+                comms.extend([f"Chat: {chat.get('message', 'N/A')[:50]}..." for chat in recent_chats[:3]])
+            if comms:
+                communications_summary = "\nRecent communications:\n" + "\n".join(comms)
+        
+        # Build reviews summary
+        reviews_summary = ""
+        if recent_reviews:
+            reviews_summary = "\nRecent performance reviews:\n" + "\n".join([
+                f"- Rating: {rev.get('overall_rating', 'N/A')}/5.0 - {rev.get('comments', 'No comments')[:100]}"
+                for rev in recent_reviews[:2]
+            ])
+        
+        # Build business context
+        business_info = f"""
+Current business situation:
+- Revenue: ${business_context.get('revenue', 0):,.2f}
+- Profit: ${business_context.get('profit', 0):,.2f}
+- Active projects: {business_context.get('active_projects', 0)}
+- Total employees: {business_context.get('employee_count', 0)}
+"""
+        
+        current_work = f"\nCurrent work: {current_task}" if current_task else "\nCurrent work: Available for new tasks"
+        
+        prompt = f"""You are {employee_name}, {employee_title} at a company.
+
+Your personality traits: {personality_str}
+Your role: {employee_role}
+Your backstory: {backstory or "A dedicated team member"}
+Current status: {current_status}
+{current_work}
+{business_info}
+{activities_summary}
+{decisions_summary}
+{communications_summary}
+{reviews_summary}
+
+Based on your personality, role, recent activities, decisions, communications, and the current business situation, what are you thinking about right now? 
+
+Write 2-3 sentences from your first-person perspective that capture:
+1. What's on your mind (work-related thoughts, concerns, ideas, or observations)
+2. How you're feeling about your current situation
+3. What you might be planning or considering
+
+Write as if you're thinking to yourself - be authentic to your personality and role. Use first-person ("I", "my", "me"). Keep it natural and realistic.
+
+Write only the thoughts, nothing else."""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Ensure it's not empty
+            if not response_text:
+                response_text = f"I'm focused on my current work and thinking about how to contribute effectively to the team."
+            
+            return response_text
+        except Exception as e:
+            print(f"Error generating employee thoughts: {e}")
+            # Fallback thoughts
+            return f"I'm thinking about my current work and how I can best contribute to the team's success."
+    
     async def close(self):
         if self._client is not None:
             await self._client.aclose()

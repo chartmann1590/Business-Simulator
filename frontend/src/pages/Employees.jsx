@@ -10,7 +10,7 @@ function Employees() {
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState('all')
   const [titleFilter, setTitleFilter] = useState('all')
-  const [reviewFilter, setReviewFilter] = useState('all') // 'all', 'with_reviews', 'without_reviews'
+  const [reviewFilter, setReviewFilter] = useState('all') // 'all', 'with_reviews', 'without_reviews', 'highest', 'lowest'
 
   useEffect(() => {
     fetchEmployees()
@@ -25,6 +25,11 @@ function Employees() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       const data = await response.json()
+      // Debug: Check for award holders
+      const awardHolders = data.filter(emp => emp.has_performance_award === true)
+      if (awardHolders.length > 0) {
+        console.log('Award holders found:', awardHolders.map(e => ({ name: e.name, award: e.has_performance_award })))
+      }
       setEmployees(data || [])
       setLoading(false)
     } catch (error) {
@@ -35,7 +40,7 @@ function Employees() {
   }
   
   // Filter employees based on selected filters
-  const filteredEmployees = employees.filter(emp => {
+  let filteredEmployees = employees.filter(emp => {
     // Status filter
     let matchesStatus = true
     if (filter === 'active') {
@@ -77,9 +82,27 @@ function Employees() {
     } else if (reviewFilter === 'without_reviews') {
       if (emp.review_count && emp.review_count > 0) return false
     }
+    // Note: 'highest' and 'lowest' don't filter, they just sort
     
     return true
   })
+
+  // Sort by rating if highest or lowest filter is selected
+  if (reviewFilter === 'highest') {
+    // Sort all employees with highest ratings first, employees without ratings last
+    filteredEmployees = [...filteredEmployees].sort((a, b) => {
+      const ratingA = a.latest_rating ?? -1 // Use -1 for null/undefined so they sort last
+      const ratingB = b.latest_rating ?? -1
+      return ratingB - ratingA // Descending (highest first)
+    })
+  } else if (reviewFilter === 'lowest') {
+    // Sort all employees with lowest ratings first, employees without ratings last
+    filteredEmployees = [...filteredEmployees].sort((a, b) => {
+      const ratingA = a.latest_rating ?? 999 // Use 999 for null/undefined so they sort last
+      const ratingB = b.latest_rating ?? 999
+      return ratingA - ratingB // Ascending (lowest first)
+    })
+  }
   
   // Get unique departments, roles, and titles for filter dropdowns
   const departments = [...new Set(employees.map(emp => emp.department).filter(Boolean))].sort()
@@ -243,6 +266,8 @@ function Employees() {
               <option value="all">All Employees</option>
               <option value="with_reviews">With Reviews</option>
               <option value="without_reviews">Without Reviews</option>
+              <option value="highest">Highest Performance</option>
+              <option value="lowest">Lowest Performance</option>
             </select>
           </div>
         </div>
@@ -353,6 +378,14 @@ function Employees() {
               {employee.current_task_id && !employee.fired_at && (
                 <div className="text-sm text-blue-600 mt-2">
                   Has active task
+                </div>
+              )}
+              {employee.has_performance_award === true && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-2xl">🏆</span>
+                  <span className="text-sm font-semibold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">
+                    Performance Award Winner
+                  </span>
                 </div>
               )}
             </div>

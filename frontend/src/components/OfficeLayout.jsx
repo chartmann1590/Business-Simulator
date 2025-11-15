@@ -26,11 +26,16 @@ function OfficeLayout({ rooms, employees, onEmployeeClick, onRoomClick }) {
               emp => (emp.current_room || emp.home_room) === room.id
             )
         
+        const roomOccupancy = roomEmployees.length
+        const roomCapacity = room.capacity || 999
+        const isFull = roomOccupancy >= roomCapacity
+        const occupancyPercentage = roomCapacity > 0 ? (roomOccupancy / roomCapacity) * 100 : 0
+        
         return (
           <div
             key={room.id}
             onClick={() => onRoomClick && onRoomClick(room)}
-            className="relative bg-white rounded-lg shadow-md overflow-hidden border-2 border-gray-200 hover:border-blue-400 transition-colors cursor-pointer"
+            className="relative bg-white rounded-lg shadow-md overflow-hidden border-2 border-gray-200 hover:border-blue-400 transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-xl group"
             style={{ minHeight: '200px' }}
           >
             {/* Room background image */}
@@ -52,12 +57,59 @@ function OfficeLayout({ rooms, employees, onEmployeeClick, onRoomClick }) {
                 {room.name}
               </div>
               
-              {/* Employee count badge */}
-              {roomEmployees.length > 0 && (
-                <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded-full">
-                  {roomEmployees.length}
+              {/* Employee count badge with capacity indicator */}
+              <div className="absolute top-2 right-2 flex items-center space-x-1">
+                {roomEmployees.length > 0 && (
+                  <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                    isFull 
+                      ? 'bg-red-600 text-white' 
+                      : occupancyPercentage >= 80 
+                        ? 'bg-yellow-600 text-white' 
+                        : 'bg-blue-600 text-white'
+                  }`}>
+                    {roomEmployees.length}{roomCapacity < 999 && `/${roomCapacity}`}
+                  </div>
+                )}
+                {roomEmployees.length === 0 && roomCapacity < 999 && (
+                  <div className="bg-gray-400 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                    0/{roomCapacity}
+                  </div>
+                )}
+              </div>
+              
+              {/* Capacity indicator bar */}
+              {roomCapacity < 999 && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+                  <div 
+                    className={`h-full transition-all duration-300 ${
+                      isFull 
+                        ? 'bg-red-500' 
+                        : occupancyPercentage >= 80 
+                          ? 'bg-yellow-500' 
+                          : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(100, occupancyPercentage)}%` }}
+                  />
                 </div>
               )}
+              
+              {/* Hover info overlay */}
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 pointer-events-none" />
+              <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                <div className="bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                  {roomCapacity < 999 ? (
+                    <div>
+                      <div className="font-semibold">{room.name}</div>
+                      <div className="text-gray-300">
+                        {roomOccupancy} / {roomCapacity} ({Math.round(occupancyPercentage)}%)
+                        {isFull && ' • Full'}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="font-semibold">{room.name}</div>
+                  )}
+                </div>
+              </div>
               
               {/* Employees */}
               {roomEmployees.map((employee, index) => (
