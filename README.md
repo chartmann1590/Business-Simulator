@@ -244,10 +244,49 @@ All views update in real-time as the simulation runs via WebSocket.
 
 For comprehensive documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
 
+## Starting a New Game
+
+To start a completely new simulation with a fresh company, use the new game script:
+
+### Windows
+```bash
+new_game.bat
+```
+
+### Linux/Mac
+```bash
+chmod +x new_game.sh
+./new_game.sh
+```
+
+### Manual
+```bash
+cd backend
+python new_game.py
+```
+
+The script will:
+1. **Optionally backup** your current database (saved to `backend/backups/`)
+2. **Wipe all existing data** from the database
+3. **Generate a new company** using LLM:
+   - Creative company name
+   - Product/service name and description
+   - Industry sector
+   - Management team (CEO, CTO, COO, CFO, and managers) with backstories and personality traits
+4. **Seed the database** with the new company data including:
+   - Initial employees
+   - Starting projects related to the product
+   - Initial financial records (seed funding)
+   - Business settings
+
+All company data is generated using the LLM (Ollama), ensuring unique and creative businesses each time!
+
 ## Utility Scripts
 
 The project includes utility scripts for testing and debugging:
 
+- `new_game.bat` / `new_game.sh` - Start a new game/simulation with fresh company data
+- `backend/new_game.py` - New game script (run directly)
 - `backend/test_meetings.py` - Check meeting status and test meeting system
 - `backend/force_meeting_update.py` - Force immediate meeting updates
 - `backend/generate_meetings_now.py` - Generate meetings for testing

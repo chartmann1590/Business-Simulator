@@ -1290,6 +1290,73 @@ chmod +x setup.sh
    ```
 3. Ensure Ollama is running (default: http://localhost:11434)
 
+### Starting a New Game
+
+To start a completely new simulation with a fresh company, use the new game script:
+
+#### Windows
+```bash
+new_game.bat
+```
+
+#### Linux/Mac
+```bash
+chmod +x new_game.sh
+./new_game.sh
+```
+
+#### Manual
+```bash
+cd backend
+python new_game.py
+```
+
+**What the script does:**
+
+1. **Backup Option**: Prompts you to backup your current database before wiping
+   - Backups are saved to `backend/backups/` with timestamps
+   - Includes database file and WAL/SHM files if present
+
+2. **Database Wipe**: Completely clears all data from all tables:
+   - Customer reviews
+   - Notifications
+   - Employee reviews
+   - Meetings
+   - Chat messages
+   - Emails
+   - Activities
+   - Decisions
+   - Tasks
+   - Financials
+   - Business metrics
+   - Business goals
+   - Projects
+   - Employees
+   - Business settings
+
+3. **LLM-Powered Company Generation**: Uses Ollama to generate:
+   - **Company Name**: Creative, modern, and memorable
+   - **Product/Service**: Specific product name and description
+   - **Industry**: Industry sector (SaaS, FinTech, HealthTech, etc.)
+   - **Management Team**: 
+     - CEO with backstory and personality traits
+     - CTO, COO, CFO with individual backstories
+     - Product Manager, Marketing Manager, Engineering Manager
+     - Initial employees
+
+4. **Database Seeding**: Creates initial data:
+   - All employees with generated names, titles, backstories, and personality traits
+   - Initial projects related to the generated product
+   - Financial records (seed funding, initial expenses)
+   - Business settings (company name, product info, industry)
+
+**Features:**
+- All company data is generated using LLM (Ollama) for unique, creative businesses
+- Robust JSON parsing with multiple fallback strategies
+- Validates all required fields are present
+- Clear progress messages during generation
+- Graceful error handling with fallback data if LLM fails
+
 ---
 
 ## Configuration
@@ -1402,6 +1469,8 @@ Business-Simulator/
 │   ├── llm/             # LLM client
 │   ├── main.py          # FastAPI app entry point
 │   ├── requirements.txt # Python dependencies
+│   ├── new_game.py      # New game/simulation setup script
+│   ├── seed.py          # Initial database seeding script
 │   ├── test_meetings.py # Meeting system testing utility
 │   ├── force_meeting_update.py # Force meeting update utility
 │   └── [other utility scripts] # Additional utility scripts
