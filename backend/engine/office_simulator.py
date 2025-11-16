@@ -44,8 +44,8 @@ class OfficeSimulator:
         self.websocket_connections: Set = set()
         self.review_tick_counter = 0  # Counter for periodic reviews
         self.boardroom_discussion_counter = 0  # Counter for boardroom discussions (every 15 ticks = 2 minutes)
-        self.customer_review_counter = 0  # Counter for customer reviews (every 450 ticks = 60 minutes)
-        self.meeting_generation_counter = 0  # Counter for meeting generation (every 900 ticks = 2 hours)
+        self.meeting_generation_counter = 0  # Counter for meeting generation (every 450 ticks = 1 hour)
+        self.last_meeting_check_date = None  # Track the last date we checked for meetings
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -167,37 +167,57 @@ class OfficeSimulator:
                 print(f"❌ Error generating boardroom discussions: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
         
-        # Generate customer reviews every 60 minutes (3600 seconds)
-        # Check every tick (8 seconds), so every 450 ticks = 60 minutes
-        self.customer_review_counter += 1
-        if self.customer_review_counter >= 450:  # 450 * 8 seconds = 3600 seconds = 60 minutes
-            self.customer_review_counter = 0
-            try:
-                async with async_session_maker() as customer_review_db:
-                    from business.customer_review_manager import CustomerReviewManager
-                    customer_review_manager = CustomerReviewManager(customer_review_db)
-                    reviews_created = await customer_review_manager.generate_reviews_for_completed_projects(
-                        hours_since_completion=24.0
-                    )
-                    if reviews_created:
-                        print(f"⭐ Generated {len(reviews_created)} customer review(s) for completed projects")
-            except Exception as e:
-                import traceback
-                print(f"❌ Error generating customer reviews: {e}")
-                print(f"Traceback: {traceback.format_exc()}")
+        # Customer reviews are now handled by a dedicated background task (every 2 hours)
+        # See generate_customer_reviews_periodically() method
         
-        # Generate meetings every 2 hours (7200 seconds)
-        # Check every tick (8 seconds), so every 900 ticks = 2 hours
+        # Check for meeting generation every hour (3600 seconds)
+        # Check every tick (8 seconds), so every 450 ticks = 1 hour
+        # Also check if it's a new day to ensure meetings are scheduled
         self.meeting_generation_counter += 1
-        if self.meeting_generation_counter >= 900:  # 900 * 8 seconds = 7200 seconds = 2 hours
+        now = datetime.utcnow()
+        current_date = now.date()
+        
+        # Check if it's a new day or if we should check (every hour)
+        is_new_day = self.last_meeting_check_date is None or self.last_meeting_check_date != current_date
+        should_check = is_new_day or self.meeting_generation_counter >= 450  # Every hour or new day
+        
+        if should_check:
             self.meeting_generation_counter = 0
+            self.last_meeting_check_date = current_date
+            
             try:
                 async with async_session_maker() as meeting_db:
                     from business.meeting_manager import MeetingManager
+                    from database.models import Meeting
+                    
                     meeting_manager = MeetingManager(meeting_db)
-                    meetings_created = await meeting_manager.generate_meetings()
-                    if meetings_created > 0:
-                        print(f"📅 Generated {meetings_created} meetings for the day")
+                    
+                    # Check if there are meetings scheduled for today
+                    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    tomorrow_start = today_start + timedelta(days=1)
+                    
+                    result = await meeting_db.execute(
+                        select(Meeting).where(
+                            Meeting.start_time >= today_start,
+                            Meeting.start_time < tomorrow_start
+                        )
+                    )
+                    existing_meetings = result.scalars().all()
+                    
+                    # If it's a new day and there are no meetings, or if there are fewer than 3 meetings, generate them
+                    if is_new_day and len(existing_meetings) == 0:
+                        print(f"📅 New day detected ({current_date}), generating meetings for today...")
+                        meetings_created = await meeting_manager.generate_meetings()
+                        if meetings_created > 0:
+                            print(f"📅 Generated {meetings_created} meetings for the new day")
+                    elif len(existing_meetings) < 3:
+                        print(f"📅 Only {len(existing_meetings)} meetings found for today, generating more...")
+                        meetings_created = await meeting_manager.generate_meetings()
+                        if meetings_created > 0:
+                            print(f"📅 Generated {meetings_created} additional meetings for today")
+                    else:
+                        # Meetings already exist for today, no need to generate
+                        pass
             except Exception as e:
                 import traceback
                 print(f"❌ Error generating meetings: {e}")
@@ -1555,10 +1575,118 @@ Return ONLY the termination reason text, nothing else."""
                 return "Terminated due to budget constraints and cost-cutting measures."
             return f"Terminated due to performance issues in the {employee.department or 'department'}."
     
+    async def update_meetings_frequently(self):
+        """Background task to update meeting status and generate live content very frequently (every 2-3 seconds)."""
+        print("🔄 Starting frequent meeting update background task...")
+        while self.running:
+            try:
+                async with async_session_maker() as meeting_db:
+                    from business.meeting_manager import MeetingManager
+                    meeting_manager = MeetingManager(meeting_db)
+                    await meeting_manager.update_meeting_status()
+                await asyncio.sleep(10)  # Update meetings every 10 seconds (slower pace, one message at a time)
+            except Exception as e:
+                print(f"❌ Error in frequent meeting update: {e}")
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(2)  # Wait a bit before retrying
+    
+    async def update_goals_daily(self):
+        """Background task to update business goals daily at midnight (00:00)."""
+        from datetime import datetime, time, timezone, timedelta
+        
+        print("🔄 Starting daily goal update background task...")
+        
+        # Check immediately on startup
+        try:
+            async with async_session_maker() as goal_db:
+                from business.goal_system import GoalSystem
+                goal_system = GoalSystem(goal_db)
+                
+                # Check if goals need to be updated today
+                if await goal_system.should_update_goals_today():
+                    print("📅 Updating business goals on startup...")
+                    await goal_system.generate_daily_goals()
+                else:
+                    print("ℹ️  Business goals are up to date")
+        except Exception as e:
+            print(f"❌ Error in initial goal update: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Main loop: check daily at midnight
+        while self.running:
+            try:
+                # Calculate time until next midnight (tomorrow at 00:00:00)
+                now = datetime.now(timezone.utc)
+                # Get tomorrow's midnight
+                tomorrow_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                seconds_until_midnight = (tomorrow_midnight - now).total_seconds()
+                
+                print(f"⏰ Next goal update scheduled for {tomorrow_midnight.strftime('%Y-%m-%d %H:%M:%S UTC')} (in {seconds_until_midnight/3600:.1f} hours)")
+                
+                # Wait until midnight
+                await asyncio.sleep(seconds_until_midnight)
+                
+                # Update goals at midnight
+                if self.running:
+                    async with async_session_maker() as goal_db:
+                        from business.goal_system import GoalSystem
+                        goal_system = GoalSystem(goal_db)
+                        
+                        # Check if goals need to be updated (should be true at midnight)
+                        if await goal_system.should_update_goals_today():
+                            print("📅 Updating business goals for new day...")
+                            await goal_system.generate_daily_goals()
+                        else:
+                            print("ℹ️  Goals already updated today")
+                            
+            except Exception as e:
+                print(f"❌ Error in daily goal update: {e}")
+                import traceback
+                traceback.print_exc()
+                # If error occurs, wait 1 hour before retrying
+                await asyncio.sleep(3600)
+    
+    async def generate_customer_reviews_periodically(self):
+        """Background task to generate customer reviews every 2 hours."""
+        print("🔄 Starting customer review generation background task (every 2 hours)...")
+        while self.running:
+            try:
+                async with async_session_maker() as customer_review_db:
+                    from business.customer_review_manager import CustomerReviewManager
+                    customer_review_manager = CustomerReviewManager(customer_review_db)
+                    reviews_created = await customer_review_manager.generate_reviews_for_completed_projects(
+                        hours_since_completion=24.0
+                    )
+                    if reviews_created:
+                        print(f"⭐ Generated {len(reviews_created)} customer review(s) for completed projects")
+                    else:
+                        print("ℹ️  No new customer reviews to generate at this time")
+            except Exception as e:
+                print(f"❌ Error generating customer reviews: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 2 hours (7200 seconds) before next generation
+            await asyncio.sleep(7200)
+    
     async def run(self):
         """Run the simulation loop."""
         self.running = True
         print("Office simulation started...")
+        
+        # Start the frequent meeting update task in the background
+        meeting_task = asyncio.create_task(self.update_meetings_frequently())
+        print(f"✅ Created meeting update background task: {meeting_task}")
+        
+        # Start the daily goal update task in the background
+        goal_task = asyncio.create_task(self.update_goals_daily())
+        print(f"✅ Created daily goal update background task: {goal_task}")
+        
+        # Start the customer review generation task in the background (every 2 hours)
+        customer_review_task = asyncio.create_task(self.generate_customer_reviews_periodically())
+        print(f"✅ Created customer review generation background task (every 2 hours): {customer_review_task}")
         
         while self.running:
             try:

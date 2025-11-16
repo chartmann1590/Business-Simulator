@@ -385,6 +385,19 @@ function Employees() {
                   <span className="text-2xl">🏆</span>
                   <span className="text-sm font-semibold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">
                     Performance Award Winner
+                    {employee.performance_award_wins > 0 && (
+                      <span className="ml-1 text-xs">
+                        ({employee.performance_award_wins} time{employee.performance_award_wins !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {employee.performance_award_wins > 0 && !employee.has_performance_award && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xl">🏆</span>
+                  <span className="text-xs text-gray-600">
+                    {employee.performance_award_wins} award win{employee.performance_award_wins !== 1 ? 's' : ''}
                   </span>
                 </div>
               )}

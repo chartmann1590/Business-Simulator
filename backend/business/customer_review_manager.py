@@ -259,7 +259,7 @@ Write only the review text, nothing else. Make it feel like a real customer revi
         )
         return result.scalars().all()
     
-    async def get_all_reviews(self, limit: int = 100) -> List[CustomerReview]:
+    async def get_all_reviews(self, limit: int = 1000) -> List[CustomerReview]:
         """
         Get all customer reviews, ordered by most recent.
         """

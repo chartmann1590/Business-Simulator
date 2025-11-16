@@ -32,7 +32,7 @@ function CustomerReviews() {
   const fetchData = async () => {
     try {
       const [reviewsRes, statsRes, projectsRes] = await Promise.all([
-        fetch('/api/customer-reviews?limit=200'),
+        fetch('/api/customer-reviews?limit=1000'),
         fetch('/api/customer-reviews/stats'),
         fetch('/api/projects')
       ])

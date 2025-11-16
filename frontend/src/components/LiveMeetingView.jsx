@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
 
 function LiveMeetingView({ meeting, onClose, employees = [] }) {
@@ -7,8 +7,11 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
   const [activeSpeaker, setActiveSpeaker] = useState(null)
   const [bubbleTimestamps, setBubbleTimestamps] = useState({}) // Track when each bubble appeared (UI timestamp)
   const [renderTrigger, setRenderTrigger] = useState(0) // Force re-renders for opacity updates
+  const [viewMode, setViewMode] = useState('all') // 'all' or 'speaker' - view all attendees or just the speaker
+  const [isAtBottom, setIsAtBottom] = useState(true) // Track if user is scrolled to bottom
   const seenMessageIdsRef = useRef(new Set()) // Track which messages we've already processed
   const transcriptEndRef = useRef(null)
+  const transcriptContainerRef = useRef(null) // Ref for the transcript scroll container
   const videoGridRef = useRef(null)
 
   useEffect(() => {
@@ -19,12 +22,40 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
     }
   }, [meeting?.id])
 
+  // Check if user is at bottom of transcript
+  const checkIfAtBottom = useCallback(() => {
+    if (transcriptContainerRef.current) {
+      const container = transcriptContainerRef.current
+      const threshold = 100 // Consider "at bottom" if within 100px of bottom
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+      setIsAtBottom(isNearBottom)
+    }
+  }, [])
+
+  // Handle scroll events and check initial position
   useEffect(() => {
-    // Scroll transcript to bottom when new messages arrive
-    if (transcriptEndRef.current) {
+    const container = transcriptContainerRef.current
+    if (!container) return
+
+    // Check initial position after a brief delay to ensure content is rendered
+    const checkInitial = setTimeout(() => {
+      checkIfAtBottom()
+    }, 100)
+
+    container.addEventListener('scroll', checkIfAtBottom)
+
+    return () => {
+      clearTimeout(checkInitial)
+      container.removeEventListener('scroll', checkIfAtBottom)
+    }
+  }, [checkIfAtBottom, liveMessages.length])
+
+  // Scroll transcript to bottom when new messages arrive (only if user is already at bottom)
+  useEffect(() => {
+    if (transcriptEndRef.current && isAtBottom) {
       transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [liveMessages, meetingData.live_transcript])
+  }, [liveMessages, meetingData.live_transcript, isAtBottom])
 
   // Separate effect for managing active speaker and bubble timestamps
   useEffect(() => {
@@ -154,19 +185,27 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
           // Parse transcript to extract messages if live_messages is empty
           const transcriptLines = data.live_transcript.split('\n').filter(line => line.trim())
           const parsedMessages = []
+          const meetingStartTime = data.start_time ? new Date(data.start_time) : new Date()
+          
           transcriptLines.forEach(line => {
             // Match pattern like [16:52:42] Quinn Garcia: message text
-            const match = line.match(/\[(\d{2}:\d{2}:\d{2})\]\s+([^:]+):\s+(.+)/)
+            const match = line.match(/\[(\d{2}):(\d{2}):(\d{2})\]\s+([^:]+):\s+(.+)/)
             if (match) {
-              const [, time, name, message] = match
+              const [, hours, minutes, seconds, name, message] = match
               const attendee = data.attendees?.find(a => a.name === name.trim())
               if (attendee) {
+                // Create a static timestamp based on the meeting start time + the time in the transcript
+                const transcriptTime = new Date(meetingStartTime)
+                transcriptTime.setHours(parseInt(hours, 10))
+                transcriptTime.setMinutes(parseInt(minutes, 10))
+                transcriptTime.setSeconds(parseInt(seconds, 10))
+                
                 parsedMessages.push({
                   sender_id: attendee.id,
                   sender_name: attendee.name,
                   sender_title: attendee.title,
                   message: message.trim(),
-                  timestamp: new Date().toISOString() // Approximate timestamp
+                  timestamp: transcriptTime.toISOString() // Static timestamp based on transcript time
                 })
               }
             }
@@ -217,7 +256,20 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
   }
 
   const attendees = meetingData.attendees || []
-  const gridCols = getGridCols(attendees.length)
+  
+  // Filter attendees based on view mode
+  let displayedAttendees = attendees
+  if (viewMode === 'speaker') {
+    // Show only the active speaker, or all if no one is speaking
+    if (activeSpeaker) {
+      displayedAttendees = attendees.filter(a => a.id === activeSpeaker)
+    } else {
+      // If no one is speaking, show all (fallback)
+      displayedAttendees = attendees
+    }
+  }
+  
+  const gridCols = getGridCols(displayedAttendees.length)
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
@@ -233,14 +285,44 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                 Live
               </span>
               <span>👥 {attendees.length} attendees</span>
+              {viewMode === 'speaker' && activeSpeaker && (
+                <span className="text-blue-400">• Speaker View</span>
+              )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
-          >
-            Leave Meeting
-          </button>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2 bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('all')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:text-white'
+                }`}
+                title="View all attendees"
+              >
+                All
+              </button>
+              <button
+                onClick={() => setViewMode('speaker')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'speaker'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:text-white'
+                }`}
+                title="View only the active speaker"
+              >
+                Speaker
+              </button>
+            </div>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
+            >
+              Leave Meeting
+            </button>
+          </div>
         </div>
       </div>
 
@@ -249,7 +331,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
         {/* Video Grid Area (Main) */}
         <div className="flex-1 bg-black p-4 overflow-hidden relative" ref={videoGridRef}>
           <div className={`grid ${gridCols} gap-4 h-full`}>
-            {attendees.map(attendee => {
+            {displayedAttendees.map(attendee => {
               const latestMessage = getLatestMessageForAttendee(attendee.id)
               const isSpeaking = activeSpeaker === attendee.id
               // Get avatar path using the utility function
@@ -376,7 +458,10 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
           </div>
 
           {/* Transcript Content */}
-          <div className="flex-1 overflow-y-auto p-4 bg-gray-950">
+          <div 
+            ref={transcriptContainerRef}
+            className="flex-1 overflow-y-auto p-4 bg-gray-950"
+          >
             <div className="space-y-2">
               {liveMessages.map((msg, index) => {
                 const attendee = getAttendeeById(msg.sender_id)
@@ -399,41 +484,52 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
               })}
               
               {/* Fallback: Show live_transcript if live_messages is empty but transcript exists */}
-              {liveMessages.length === 0 && meetingData.live_transcript && (
-                <div className="space-y-2">
-                  {meetingData.live_transcript.split('\n').filter(line => {
-                    const trimmed = line.trim()
-                    return trimmed && !trimmed.includes('Meeting started') && trimmed.length > 0
-                  }).map((line, index) => {
-                    // Parse transcript lines like [16:52:42] Quinn Garcia: message text
-                    const match = line.match(/\[(\d{2}:\d{2}:\d{2})\]\s+([^:]+):\s+(.+)/)
-                    if (match) {
-                      const [, time, name, message] = match
-                      const attendee = meetingData.attendees?.find(a => a.name === name.trim())
-                      return (
-                        <div key={index} className="text-sm animate-fade-in">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-blue-400">{name.trim()}</span>
-                            <span className="text-xs text-gray-500">[{time}]</span>
+              {liveMessages.length === 0 && meetingData.live_transcript && (() => {
+                // Calculate meeting start time once for stable timestamps
+                const meetingStartTime = meetingData.start_time ? new Date(meetingData.start_time) : new Date()
+                return (
+                  <div className="space-y-2">
+                    {meetingData.live_transcript.split('\n').filter(line => {
+                      const trimmed = line.trim()
+                      return trimmed && !trimmed.includes('Meeting started') && trimmed.length > 0
+                    }).map((line, index) => {
+                      // Parse transcript lines like [16:52:42] Quinn Garcia: message text
+                      const match = line.match(/\[(\d{2}):(\d{2}):(\d{2})\]\s+([^:]+):\s+(.+)/)
+                      if (match) {
+                        const [, hours, minutes, seconds, name, message] = match
+                        const attendee = meetingData.attendees?.find(a => a.name === name.trim())
+                        // Create static timestamp based on meeting start time + transcript time
+                        const transcriptTime = new Date(meetingStartTime)
+                        transcriptTime.setHours(parseInt(hours, 10))
+                        transcriptTime.setMinutes(parseInt(minutes, 10))
+                        transcriptTime.setSeconds(parseInt(seconds, 10))
+                        const staticTimestamp = transcriptTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        
+                        return (
+                          <div key={index} className="text-sm animate-fade-in">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-blue-400">{name.trim()}</span>
+                              <span className="text-xs text-gray-500">{staticTimestamp}</span>
+                            </div>
+                            <div className="text-gray-200 bg-gray-800 rounded px-3 py-2">
+                              {message.trim()}
+                            </div>
                           </div>
-                          <div className="text-gray-200 bg-gray-800 rounded px-3 py-2">
-                            {message.trim()}
+                        )
+                      }
+                      // If it doesn't match the pattern, just show the line
+                      if (line.trim().length > 0) {
+                        return (
+                          <div key={index} className="text-sm text-gray-300 py-1">
+                            {line}
                           </div>
-                        </div>
-                      )
-                    }
-                    // If it doesn't match the pattern, just show the line
-                    if (line.trim().length > 0) {
-                      return (
-                        <div key={index} className="text-sm text-gray-300 py-1">
-                          {line}
-                        </div>
-                      )
-                    }
-                    return null
-                  })}
-                </div>
-              )}
+                        )
+                      }
+                      return null
+                    })}
+                  </div>
+                )
+              })()}
               
               {liveMessages.length === 0 && !meetingData.live_transcript && (
                 <div className="text-center text-gray-500 py-8 text-sm">

@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 import os
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# Default to llama3.2 or gemma3, preferring llama3.2
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 class OllamaClient:

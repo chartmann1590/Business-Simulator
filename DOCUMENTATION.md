@@ -274,7 +274,10 @@ API endpoints:
 - `/api/meetings`: Get all meetings
 - `/api/meetings/{meeting_id}`: Get specific meeting details
 - `/api/employees/{employee_id}/award-message`: Get performance award message for employee
+- `/api/employees/{employee_id}/thoughts`: Get AI-generated thoughts from employee's perspective
 - `/api/employees/initialize-award` (POST): Initialize performance award system
+- `/api/reviews/debug`: Debug endpoint to see all reviews in the database
+- `/api/reviews/award-diagnostic`: Diagnostic endpoint to check award assignment
 
 **`websocket.py`**: WebSocket handler
 - Manages WebSocket connections
@@ -1109,10 +1112,66 @@ Returns all meetings ordered by start time.
 **GET `/api/meetings/{meeting_id}`**
 Returns detailed information about a specific meeting.
 
+**POST `/api/meetings/generate`**
+Generates new meetings for the current day.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Generated 5 meetings",
+  "meetings_created": 5
+}
+```
+
+**POST `/api/meetings/generate-now`**
+Generates meetings for the last week, today, and creates an in-progress meeting if none exists. Useful for populating meeting data quickly.
+
+**POST `/api/meetings/schedule-in-15min`**
+Schedules a meeting to start in 15 minutes with random attendees.
+
+**POST `/api/meetings/schedule-in-1min`**
+Schedules a meeting to start in 1 minute with random attendees.
+
+**POST `/api/meetings/force-update`**
+Forces immediate update of all in-progress meetings, bypassing background tasks. Useful for testing and debugging.
+
+**POST `/api/meetings/cleanup-missed`**
+Cleans up meetings that should have started but are still in "scheduled" status.
+
+**DELETE `/api/meetings/{meeting_id}`**
+Deletes a meeting by ID.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Meeting 1 deleted successfully"
+}
+```
+
 #### Performance Awards
 
 **GET `/api/employees/{employee_id}/award-message`**
 Returns the performance award message for an employee who currently holds the award.
+
+**GET `/api/employees/{employee_id}/thoughts`**
+Returns AI-generated thoughts from the employee's perspective based on their recent activities and current situation.
+
+**Response:**
+```json
+{
+  "employee_id": 1,
+  "employee_name": "John Doe",
+  "thoughts": "I've been working hard on the new project feature. The team seems to be making good progress, but I'm concerned about the deadline..."
+}
+```
+
+**GET `/api/reviews/debug`**
+Debug endpoint to see all reviews in the database with employee information.
+
+**GET `/api/reviews/award-diagnostic`**
+Diagnostic endpoint to check who should have the performance award versus who actually has it. Useful for troubleshooting award assignment issues.
 
 **Response:**
 ```json
@@ -1342,7 +1401,10 @@ Business-Simulator/
 │   ├── engine/          # Simulation engine
 │   ├── llm/             # LLM client
 │   ├── main.py          # FastAPI app entry point
-│   └── requirements.txt # Python dependencies
+│   ├── requirements.txt # Python dependencies
+│   ├── test_meetings.py # Meeting system testing utility
+│   ├── force_meeting_update.py # Force meeting update utility
+│   └── [other utility scripts] # Additional utility scripts
 ├── frontend/            # React frontend
 │   ├── src/
 │   │   ├── components/ # Reusable components
@@ -1541,6 +1603,40 @@ For issues and questions:
 ---
 
 *Last updated: January 2025*
+
+## Utility Scripts
+
+The project includes several utility scripts for testing and debugging:
+
+### `backend/test_meetings.py`
+Utility script to check meeting status and test the meeting system:
+- Checks in-progress meetings
+- Identifies scheduled meetings that should be active
+- Tests LLM connection
+
+**Usage:**
+```bash
+cd backend
+python test_meetings.py
+```
+
+### `backend/force_meeting_update.py`
+Forces an immediate update of in-progress meetings to test the meeting update system.
+
+**Usage:**
+```bash
+cd backend
+python force_meeting_update.py
+```
+
+### `backend/generate_meetings_now.py`
+Generates meetings immediately for testing purposes.
+
+### `backend/initialize_award.py`
+Initializes the performance award system.
+
+### `backend/check_db.py`
+Database checking and validation utility.
 
 ## Customer Reviews System
 

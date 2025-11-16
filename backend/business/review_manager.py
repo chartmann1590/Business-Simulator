@@ -128,8 +128,13 @@ class ReviewManager:
                 if overdue_count > 0:
                     print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
                 
-                # Update performance award after reviews are committed
+                # ALWAYS update performance award after reviews are committed
+                # This ensures the award is transferred to the employee with the highest current rating
+                print(f"  [AWARD] Updating performance award after {len(reviews_created)} new review(s)...")
                 await self._update_performance_award()
+                # Commit award changes
+                await self.db.commit()
+                print(f"  [AWARD] Award update completed and committed")
             except Exception as e:
                 import traceback
                 print(f"❌ Error committing reviews: {e}")
@@ -653,6 +658,10 @@ Be professional, fair, and constructive. Match your personality traits when writ
     async def _update_performance_award(self):
         """
         Update the performance award to the employee with the highest recent review rating.
+        IMPORTANT: The award is ALWAYS transferred to the employee with the highest current rating
+        when new reviews are released. If a different employee now has the highest rating, 
+        the award is transferred to them and their win count is incremented.
+        
         If multiple employees have the same highest rating, use tiebreaker logic:
         1. Most recent review date (newer review wins)
         2. Employee ID (lower ID wins as final tiebreaker)
@@ -727,15 +736,38 @@ Be professional, fair, and constructive. Match your personality traits when writ
         )
         current_holder = result.scalar_one_or_none()
         
-        # If the winner is already the holder, no change needed
+        # If the winner is already the holder, verify they still have the highest rating
         if current_holder and current_holder.id == winner.id:
-            print(f"  [AWARD] {winner.name} already holds the performance award (rating: {max_rating:.1f}/5.0)")
-            return
+            # Double-check: verify current holder's rating matches the max rating
+            current_holder_rating = None
+            for er in employee_reviews:
+                if er["employee"].id == current_holder.id:
+                    current_holder_rating = er["rating"]
+                    break
+            
+            # If current holder's rating matches max, they should keep it
+            if current_holder_rating is not None and abs(current_holder_rating - max_rating) < 0.01:  # Use small epsilon for float comparison
+                print(f"  [AWARD] {winner.name} already holds the performance award (rating: {max_rating:.1f}/5.0) - no change needed")
+                return
+            else:
+                # Current holder doesn't have max rating - this shouldn't happen, but fix it
+                print(f"  [AWARD] WARNING: {current_holder.name} has award but rating ({current_holder_rating:.1f if current_holder_rating else 'N/A'}) doesn't match max ({max_rating:.1f}). Transferring to {winner.name}.")
+                # Continue with transfer logic below
         
         # Remove award from current holder if different
         if current_holder:
+            # Get current holder's rating for logging
+            current_holder_rating = None
+            for er in employee_reviews:
+                if er["employee"].id == current_holder.id:
+                    current_holder_rating = er["rating"]
+                    break
+            
             current_holder.has_performance_award = False
-            print(f"  [AWARD] Performance award transferred from {current_holder.name} to {winner.name}")
+            if current_holder_rating:
+                print(f"  [AWARD] Performance award transferred from {current_holder.name} (rating: {current_holder_rating:.1f}/5.0) to {winner.name} (rating: {max_rating:.1f}/5.0)")
+            else:
+                print(f"  [AWARD] Performance award transferred from {current_holder.name} to {winner.name} (rating: {max_rating:.1f}/5.0)")
             
             # Create notification for previous holder
             from database.models import Notification
@@ -766,11 +798,19 @@ Be professional, fair, and constructive. Match your personality traits when writ
         
         # Assign award to winner
         winner.has_performance_award = True
-        # Increment award wins count
-        if not hasattr(winner, 'performance_award_wins') or winner.performance_award_wins is None:
-            winner.performance_award_wins = 0
-        winner.performance_award_wins += 1
-        print(f"  [AWARD] {winner.name} now has {winner.performance_award_wins} award win(s)")
+        
+        # Only increment award wins if this is a NEW win (not if they already had it)
+        # Check if winner already had the award before this update
+        winner_already_had_award = current_holder and current_holder.id == winner.id
+        
+        if not winner_already_had_award:
+            # Increment award wins count only for new wins
+            if not hasattr(winner, 'performance_award_wins') or winner.performance_award_wins is None:
+                winner.performance_award_wins = 0
+            winner.performance_award_wins += 1
+            print(f"  [AWARD] {winner.name} now has {winner.performance_award_wins} award win(s)")
+        else:
+            print(f"  [AWARD] {winner.name} retains the award (already had {winner.performance_award_wins or 0} win(s))")
         
         # Create notification for winner
         from database.models import Notification
@@ -814,5 +854,10 @@ Be professional, fair, and constructive. Match your personality traits when writ
                 self.db.add(acknowledgment)
         
         await self.db.flush()
-        print(f"  [AWARD] Performance award system updated - {winner.name} is the new award holder")
+        print(f"  [AWARD] Performance award system updated - {winner.name} is the new award holder (rating: {max_rating:.1f}/5.0)")
+        
+        # Debug: Print all top employees for verification
+        print(f"  [AWARD DEBUG] Top employees with rating {max_rating:.1f}:")
+        for i, emp_rev in enumerate(top_employees[:5]):
+            print(f"    {i+1}. {emp_rev['employee'].name} (ID: {emp_rev['employee'].id}, Rating: {emp_rev['rating']:.1f}, Review Date: {emp_rev['review_date']})")
 

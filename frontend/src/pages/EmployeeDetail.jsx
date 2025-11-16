@@ -178,6 +178,17 @@ function EmployeeDetail() {
                   </svg>
                 </div>
               )}
+              {employee.performance_award_wins > 0 && !employee.has_performance_award && (
+                <div className="mt-3 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2">
+                  <span className="text-2xl">🏆</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-700">Award History</p>
+                    <p className="text-xs text-gray-600">
+                      {employee.performance_award_wins} time{employee.performance_award_wins !== 1 ? 's' : ''} winner
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -333,6 +344,51 @@ function EmployeeDetail() {
           ) : (
             <div className="text-center py-4">
               <p className="text-gray-600">{employee.next_review.reason || "This employee is not eligible for performance reviews."}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Performance Award History */}
+      {(employee.performance_award_wins > 0 || (employee.award_history && employee.award_history.length > 0)) && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="text-2xl">🏆</span>
+            Performance Award History
+            {employee.performance_award_wins > 0 && (
+              <span className="text-sm font-normal text-gray-600 ml-2">
+                ({employee.performance_award_wins} total win{employee.performance_award_wins !== 1 ? 's' : ''})
+              </span>
+            )}
+          </h3>
+          {employee.award_history && employee.award_history.length > 0 ? (
+            <div className="space-y-4">
+              {employee.award_history.map((award, index) => (
+                <div key={award.id} className="border-l-4 border-yellow-400 pl-4 py-3 bg-gradient-to-r from-yellow-50 to-transparent rounded-r-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-gray-900 font-medium mb-1">{award.description}</p>
+                      {award.rating && (
+                        <p className="text-sm text-gray-600">
+                          Rating: <span className="font-semibold text-green-600">{award.rating.toFixed(1)}/5.0</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right ml-4">
+                      <p className="text-xs text-gray-500">
+                        {award.timestamp ? new Date(award.timestamp).toLocaleDateString() : 'N/A'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {award.timestamp ? new Date(award.timestamp).toLocaleTimeString() : ''}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-sm">No award history available yet.</p>
             </div>
           )}
         </div>

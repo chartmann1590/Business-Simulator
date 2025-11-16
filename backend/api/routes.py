@@ -271,6 +271,17 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
     )
     activities = result.scalars().all()
     
+    # Get award history (all times employee won the performance award)
+    result = await db.execute(
+        select(Activity)
+        .where(
+            Activity.employee_id == employee_id,
+            Activity.activity_type == "performance_award_earned"
+        )
+        .order_by(desc(Activity.timestamp))
+    )
+    award_history = result.scalars().all()
+    
     # Get recent decisions
     from database.models import Decision
     result = await db.execute(
@@ -303,6 +314,15 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
         "has_performance_award": bool(emp.has_performance_award) if hasattr(emp, 'has_performance_award') else False,
         "performance_award_wins": int(emp.performance_award_wins) if hasattr(emp, 'performance_award_wins') else 0,
+        "award_history": [
+            {
+                "id": award.id,
+                "description": award.description,
+                "timestamp": award.timestamp.isoformat() if award.timestamp else None,
+                "rating": award.activity_metadata.get("rating") if award.activity_metadata and isinstance(award.activity_metadata, dict) else None
+            }
+            for award in award_history
+        ],
         "activities": [
             {
                 "id": act.id,
@@ -634,10 +654,103 @@ async def create_employee_review(employee_id: int, review_data: CreateReviewRequ
         "created_at": review.created_at.isoformat() if review.created_at else None
     }
 
-@router.post("/reviews/initialize-award")
-async def initialize_performance_award(db: AsyncSession = Depends(get_db)):
-    """Initialize the performance award for existing reviews. Assigns award to employee with highest rating."""
+@router.get("/reviews/award-diagnostic")
+async def get_award_diagnostic(db: AsyncSession = Depends(get_db)):
+    """Diagnostic endpoint to check who should have the award vs who actually has it."""
     from business.review_manager import ReviewManager
+    from sqlalchemy import select, desc, func
+    from datetime import datetime
+    
+    # Get all active employees with their latest reviews
+    result = await db.execute(
+        select(Employee).where(Employee.status == "active")
+    )
+    all_employees = result.scalars().all()
+    
+    employee_reviews = []
+    for employee in all_employees:
+        # Get most recent review
+        review_result = await db.execute(
+            select(EmployeeReview)
+            .where(EmployeeReview.employee_id == employee.id)
+            .order_by(desc(EmployeeReview.review_date), desc(EmployeeReview.created_at))
+            .limit(1)
+        )
+        latest_review = review_result.scalar_one_or_none()
+        
+        if latest_review:
+            review_date = latest_review.review_date if latest_review.review_date else latest_review.created_at
+            employee_reviews.append({
+                "employee_id": employee.id,
+                "employee_name": employee.name,
+                "rating": latest_review.overall_rating,
+                "review_date": review_date.isoformat() if review_date else None,
+                "has_award": bool(employee.has_performance_award),
+                "award_wins": int(employee.performance_award_wins) if employee.performance_award_wins else 0
+            })
+    
+    if not employee_reviews:
+        return {
+            "error": "No reviews found",
+            "current_holder": None,
+            "should_be_holder": None
+        }
+    
+    # Find who should have the award (highest rating, most recent review date)
+    max_rating = max(er["rating"] for er in employee_reviews)
+    top_employees = [er for er in employee_reviews if er["rating"] == max_rating]
+    
+    # Sort by review date (newest first), then by employee ID
+    top_employees.sort(key=lambda x: (
+        -(datetime.fromisoformat(x["review_date"]).timestamp() if x["review_date"] else 0),
+        x["employee_id"]
+    ))
+    
+    should_be_holder = top_employees[0] if top_employees else None
+    
+    # Find current holder
+    result = await db.execute(
+        select(Employee).where(
+            Employee.has_performance_award == True,
+            Employee.status == "active"
+        )
+    )
+    current_holder_emp = result.scalar_one_or_none()
+    current_holder = None
+    if current_holder_emp:
+        current_holder = {
+            "employee_id": current_holder_emp.id,
+            "employee_name": current_holder_emp.name,
+            "award_wins": int(current_holder_emp.performance_award_wins) if current_holder_emp.performance_award_wins else 0
+        }
+    
+    return {
+        "current_holder": current_holder,
+        "should_be_holder": should_be_holder,
+        "all_top_employees": top_employees[:5],  # Top 5 for reference
+        "max_rating": max_rating,
+        "match": current_holder and should_be_holder and current_holder["employee_id"] == should_be_holder["employee_id"]
+    }
+
+@router.post("/reviews/initialize-award")
+async def initialize_performance_award(db: AsyncSession = Depends(get_db), force: bool = False):
+    """Initialize the performance award for existing reviews. Assigns award to employee with highest rating.
+    
+    Args:
+        force: If True, will remove award from current holder and recalculate from scratch.
+    """
+    from business.review_manager import ReviewManager
+    
+    # If force is True, remove award from all employees first
+    if force:
+        result = await db.execute(
+            select(Employee).where(Employee.has_performance_award == True)
+        )
+        current_holders = result.scalars().all()
+        for holder in current_holders:
+            holder.has_performance_award = False
+        await db.commit()
+        print(f"[AWARD] Force update: Removed award from {len(current_holders)} employee(s)")
     
     review_manager = ReviewManager(db)
     await review_manager._update_performance_award()
@@ -1235,7 +1348,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         recent_activities = result.scalars().all()
         
         goals = await goal_system.get_business_goals()
-        goal_progress = await goal_system.evaluate_goals()
+        goals_with_keys = await goal_system.get_business_goals_with_keys()
+        goal_progress_raw = await goal_system.evaluate_goals()
+        
+        # Map goal_progress to match goals order (for frontend compatibility)
+        goal_progress = {}
+        for idx, goal_info in enumerate(goals_with_keys):
+            goal_key = goal_info["key"]
+            goal_progress[goal_key] = goal_progress_raw.get(goal_key, False)
         
         # Get business settings
         result = await db.execute(select(BusinessSettings))
@@ -3247,7 +3367,7 @@ async def mark_all_notifications_read(db: AsyncSession = Depends(get_db)):
     return {"success": True, "message": f"Marked {len(notifications)} notifications as read"}
 
 @router.get("/customer-reviews")
-async def get_customer_reviews(limit: int = 100, project_id: int = None, db: AsyncSession = Depends(get_db)):
+async def get_customer_reviews(limit: int = 1000, project_id: int = None, db: AsyncSession = Depends(get_db)):
     """Get customer reviews, optionally filtered by project."""
     from business.customer_review_manager import CustomerReviewManager
     
@@ -3547,5 +3667,382 @@ async def generate_meetings_now(db: AsyncSession = Depends(get_db)):
             "past_meetings": 0,
             "today_meetings": 0,
             "in_progress_created": 0
+        }
+
+@router.post("/meetings/schedule-in-15min")
+async def schedule_meeting_in_15min(db: AsyncSession = Depends(get_db)):
+    """Schedule a meeting to start in 15 minutes."""
+    try:
+        from business.meeting_manager import MeetingManager
+        from database.models import Meeting, Employee
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        import random
+        import json
+        
+        meeting_manager = MeetingManager(db)
+        now = datetime.utcnow()
+        
+        # Meeting starts in 15 minutes
+        start_time = now + timedelta(minutes=15)
+        # Meeting lasts 30-60 minutes
+        duration = random.randint(30, 60)
+        end_time = start_time + timedelta(minutes=duration)
+        
+        # Get all active employees
+        result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        all_employees = result.scalars().all()
+        
+        if len(all_employees) < 2:
+            return {
+                "success": False,
+                "message": "Not enough employees to create a meeting",
+                "meeting_id": None
+            }
+        
+        # Randomly select an organizer and 1-3 attendees
+        organizer = random.choice(all_employees)
+        available = [e for e in all_employees if e.id != organizer.id]
+        num_attendees = random.randint(1, min(3, len(available)))
+        attendees = random.sample(available, num_attendees)
+        attendees.append(organizer)  # Organizer is also an attendee
+        
+        # Determine meeting type and description
+        meeting_types = ["Team Sync", "Project Review", "Strategy Discussion", "Status Update", "Planning Session"]
+        meeting_type = random.choice(meeting_types)
+        
+        meeting_descriptions = {
+            "Team Sync": "Weekly team synchronization and updates",
+            "Project Review": "Review project progress and milestones",
+            "Strategy Discussion": "Strategic planning and decision-making",
+            "Status Update": "Team status updates and coordination",
+            "Planning Session": "Planning upcoming tasks and priorities"
+        }
+        meeting_description = meeting_descriptions.get(meeting_type, "General discussion")
+        
+        attendee_ids = [e.id for e in attendees]
+        
+        # Generate meeting title
+        title = f"{meeting_type}: {organizer.department or 'General'}"
+        
+        # Get business context for agenda generation
+        from engine.office_simulator import get_business_context
+        business_context = await get_business_context(db)
+        
+        # Generate agenda and outline using LLM
+        agenda, outline = await meeting_manager._generate_meeting_agenda(
+            meeting_type, meeting_description, organizer, attendees, business_context
+        )
+        
+        # Ensure agenda and outline are strings
+        if isinstance(agenda, (list, dict)):
+            agenda = json.dumps(agenda) if isinstance(agenda, dict) else "\n".join(str(item) for item in agenda)
+        if isinstance(outline, (list, dict)):
+            outline = json.dumps(outline) if isinstance(outline, dict) else "\n".join(str(item) for item in outline)
+        
+        # Create meeting
+        meeting = Meeting(
+            title=title,
+            description=meeting_description,
+            organizer_id=organizer.id,
+            attendee_ids=attendee_ids,
+            start_time=start_time,
+            end_time=end_time,
+            status="scheduled",
+            agenda=str(agenda) if agenda else None,
+            outline=str(outline) if outline else None,
+            meeting_metadata={}
+        )
+        
+        db.add(meeting)
+        await db.commit()
+        await db.refresh(meeting)
+        
+        return {
+            "success": True,
+            "message": f"Meeting scheduled for {start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC",
+            "meeting_id": meeting.id,
+            "title": meeting.title,
+            "start_time": meeting.start_time.isoformat(),
+            "end_time": meeting.end_time.isoformat()
+        }
+    except Exception as e:
+        print(f"Error scheduling meeting: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "meeting_id": None
+        }
+
+@router.post("/meetings/schedule-in-1min")
+async def schedule_meeting_in_1min(db: AsyncSession = Depends(get_db)):
+    """Schedule a meeting to start in 1 minute and last 5 minutes."""
+    try:
+        from business.meeting_manager import MeetingManager
+        from database.models import Meeting, Employee
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        import random
+        import json
+        
+        meeting_manager = MeetingManager(db)
+        now = datetime.utcnow()
+        
+        # Meeting starts in 10 seconds (to ensure it starts before the 5-minute window)
+        start_time = now + timedelta(seconds=10)
+        # Meeting lasts 5 minutes
+        end_time = start_time + timedelta(minutes=5)
+        
+        # Get all active employees
+        result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        all_employees = result.scalars().all()
+        
+        if len(all_employees) < 2:
+            return {
+                "success": False,
+                "message": "Not enough employees to create a meeting",
+                "meeting_id": None
+            }
+        
+        # Randomly select an organizer and 1-3 attendees
+        organizer = random.choice(all_employees)
+        available = [e for e in all_employees if e.id != organizer.id]
+        num_attendees = random.randint(1, min(3, len(available)))
+        attendees = random.sample(available, num_attendees)
+        attendees.append(organizer)  # Organizer is also an attendee
+        
+        # Determine meeting type and description
+        meeting_types = ["Team Sync", "Project Review", "Strategy Discussion", "Status Update", "Planning Session"]
+        meeting_type = random.choice(meeting_types)
+        
+        meeting_descriptions = {
+            "Team Sync": "Weekly team synchronization and updates",
+            "Project Review": "Review project progress and milestones",
+            "Strategy Discussion": "Strategic planning and decision-making",
+            "Status Update": "Team status updates and coordination",
+            "Planning Session": "Planning upcoming tasks and priorities"
+        }
+        meeting_description = meeting_descriptions.get(meeting_type, "General discussion")
+        
+        attendee_ids = [e.id for e in attendees]
+        
+        # Generate meeting title
+        title = f"{meeting_type}: {organizer.department or 'General'}"
+        
+        # Get business context for agenda generation
+        from engine.office_simulator import get_business_context
+        business_context = await get_business_context(db)
+        
+        # Generate agenda and outline using LLM
+        agenda, outline = await meeting_manager._generate_meeting_agenda(
+            meeting_type, meeting_description, organizer, attendees, business_context
+        )
+        
+        # Ensure agenda and outline are strings
+        if isinstance(agenda, (list, dict)):
+            agenda = json.dumps(agenda) if isinstance(agenda, dict) else "\n".join(str(item) for item in agenda)
+        if isinstance(outline, (list, dict)):
+            outline = json.dumps(outline) if isinstance(outline, dict) else "\n".join(str(item) for item in outline)
+        
+        # Create meeting
+        meeting = Meeting(
+            title=title,
+            description=meeting_description,
+            organizer_id=organizer.id,
+            attendee_ids=attendee_ids,
+            start_time=start_time,
+            end_time=end_time,
+            status="scheduled",
+            agenda=str(agenda) if agenda else None,
+            outline=str(outline) if outline else None,
+            meeting_metadata={}
+        )
+        
+        db.add(meeting)
+        await db.commit()
+        await db.refresh(meeting)
+        
+        return {
+            "success": True,
+            "message": f"Meeting scheduled for {start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (5 minutes duration)",
+            "meeting_id": meeting.id,
+            "title": meeting.title,
+            "start_time": meeting.start_time.isoformat(),
+            "end_time": meeting.end_time.isoformat()
+        }
+    except Exception as e:
+        print(f"Error scheduling meeting: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "meeting_id": None
+        }
+
+@router.delete("/meetings/{meeting_id}")
+async def delete_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a meeting by ID."""
+    try:
+        from database.models import Meeting
+        from sqlalchemy import select
+        
+        result = await db.execute(
+            select(Meeting).where(Meeting.id == meeting_id)
+        )
+        meeting = result.scalar_one_or_none()
+        
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        await db.delete(meeting)
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Meeting {meeting_id} deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting meeting: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/meetings/cleanup-missed")
+async def cleanup_missed_meetings(db: AsyncSession = Depends(get_db)):
+    """Delete meetings that are scheduled but have passed their end time."""
+    try:
+        from database.models import Meeting
+        from sqlalchemy import select
+        from datetime import datetime
+        
+        now = datetime.utcnow()
+        
+        # Find meetings that are scheduled but have passed their end time
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.status == "scheduled",
+                Meeting.end_time < now
+            )
+        )
+        missed_meetings = result.scalars().all()
+        
+        deleted_count = 0
+        for meeting in missed_meetings:
+            await db.delete(meeting)
+            deleted_count += 1
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} missed meeting(s)",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        print(f"Error cleaning up missed meetings: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "deleted_count": 0
+        }
+
+@router.post("/meetings/force-update")
+async def force_meeting_update(db: AsyncSession = Depends(get_db)):
+    """Force immediate update of all in-progress meetings (bypasses background task)."""
+    try:
+        from business.meeting_manager import MeetingManager
+        from database.models import Meeting
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        
+        meeting_manager = MeetingManager(db)
+        
+        # CRITICAL: Update meeting status FIRST (this transitions scheduled->in_progress)
+        # This must happen before we query for in_progress meetings
+        await meeting_manager.update_meeting_status()
+        await db.commit()  # Ensure status changes are committed
+        
+        # Get meetings after status update
+        result = await db.execute(
+            select(Meeting).where(Meeting.status == 'in_progress')
+        )
+        meetings_before = result.scalars().all()
+        
+        # If no in-progress meetings, create one
+        if len(meetings_before) == 0:
+            print("No in-progress meetings found, generating one...")
+            in_progress_meeting = await meeting_manager.generate_in_progress_meeting()
+            if in_progress_meeting:
+                meetings_before = [in_progress_meeting]
+                print(f"Generated in-progress meeting: {in_progress_meeting.id}")
+        
+        # FORCE generate content for each meeting regardless of last_update
+        for meeting in meetings_before:
+            try:
+                await db.refresh(meeting)
+                print(f"🔄 Force updating meeting {meeting.id}: {meeting.title}")
+                print(f"  Attendees: {len(meeting.attendee_ids or [])}")
+                
+                # Check current metadata
+                current_metadata = meeting.meeting_metadata or {}
+                print(f"  Current metadata keys: {list(current_metadata.keys())}")
+                print(f"  Current last_update: {current_metadata.get('last_content_update', 'NOT SET')}")
+                
+                # Force generate content by calling _generate_live_meeting_content directly
+                await meeting_manager._generate_live_meeting_content(meeting)
+                
+                # Commit to ensure changes are saved
+                await db.commit()
+                
+                # Refresh to get updated state
+                await db.refresh(meeting)
+                metadata = meeting.meeting_metadata or {}
+                live_messages = metadata.get("live_messages", [])
+                last_update = metadata.get("last_content_update", "NOT SET")
+                print(f"  ✅ After generation: {len(live_messages) if isinstance(live_messages, list) else 0} messages")
+                print(f"  ✅ Last update: {last_update}")
+            except Exception as e:
+                print(f"❌ ERROR generating content for meeting {meeting.id}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        meetings = meetings_before
+        
+        updates = []
+        for meeting in meetings:
+            metadata = meeting.meeting_metadata or {}
+            live_messages = metadata.get("live_messages", [])
+            updates.append({
+                "meeting_id": meeting.id,
+                "title": meeting.title,
+                "live_messages_count": len(live_messages) if isinstance(live_messages, list) else 0,
+                "last_update": metadata.get("last_content_update", "Never")
+            })
+        
+        return {
+            "success": True,
+            "message": f"Force updated {len(meetings)} meeting(s)",
+            "meetings_updated": len(meetings),
+            "meetings": updates
+        }
+    except Exception as e:
+        print(f"Error forcing meeting update: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "meetings_updated": 0
         }
 

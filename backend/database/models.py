@@ -124,6 +124,17 @@ class BusinessSettings(Base):
     setting_value = Column(Text, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+class BusinessGoal(Base):
+    __tablename__ = "business_goals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    goal_text = Column(Text, nullable=False)
+    goal_key = Column(String, nullable=True)  # e.g., "revenue_growth", "profitability", etc.
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_updated_date = Column(DateTime(timezone=True), nullable=True)  # Track when goal was last updated (date only, no time)
+
 class Email(Base):
     __tablename__ = "emails"
     

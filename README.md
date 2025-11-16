@@ -244,6 +244,15 @@ All views update in real-time as the simulation runs via WebSocket.
 
 For comprehensive documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
 
+## Utility Scripts
+
+The project includes utility scripts for testing and debugging:
+
+- `backend/test_meetings.py` - Check meeting status and test meeting system
+- `backend/force_meeting_update.py` - Force immediate meeting updates
+- `backend/generate_meetings_now.py` - Generate meetings for testing
+- `backend/initialize_award.py` - Initialize performance award system
+
 ## License
 
 MIT
