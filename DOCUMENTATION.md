@@ -31,6 +31,7 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Real-time Web Interface**: Modern React dashboard with live updates via WebSocket
 - **Office Layout System**: Visual representation of employees moving between rooms across all floors
 - **Communication System**: Email and chat messaging between employees
+- **Product Management**: Product catalog with team members, sales tracking, and customer reviews
 - **Project Management**: Employees create, plan, and execute projects with progress tracking
 - **Task Management**: Detailed task tracking with progress, assignments, and activity history
 - **Financial System**: Comprehensive revenue, expenses, profit tracking with detailed analytics
@@ -400,6 +401,8 @@ frontend/src/
 │   ├── EmployeeDetail.jsx # Employee detail page
 │   ├── Projects.jsx       # Project list
 │   ├── ProjectDetail.jsx  # Project detail page
+│   ├── Products.jsx       # Product catalog
+│   ├── ProductDetail.jsx  # Product detail page
 │   ├── Financials.jsx     # Financial reports
 │   ├── OfficeView.jsx     # Office layout view
 │   └── Communications.jsx # Email and chat view
@@ -454,6 +457,24 @@ Office layout visualization:
 - Click room to see details (employees, capacity, recent activities)
 - Terminated employees section
 - Real-time updates as employees move between rooms
+
+#### `pages/Products.jsx`
+Product catalog:
+- List of all products with status badges
+- Product ratings and review counts
+- Team member counts
+- Sales information
+- Filter by status
+- Click to view details
+
+#### `pages/ProductDetail.jsx`
+Product detail view:
+- Product information (name, description, category, status, price)
+- Team members with roles and responsibilities
+- Sales data (total revenue, budget, related projects)
+- Customer reviews with ratings
+- Recent financial transactions
+- Related projects
 
 #### `pages/Projects.jsx`
 Project management:
@@ -588,6 +609,25 @@ WebSocket hook for real-time updates:
 - `fired_at`: Timestamp (nullable)
 - `created_at`: Timestamp
 
+#### `products`
+- `id`: Primary key
+- `name`: Product name
+- `description`: Product description
+- `category`: Product category (e.g., "Software", "Service", "Hardware")
+- `status`: active, development, discontinued, planned
+- `price`: Base price
+- `launch_date`: Launch date (nullable)
+- `created_at`: Timestamp
+- `updated_at`: Timestamp
+
+#### `product_team_members`
+- `id`: Primary key
+- `product_id`: Foreign key to products
+- `employee_id`: Foreign key to employees
+- `role`: Team member role (e.g., "Product Manager", "Lead Developer")
+- `responsibility`: Responsibility description
+- `added_at`: Timestamp
+
 #### `projects`
 - `id`: Primary key
 - `name`: Project name
@@ -596,6 +636,7 @@ WebSocket hook for real-time updates:
 - `priority`: low, medium, high
 - `budget`: Budget amount
 - `revenue`: Revenue generated
+- `product_id`: Foreign key to products (nullable)
 - `deadline`: Deadline (nullable)
 - `last_activity_at`: Timestamp
 - `created_at`: Timestamp
@@ -663,7 +704,8 @@ WebSocket hook for real-time updates:
 
 #### `customer_reviews`
 - `id`: Primary key
-- `project_id`: Foreign key to projects
+- `project_id`: Foreign key to projects (nullable)
+- `product_id`: Foreign key to products (nullable)
 - `customer_name`: Customer name
 - `customer_title`: Customer job title
 - `company_name`: Customer company name
@@ -1044,6 +1086,64 @@ Generates customer reviews for completed projects. Reviews are generated 24 hour
   "success": true,
   "message": "Generated 12 customer review(s)",
   "reviews_created": 12
+}
+```
+
+**GET `/api/products`**
+Returns list of all products with aggregated data.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Product Alpha",
+    "description": "A revolutionary software solution",
+    "category": "Software",
+    "status": "active",
+    "price": 999.99,
+    "launch_date": "2024-01-01T00:00:00Z",
+    "review_count": 15,
+    "average_rating": 4.5,
+    "total_sales": 50000.0,
+    "team_count": 5
+  }
+]
+```
+
+**GET `/api/products/{product_id}`**
+Returns detailed product information including team members, sales data, and customer reviews.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "Product Alpha",
+  "description": "A revolutionary software solution",
+  "category": "Software",
+  "status": "active",
+  "price": 999.99,
+  "launch_date": "2024-01-01T00:00:00Z",
+  "team_members": [
+    {
+      "id": 1,
+      "employee_id": 1,
+      "employee_name": "John Doe",
+      "employee_title": "Product Manager",
+      "role": "Product Manager",
+      "responsibility": "Overall product strategy"
+    }
+  ],
+  "sales": {
+    "total_revenue": 50000.0,
+    "total_budget": 30000.0,
+    "project_count": 3,
+    "projects": [...]
+  },
+  "customer_reviews": [...],
+  "average_rating": 4.5,
+  "review_count": 15,
+  "recent_transactions": [...]
 }
 ```
 
@@ -1901,6 +2001,62 @@ The boardroom system integrates with:
 Boardroom behavior can be adjusted in:
 - `backend/business/boardroom_manager.py`: Rotation interval, room capacity, discussion topics
 - `backend/engine/office_simulator.py`: Discussion generation frequency (currently every 15 ticks = 2 minutes)
+
+## Products System
+
+The products system manages the company's product catalog, tracking products, their team members, sales performance, and customer feedback.
+
+### Features
+
+- **Product Catalog**: Comprehensive product listing with status, category, and pricing
+- **Team Management**: Assign employees to products with specific roles and responsibilities
+- **Sales Tracking**: Aggregate sales data from related projects
+- **Customer Reviews**: Link customer reviews to products for feedback tracking
+- **Product Status**: Track product lifecycle (active, development, discontinued, planned)
+- **Financial Integration**: View financial transactions related to products through projects
+
+### Database Structure
+
+**Products Table:**
+- Stores product information (name, description, category, status, price)
+- Links to projects through `product_id` foreign key
+- Tracks launch dates and creation timestamps
+
+**Product Team Members Table:**
+- Many-to-many relationship between products and employees
+- Stores role and responsibility for each team member
+- Tracks when team members were added
+
+### How It Works
+
+1. **Product Creation**: Products can be created manually or through migration scripts
+2. **Team Assignment**: Employees are assigned to products with specific roles (Product Manager, Lead Developer, Designer, etc.)
+3. **Project Linking**: Projects can be linked to products via `product_id` field
+4. **Sales Aggregation**: Sales data is calculated from all projects related to a product
+5. **Review Linking**: Customer reviews can be linked to products (in addition to projects)
+6. **Status Management**: Products have lifecycle status (planned → development → active → discontinued)
+
+### Frontend Components
+
+- **Products Page**: Grid view of all products with key metrics
+- **Product Detail Page**: Comprehensive product view with:
+  - Product information and status
+  - Team members with avatars and roles
+  - Sales data and related projects
+  - Customer reviews with ratings
+  - Recent financial transactions
+
+### API Endpoints
+
+- `GET /api/products` - List all products with aggregated data
+- `GET /api/products/{product_id}` - Get detailed product information
+
+### Utility Scripts
+
+- `backend/create_products.py` - Create product entries
+- `backend/create_real_products.py` - Create realistic product data with LLM
+- `backend/link_reviews_to_products.py` - Link existing customer reviews to products
+- `backend/migrate_add_products.py` - Database migration for products table
 
 ## Office Layout Details
 

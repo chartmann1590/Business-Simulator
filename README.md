@@ -13,6 +13,7 @@ A fully autonomous office simulation where AI employees make decisions, work on 
 - **Rich Observability**: 
   - Dashboard with key metrics and business goals
   - Employee details with backstories, activities, and room locations
+  - Product catalog with team members, sales, and customer reviews
   - Project tracking with progress and financial data
   - Task management with detailed task views
   - Comprehensive financial analytics with payroll breakdowns
@@ -174,6 +175,7 @@ The web interface provides several views:
 
 - **Dashboard**: Overview of business metrics, recent activities, and goals
 - **Employees**: Browse all employees, click to see details, backstories, activities, and room locations
+- **Products**: View product catalog with team members, sales data, customer reviews, and ratings
 - **Projects**: View all projects, their progress, tasks, and financial details
 - **Financials**: Comprehensive financial analytics with:
   - Income, expenses, and profit trends
@@ -291,6 +293,10 @@ The project includes utility scripts for testing and debugging:
 - `backend/force_meeting_update.py` - Force immediate meeting updates
 - `backend/generate_meetings_now.py` - Generate meetings for testing
 - `backend/initialize_award.py` - Initialize performance award system
+- `backend/create_products.py` - Create product entries
+- `backend/create_real_products.py` - Create realistic product data
+- `backend/link_reviews_to_products.py` - Link customer reviews to products
+- `backend/migrate_add_products.py` - Database migration for products
 
 ## License
 
