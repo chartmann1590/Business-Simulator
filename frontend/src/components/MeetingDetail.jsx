@@ -263,6 +263,22 @@ function MeetingDetail({ meeting, onClose, employees = [] }) {
             </div>
           )}
 
+          {/* AI Summary */}
+          {meetingData.status === 'completed' && meetingData.meeting_metadata?.ai_summary && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Meeting Summary</h3>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-blue-600 text-lg">🤖</span>
+                  <span className="text-sm font-medium text-blue-700">AI-Generated Summary</span>
+                </div>
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {meetingData.meeting_metadata.ai_summary}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Transcript */}
           {meetingData.status === 'completed' && meetingData.transcript && (
             <div>

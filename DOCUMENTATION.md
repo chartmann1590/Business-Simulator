@@ -42,6 +42,14 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Boardroom Discussions**: Strategic planning and decision-making sessions
 - **Meeting Management**: Meeting scheduling, calendar views, and live meeting transcripts with AI-generated content
 - **Customer Reviews**: AI-generated customer reviews for completed projects with ratings and statistics
+- **Pet Care System**: Office pets that employees can interact with and care for
+- **Birthday Celebrations**: Automatic birthday party system with calendar integration
+- **Coffee Breaks**: Natural break system for employees with automatic scheduling
+- **Gossip System**: AI-generated workplace gossip and social interactions
+- **Newsletter System**: Company newsletter generation with periodic updates
+- **Random Events**: Dynamic office events affecting productivity and morale
+- **Suggestion System**: Employee suggestion box with voting and manager feedback
+- **Weather System**: Office weather tracking affecting office mood
 
 ---
 
@@ -215,6 +223,53 @@ Business logic managers:
 - Uses LLM to create contextual discussions between executives
 - Tracks boardroom state and executive assignments
 - Supports 40+ strategic discussion topics
+
+**`pet_manager.py`**:
+- Manages office pets (cats and dogs)
+- Initializes pets from available avatars
+- Tracks pet care interactions with employees
+- Manages pet care logs and statistics
+- Handles pet happiness, hunger, and energy levels
+
+**`birthday_manager.py`**:
+- Checks for employee birthdays
+- Creates birthday celebrations and parties
+- Generates birthday party meetings for calendar
+- Tracks upcoming birthdays
+- Organizes breakroom parties for birthdays
+
+**`coffee_break_manager.py`**:
+- Determines when employees should take coffee breaks
+- Manages break scheduling (every 2-4 hours)
+- Moves employees to breakrooms during breaks
+- Tracks break history and statistics
+
+**`gossip_manager.py`**:
+- Generates AI-powered workplace gossip
+- Creates realistic conversations between employees
+- Tracks gossip threads and social dynamics
+
+**`newsletter_manager.py`**:
+- Generates company newsletters
+- Creates periodic company updates and announcements
+- Tracks newsletter history
+
+**`random_event_manager.py`**:
+- Generates random office events (5% chance per check)
+- Event types: power outages, fire drills, pizza parties, printer jams, etc.
+- Events affect productivity and morale
+- Tracks event duration and resolution
+
+**`suggestion_manager.py`**:
+- Manages employee suggestions
+- Generates AI-powered suggestions from employees
+- Handles suggestion voting system
+- Processes manager comments on suggestions
+
+**`weather_manager.py`**:
+- Tracks office weather conditions
+- Weather affects office mood and productivity
+- Generates weather updates
 
 #### 5. `database/`
 Database layer:
@@ -517,6 +572,32 @@ Customer reviews dashboard:
 - Filter by rating and project
 - Detailed review cards with customer information and ratings
 
+#### `pages/PetCareGame.jsx`
+Pet care interactive game:
+- View all office pets with avatars
+- Pet stats: happiness, hunger, and energy
+- Interactive pet care actions (feed, play, pet)
+- Pet care logs showing employee interactions
+- Game statistics tracking
+
+#### `pages/PetCareLog.jsx`
+Pet care log viewer:
+- Detailed log of all pet care interactions
+- Employee care statistics
+- Pet-specific care history
+
+#### `pages/BirthdayDetail.jsx`
+Birthday celebration view:
+- Upcoming birthdays
+- Birthday party details
+- Celebration history
+
+#### `pages/NotificationsHistory.jsx`
+Notifications history page:
+- Complete notification history
+- Filtering and search capabilities
+- Notification statistics
+
 #### `components/CalendarView.jsx`
 Meeting calendar view:
 - Day, week, and month views
@@ -605,6 +686,9 @@ WebSocket hook for real-time updates:
 - `activity_state`: idle, working, walking, meeting, break, training, waiting
 - `has_performance_award`: Boolean (whether employee currently holds performance award)
 - `performance_award_wins`: Integer (number of times employee has won the award)
+- `birthday_month`: Birthday month (nullable)
+- `birthday_day`: Birthday day (nullable)
+- `last_coffee_break`: Last coffee break timestamp (nullable)
 - `hired_at`: Timestamp
 - `fired_at`: Timestamp (nullable)
 - `created_at`: Timestamp
@@ -619,6 +703,60 @@ WebSocket hook for real-time updates:
 - `launch_date`: Launch date (nullable)
 - `created_at`: Timestamp
 - `updated_at`: Timestamp
+
+#### `office_pets`
+- `id`: Primary key
+- `name`: Pet name
+- `pet_type`: Type of pet (cat, dog)
+- `avatar_path`: Path to pet avatar image
+- `favorite_employee_id`: Foreign key to employees (favorite employee)
+- `created_at`: Timestamp
+
+#### `pet_care_logs`
+- `id`: Primary key
+- `pet_id`: Foreign key to office_pets
+- `employee_id`: Foreign key to employees
+- `care_type`: Type of care (feed, play, pet)
+- `timestamp`: Timestamp
+
+#### `birthday_celebrations`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees
+- `celebration_date`: Celebration date
+- `age`: Employee age at celebration
+- `party_room`: Room where party was held
+- `created_at`: Timestamp
+
+#### `gossip`
+- `id`: Primary key
+- `originator_id`: Foreign key to employees (gossip originator)
+- `recipient_id`: Foreign key to employees (gossip recipient)
+- `message`: Gossip message text
+- `thread_id`: Thread identifier for grouping related gossip
+- `timestamp`: Timestamp
+
+#### `suggestions`
+- `id`: Primary key
+- `employee_id`: Foreign key to employees (suggestion submitter)
+- `title`: Suggestion title
+- `description`: Suggestion description
+- `status`: pending, approved, rejected, implemented
+- `votes`: Number of votes
+- `manager_comment`: Manager feedback (nullable)
+- `created_at`: Timestamp
+
+#### `random_events`
+- `id`: Primary key
+- `event_type`: Type of event (power_outage, fire_drill, pizza_party, etc.)
+- `title`: Event title
+- `description`: Event description
+- `impact_level`: Impact level (low, medium, high)
+- `productivity_modifier`: Productivity modifier (0.0 to 1.5)
+- `duration_minutes`: Event duration in minutes
+- `affected_employee_ids`: JSON array of affected employee IDs
+- `resolved`: Boolean (whether event is resolved)
+- `created_at`: Timestamp
+- `resolved_at`: Timestamp (nullable)
 
 #### `product_team_members`
 - `id`: Primary key
@@ -1114,6 +1252,50 @@ Returns list of all products with aggregated data.
 **GET `/api/products/{product_id}`**
 Returns detailed product information including team members, sales data, and customer reviews.
 
+#### Pets
+
+**GET `/api/pets`**
+Returns all office pets. Automatically initializes pets if none exist.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Midnight",
+    "pet_type": "cat",
+    "avatar_path": "/avatars/cat_black.png",
+    "favorite_employee_id": 5,
+    "favorite_employee_name": "John Doe"
+  }
+]
+```
+
+**GET `/api/pets/care-log`**
+Returns pet care log showing which employees have cared for pets.
+
+**GET `/api/pets/{pet_id}/care-log`**
+Returns care log for a specific pet.
+
+#### Birthdays
+
+**GET `/api/birthdays/today`**
+Returns employees with birthdays today.
+
+**GET `/api/birthdays/upcoming?days=7`**
+Returns upcoming birthdays within specified days.
+
+**GET `/api/birthdays/parties`**
+Returns scheduled birthday parties with room information.
+
+**POST `/api/birthdays/generate-meetings?days_ahead=90`**
+Generates birthday party meetings for upcoming birthdays (appears on calendar).
+
+#### Gossip
+
+**GET `/api/gossip`**
+Returns recent workplace gossip messages.
+
 **Response:**
 ```json
 {
@@ -1469,7 +1651,14 @@ Create a `.env` file in the `backend` directory:
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
 DATABASE_URL=sqlite+aiosqlite:///./office.db
+TIMEZONE=America/New_York
 ```
+
+**Timezone Configuration:**
+- `TIMEZONE`: The timezone for all timestamps, scheduled tasks, and background jobs (default: `America/New_York`)
+- All timestamps, scheduled tasks, and background jobs run in the configured timezone
+- Use standard timezone names (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`)
+- See [pytz timezone list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid timezone names
 
 ### Database Configuration
 
@@ -2001,6 +2190,180 @@ The boardroom system integrates with:
 Boardroom behavior can be adjusted in:
 - `backend/business/boardroom_manager.py`: Rotation interval, room capacity, discussion topics
 - `backend/engine/office_simulator.py`: Discussion generation frequency (currently every 15 ticks = 2 minutes)
+
+## Pet Care System
+
+The pet care system adds office pets that employees can interact with and care for, creating a more engaging and social office environment.
+
+### Features
+
+- **Office Pets**: 3-5 randomly selected pets (cats and dogs) with unique names and personalities
+- **Pet Care Game**: Interactive game where users can feed, play with, and pet office pets
+- **Pet Stats**: Each pet has happiness (50-100), hunger (0-100), and energy (0-100) stats
+- **Care Logs**: Tracks all employee interactions with pets
+- **Pet Avatars**: Visual representation of pets using avatar images
+
+### How It Works
+
+1. **Pet Initialization**: On first run, 3-5 pets are randomly selected from available pet avatars
+2. **Pet Assignment**: Each pet is assigned a favorite employee
+3. **Care Interactions**: Employees can interact with pets through the pet care game interface
+4. **Stats Management**: Pet stats change based on care actions (feeding reduces hunger, playing increases happiness)
+5. **Care Logging**: All interactions are logged for tracking and statistics
+
+### Frontend Components
+
+- **PetCareGame**: Interactive pet care interface with pet selection and care actions
+- **PetCareLog**: Detailed log of all pet care interactions
+
+### API Endpoints
+
+- `GET /api/pets` - Get all office pets
+- `GET /api/pets/care-log` - Get pet care log
+- `GET /api/pets/{pet_id}/care-log` - Get care log for specific pet
+
+## Birthday System
+
+The birthday system automatically tracks employee birthdays and creates birthday celebrations.
+
+### Features
+
+- **Birthday Tracking**: Each employee has a birthday (month and day)
+- **Automatic Celebrations**: Birthday parties are automatically created on employee birthdays
+- **Calendar Integration**: Birthday parties appear as meetings on the calendar
+- **Breakroom Parties**: Birthday parties are held in breakrooms with multiple attendees
+- **Upcoming Birthdays**: Track upcoming birthdays within specified days
+
+### How It Works
+
+1. **Birthday Assignment**: Employees are assigned random birthdays if not already set
+2. **Daily Check**: System checks for birthdays each day
+3. **Party Creation**: Birthday parties are created in breakrooms with 15 attendees (14 colleagues + birthday person)
+4. **Meeting Generation**: Birthday parties are created as Meeting records for calendar visibility
+5. **Celebration Logging**: Birthday celebrations are tracked in the database
+
+### API Endpoints
+
+- `GET /api/birthdays/today` - Get employees with birthdays today
+- `GET /api/birthdays/upcoming?days=7` - Get upcoming birthdays
+- `GET /api/birthdays/parties` - Get scheduled birthday parties
+- `POST /api/birthdays/generate-meetings?days_ahead=90` - Generate birthday party meetings
+
+## Coffee Break System
+
+The coffee break system manages natural break scheduling for employees.
+
+### Features
+
+- **Automatic Breaks**: Employees automatically take coffee breaks every 2-4 hours
+- **Breakroom Movement**: Employees move to breakrooms during breaks
+- **Break Tracking**: System tracks last coffee break time for each employee
+- **Break Statistics**: Track break frequency and patterns
+
+### How It Works
+
+1. **Break Check**: System checks if employee should take a break based on time since last break
+2. **Break Decision**: Employees take breaks every 2-4 hours (30% chance after 2 hours, guaranteed after 4 hours)
+3. **Room Movement**: Employees move to breakrooms during breaks
+4. **Activity Logging**: Breaks are logged as activities
+
+## Gossip System
+
+The gossip system generates AI-powered workplace gossip between employees, adding social dynamics to the office.
+
+### Features
+
+- **AI-Generated Gossip**: Realistic workplace conversations generated using LLM
+- **Social Dynamics**: Gossip creates relationships and social interactions between employees
+- **Thread Tracking**: Gossip messages are grouped by thread IDs
+
+### How It Works
+
+1. **Gossip Generation**: System generates gossip between random employee pairs
+2. **LLM Content**: Gossip messages are created using LLM with employee context
+3. **Thread Management**: Related gossip messages are grouped by thread IDs
+4. **Social Tracking**: Gossip creates social connections between employees
+
+### API Endpoints
+
+- `GET /api/gossip` - Get recent workplace gossip
+
+## Newsletter System
+
+The newsletter system generates periodic company newsletters with updates and announcements.
+
+### Features
+
+- **Periodic Generation**: Newsletters are generated at regular intervals
+- **Company Updates**: Newsletters include company news, achievements, and announcements
+- **Employee Highlights**: Features employees and their accomplishments
+
+### How It Works
+
+1. **Newsletter Generation**: System generates newsletters periodically
+2. **Content Creation**: Newsletter content is created using LLM with company context
+3. **Distribution**: Newsletters are available through the API
+
+## Random Events System
+
+The random events system generates dynamic office events that affect productivity and morale.
+
+### Features
+
+- **Event Types**: Multiple event types including:
+  - Power outages
+  - Internet downtime
+  - Fire drills
+  - Coffee machine breakdowns
+  - Pizza parties
+  - Printer jams
+  - Surprise client visits
+  - Air conditioning failures
+- **Event Impact**: Events affect productivity (modifier 0.0 to 1.5) and morale
+- **Event Duration**: Events have specific durations (15-180 minutes)
+- **Affected Employees**: Events can affect random subsets of employees
+
+### How It Works
+
+1. **Event Check**: System checks for random events (5% chance per check)
+2. **Event Generation**: Random event type is selected with impact and duration
+3. **Employee Selection**: Random subset of employees is affected
+4. **Event Resolution**: Events are resolved after their duration
+5. **Impact Application**: Productivity modifiers are applied during events
+
+## Suggestion System
+
+The suggestion system allows employees to submit suggestions with voting and manager feedback.
+
+### Features
+
+- **Suggestion Submission**: Employees can submit suggestions
+- **Voting System**: Employees can vote on suggestions
+- **Manager Feedback**: Managers can comment on suggestions
+- **Status Tracking**: Suggestions have statuses (pending, approved, rejected, implemented)
+
+### How It Works
+
+1. **Suggestion Generation**: System generates AI-powered suggestions from employees
+2. **Voting**: Employees can vote on suggestions
+3. **Manager Review**: Managers review and comment on suggestions
+4. **Status Updates**: Suggestions are updated based on manager decisions
+
+## Weather System
+
+The weather system tracks office weather conditions and their impact on office mood.
+
+### Features
+
+- **Weather Tracking**: System tracks current weather conditions
+- **Mood Impact**: Weather affects office mood and productivity
+- **Weather Updates**: Periodic weather updates
+
+### How It Works
+
+1. **Weather Generation**: System generates weather conditions
+2. **Mood Calculation**: Weather affects overall office mood
+3. **Productivity Impact**: Weather conditions can affect employee productivity
 
 ## Products System
 

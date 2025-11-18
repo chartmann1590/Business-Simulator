@@ -430,17 +430,27 @@ Make it realistic. Return ONLY valid JSON."""
             ("Employee", "Software Engineer", "Engineering"),
         ]
         
-        first_names = ["Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage"]
-        last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark"]
+        # Get existing names from already generated employees (managers, executives)
+        existing_names = [emp.get("name") for emp in employees_data if emp.get("name")]
+        
         personality_pools = [
             ["curious", "thorough", "problem-solver"],
             ["creative", "adaptable", "team-player"],
             ["methodical", "reliable", "focused"]
         ]
         
+        # Generate unique names for regular employees using AI
         for role, title, dept in employee_titles:
+            # Generate unique name using AI
+            name = await llm_client.generate_unique_employee_name(
+                existing_names=existing_names,
+                department=dept,
+                role=role
+            )
+            existing_names.append(name)  # Add to existing names to avoid duplicates in next iteration
+            
             employees_data.append({
-                "name": f"{random.choice(first_names)} {random.choice(last_names)}",
+                "name": name,
                 "title": title,
                 "role": "Employee",
                 "hierarchy_level": 3,
@@ -505,7 +515,37 @@ async def seed_new_company(company_data: dict, employees_data: list):
     async with async_session_maker() as db:
         # Create employees
         employees = []
+        hobbies_list = [
+            ["photography", "hiking", "cooking"],
+            ["reading", "yoga", "gardening"],
+            ["gaming", "music", "traveling"],
+            ["sports", "writing", "painting"],
+            ["reading", "chess", "puzzles"]
+        ]
         for emp_data in employees_data:
+            # Assign random birthday if not provided
+            if 'birthday_month' not in emp_data:
+                birthday_month = random.randint(1, 12)
+            else:
+                birthday_month = emp_data['birthday_month']
+            
+            if 'birthday_day' not in emp_data:
+                if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
+                    max_day = 31
+                elif birthday_month in [4, 6, 9, 11]:
+                    max_day = 30
+                else:  # February
+                    max_day = 28
+                birthday_day = random.randint(1, max_day)
+            else:
+                birthday_day = emp_data['birthday_day']
+            
+            # Assign random hobbies if not provided
+            if 'hobbies' not in emp_data:
+                hobbies = random.choice(hobbies_list)
+            else:
+                hobbies = emp_data['hobbies']
+            
             employee = Employee(
                 name=emp_data["name"],
                 title=emp_data["title"],
@@ -517,7 +557,10 @@ async def seed_new_company(company_data: dict, employees_data: list):
                 avatar_path=None,
                 hired_at=datetime.utcnow(),
                 fired_at=None,
-                status="active"
+                status="active",
+                birthday_month=birthday_month,
+                birthday_day=birthday_day,
+                hobbies=hobbies
             )
             db.add(employee)
             employees.append(employee)

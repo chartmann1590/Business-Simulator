@@ -1,7 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import EmployeeAvatar from './EmployeeAvatar'
+import ChatBubble from './ChatBubble'
 
 function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick }) {
+  const [conversations, setConversations] = useState([])
+  const [currentMessageIndices, setCurrentMessageIndices] = useState({})
+  const conversationIntervalRef = useRef(null)
+
   useEffect(() => {
     // Close on Escape key
     const handleEscape = (e) => {
@@ -18,6 +23,91 @@ function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick }) {
       document.body.style.overflow = 'unset'
     }
   }, [isOpen, onClose])
+
+  // Fetch conversations when room opens
+  useEffect(() => {
+    if (!isOpen || !room) {
+      setConversations([])
+      setCurrentMessageIndices({})
+      if (conversationIntervalRef.current) {
+        clearInterval(conversationIntervalRef.current)
+        conversationIntervalRef.current = null
+      }
+      return
+    }
+
+    const roomEmployees = room.employees || []
+    if (roomEmployees.length < 2) {
+      setConversations([])
+      return
+    }
+
+    // Fetch conversations
+    const fetchConversations = async () => {
+      try {
+        const employeeIds = roomEmployees.map(emp => emp.id)
+        const response = await fetch('/api/room/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            room_id: room.id,
+            employee_ids: employeeIds
+          })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setConversations(data.conversations || [])
+          // Initialize message indices
+          const indices = {}
+          data.conversations?.forEach((conv, idx) => {
+            indices[idx] = 0
+          })
+          setCurrentMessageIndices(indices)
+        }
+      } catch (error) {
+        console.error('Error fetching conversations:', error)
+      }
+    }
+
+    fetchConversations()
+
+    // Refresh conversations every 15 seconds
+    conversationIntervalRef.current = setInterval(fetchConversations, 15000)
+
+    return () => {
+      if (conversationIntervalRef.current) {
+        clearInterval(conversationIntervalRef.current)
+        conversationIntervalRef.current = null
+      }
+    }
+  }, [isOpen, room])
+
+  // Cycle through messages in conversations
+  useEffect(() => {
+    if (!isOpen || conversations.length === 0) {
+      return
+    }
+
+    const messageInterval = setInterval(() => {
+      setCurrentMessageIndices(prev => {
+        const newIndices = { ...prev }
+        conversations.forEach((conv, idx) => {
+          const maxMessages = conv.messages?.length || 0
+          if (maxMessages > 0) {
+            const current = prev[idx] || 0
+            // Advance to next message, or reset to 0 if at the end
+            newIndices[idx] = (current + 1) % maxMessages
+          }
+        })
+        return newIndices
+      })
+    }, 4000) // Change message every 4 seconds
+
+    return () => clearInterval(messageInterval)
+  }, [isOpen, conversations])
 
   if (!isOpen || !room) return null
 
@@ -122,6 +212,48 @@ function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick }) {
                 onEmployeeClick={onEmployeeClick}
               />
             ))}
+            
+            {/* Chat bubbles for conversations */}
+            {conversations.map((conversation, convIndex) => {
+              // Find employee positions
+              const emp1Index = roomEmployees.findIndex(e => e.id === conversation.employee1_id)
+              const emp2Index = roomEmployees.findIndex(e => e.id === conversation.employee2_id)
+              
+              if (emp1Index === -1 || emp2Index === -1) return null
+              
+              const emp1Pos = getEmployeePosition(emp1Index, roomEmployees.length)
+              const emp2Pos = getEmployeePosition(emp2Index, roomEmployees.length)
+              
+              // Get current message index for this conversation
+              const currentMsgIndex = currentMessageIndices[convIndex] || 0
+              const messages = conversation.messages || []
+              
+              if (messages.length === 0) return null
+              
+              // Show only the current message for each conversation
+              const currentMessage = messages[currentMsgIndex]
+              if (!currentMessage) return null
+              
+              const isEmp1 = currentMessage.speaker === conversation.employee1_name
+              const employeePos = isEmp1 ? emp1Pos : emp2Pos
+              
+              // Position bubble above the employee, slightly offset
+              const bubblePos = {
+                x: employeePos.x + (isEmp1 ? -8 : 8),
+                y: employeePos.y - 25
+              }
+              
+              return (
+                <ChatBubble
+                  key={`${convIndex}-${currentMsgIndex}`}
+                  message={currentMessage.text}
+                  speaker={currentMessage.speaker}
+                  employeeId={isEmp1 ? conversation.employee1_id : conversation.employee2_id}
+                  position={bubblePos}
+                  isVisible={true}
+                />
+              )
+            })}
             
             {/* Empty state */}
             {roomEmployees.length === 0 && (

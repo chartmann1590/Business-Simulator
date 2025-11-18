@@ -1,6 +1,6 @@
 import EmployeeAvatar from './EmployeeAvatar'
 
-function OfficeLayout({ rooms, employees, onEmployeeClick, onRoomClick }) {
+function OfficeLayout({ rooms, employees, pets = [], onEmployeeClick, onRoomClick }) {
   // Generate random positions for employees within a room
   const getEmployeePosition = (employeeIndex, totalInRoom) => {
     // Distribute employees evenly across the room
@@ -121,8 +121,36 @@ function OfficeLayout({ rooms, employees, onEmployeeClick, onRoomClick }) {
                 />
               ))}
               
+              {/* Pets in this room */}
+              {pets.filter(pet => pet.current_room === room.id && pet.floor === room.floor).map((pet, index) => {
+                const totalInRoom = roomEmployees.length + pets.filter(p => p.current_room === room.id && p.floor === room.floor).length
+                const petIndex = roomEmployees.length + index
+                const position = getEmployeePosition(petIndex, totalInRoom)
+                return (
+                  <div
+                    key={pet.id}
+                    className="absolute z-20"
+                    style={{
+                      left: `${position.x}%`,
+                      top: `${position.y}%`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                    title={`${pet.name} the ${pet.pet_type}`}
+                  >
+                    <img
+                      src={pet.avatar_path}
+                      alt={pet.name}
+                      className="w-10 h-10 rounded-full border-2 border-yellow-400 shadow-lg object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )
+              })}
+              
               {/* Empty state */}
-              {roomEmployees.length === 0 && (
+              {roomEmployees.length === 0 && pets.filter(pet => pet.current_room === room.id && pet.floor === room.floor).length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-gray-400 text-sm">Empty</div>
                 </div>

@@ -4,12 +4,17 @@ import Employees from './pages/Employees'
 import EmployeeDetail from './pages/EmployeeDetail'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
+import Products from './pages/Products'
+import ProductDetail from './pages/ProductDetail'
 import Tasks from './pages/Tasks'
 import TaskDetail from './pages/TaskDetail'
 import Financials from './pages/Financials'
 import Communications from './pages/Communications'
 import OfficeView from './pages/OfficeView'
 import CustomerReviews from './pages/CustomerReviews'
+import NotificationsHistory from './pages/NotificationsHistory'
+import PetCareGame from './pages/PetCareGame'
+import PetCareLog from './pages/PetCareLog'
 import Notifications from './components/Notifications'
 
 function NavLink({ to, children, icon }) {
@@ -49,12 +54,16 @@ function App() {
           <nav className="flex-1 p-4 space-y-1">
             <NavLink to="/" icon="📊">Dashboard</NavLink>
             <NavLink to="/office-view" icon="🏢">Office View</NavLink>
+            <NavLink to="/pet-care" icon="🐾">Pet Care Game</NavLink>
+            <NavLink to="/pet-care-log" icon="📋">Pet Care Log</NavLink>
             <NavLink to="/employees" icon="👥">Employees</NavLink>
+            <NavLink to="/products" icon="🛍️">Products</NavLink>
             <NavLink to="/projects" icon="📁">Projects</NavLink>
             <NavLink to="/tasks" icon="✅">Tasks</NavLink>
             <NavLink to="/communications" icon="💬">Communications</NavLink>
             <NavLink to="/financials" icon="💰">Financials</NavLink>
             <NavLink to="/customer-reviews" icon="⭐">Customer Reviews</NavLink>
+            <NavLink to="/notifications" icon="🔔">Notifications</NavLink>
           </nav>
         </aside>
 
@@ -63,8 +72,12 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/office-view" element={<OfficeView />} />
+            <Route path="/pet-care" element={<PetCareGame />} />
+            <Route path="/pet-care-log" element={<PetCareLog />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/employees/:id" element={<EmployeeDetail />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/tasks" element={<Tasks />} />
@@ -72,6 +85,7 @@ function App() {
             <Route path="/communications" element={<Communications />} />
             <Route path="/financials" element={<Financials />} />
             <Route path="/customer-reviews" element={<CustomerReviews />} />
+            <Route path="/notifications" element={<NotificationsHistory />} />
           </Routes>
         </main>
       </div>

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import MeetingDetail from './MeetingDetail'
 import LiveMeetingView from './LiveMeetingView'
+import BirthdayDetail from './BirthdayDetail'
 
 function CalendarView({ employees = [] }) {
   const [meetings, setMeetings] = useState([])
+  const [birthdays, setBirthdays] = useState([])
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState('day') // 'day', 'week', 'month'
@@ -11,7 +13,11 @@ function CalendarView({ employees = [] }) {
 
   useEffect(() => {
     fetchMeetings()
-    const interval = setInterval(fetchMeetings, 5000) // Refresh every 5 seconds
+    fetchBirthdays()
+    const interval = setInterval(() => {
+      fetchMeetings()
+      fetchBirthdays()
+    }, 5000) // Refresh every 5 seconds
     return () => clearInterval(interval)
   }, [])
 
@@ -22,11 +28,25 @@ function CalendarView({ employees = [] }) {
         const data = await response.json()
         setMeetings(data || [])
       }
-      setLoading(false)
     } catch (error) {
       console.error('Error fetching meetings:', error)
       setMeetings([])
+    } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBirthdays = async () => {
+    try {
+      // Fetch birthdays for the next 365 days to cover a full year
+      const response = await fetch('/api/birthdays/upcoming?days=365')
+      if (response.ok) {
+        const data = await response.json()
+        setBirthdays(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching birthdays:', error)
+      setBirthdays([])
     }
   }
 
@@ -76,13 +96,51 @@ function CalendarView({ employees = [] }) {
     }
   }
 
+  // Convert birthdays to calendar events
+  const getBirthdayEvents = () => {
+    return birthdays.map(birthday => {
+      // Parse the birthday date and extract just the date part (ignore time)
+      const birthdayDate = new Date(birthday.date)
+      // Create a new date with just the date part (year, month, day) at 9 AM local time
+      const eventDate = new Date(birthdayDate.getFullYear(), birthdayDate.getMonth(), birthdayDate.getDate(), 9, 0, 0, 0)
+      const endDate = new Date(eventDate)
+      endDate.setHours(10, 0, 0, 0)
+      
+      return {
+        id: `birthday-${birthday.employee_id}`,
+        title: `🎂 ${birthday.employee_name}'s Birthday`,
+        description: `Birthday celebration for ${birthday.employee_name}`,
+        start_time: eventDate.toISOString(),
+        end_time: endDate.toISOString(),
+        is_birthday: true,
+        employee_name: birthday.employee_name,
+        employee_id: birthday.employee_id,
+        days_until: birthday.days_until,
+        status: 'scheduled'
+      }
+    })
+  }
+
+  // Get all events (meetings + birthdays)
+  // Filter out birthday party meetings to avoid duplicates - we'll use birthday events instead
+  const getAllEvents = () => {
+    const birthdayEvents = getBirthdayEvents()
+    // Filter out meetings that are birthday parties (we show them as birthday events instead)
+    const regularMeetings = meetings.filter(m => {
+      const metadata = m.meeting_metadata || {}
+      return !metadata.is_birthday_party
+    })
+    return [...regularMeetings, ...birthdayEvents]
+  }
+
   const getMeetingsForRange = () => {
     const { start, end } = getDateRange()
+    const allEvents = getAllEvents()
     
-    return meetings.filter(meeting => {
-      if (!meeting.start_time) return false
-      const meetingDate = new Date(meeting.start_time)
-      return meetingDate >= start && meetingDate < end
+    return allEvents.filter(event => {
+      if (!event.start_time) return false
+      const eventDate = new Date(event.start_time)
+      return eventDate >= start && eventDate < end
     }).sort((a, b) => {
       const timeA = new Date(a.start_time).getTime()
       const timeB = new Date(b.start_time).getTime()
@@ -96,11 +154,16 @@ function CalendarView({ employees = [] }) {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    return meetings.filter(meeting => {
-      if (!meeting.start_time) return false
-      const meetingDate = new Date(meeting.start_time)
-      return meetingDate >= dayStart && meetingDate < dayEnd
+    const allEvents = getAllEvents()
+    return allEvents.filter(event => {
+      if (!event.start_time) return false
+      const eventDate = new Date(event.start_time)
+      return eventDate >= dayStart && eventDate < dayEnd
     }).sort((a, b) => {
+      // Prioritize birthdays first
+      if (a.is_birthday && !b.is_birthday) return -1
+      if (!a.is_birthday && b.is_birthday) return 1
+      // Then sort by time
       const timeA = new Date(a.start_time).getTime()
       const timeB = new Date(b.start_time).getTime()
       return timeA - timeB
@@ -123,7 +186,30 @@ function CalendarView({ employees = [] }) {
     setCurrentDate(new Date())
   }
 
-  const getStatusColor = (status) => {
+  const isMeetingInProgress = (meeting) => {
+    if (!meeting.start_time || !meeting.end_time) return false
+    const now = new Date()
+    const startTime = new Date(meeting.start_time)
+    const endTime = new Date(meeting.end_time)
+    // Meeting is in progress if current time is between start and end time
+    // OR if status is explicitly 'in_progress'
+    return (now >= startTime && now <= endTime) || meeting.status === 'in_progress'
+  }
+
+  const getStatusColor = (status, meeting) => {
+    // Special styling for birthdays
+    if (meeting && meeting.is_birthday) {
+      const isToday = meeting.days_until === 0
+      return isToday 
+        ? 'bg-pink-200 text-pink-900 border-pink-300' 
+        : 'bg-pink-100 text-pink-800 border-pink-200'
+    }
+    
+    // If meeting is currently happening based on time, show as in_progress
+    if (meeting && isMeetingInProgress(meeting)) {
+      return 'bg-green-100 text-green-800 border-green-200'
+    }
+    
     switch (status) {
       case 'scheduled':
         return 'bg-blue-100 text-blue-800 border-blue-200'
@@ -139,7 +225,54 @@ function CalendarView({ employees = [] }) {
   }
 
   const handleMeetingClick = (meeting) => {
-    setSelectedMeeting(meeting)
+    // If it's a birthday event, find the corresponding birthday party meeting
+    if (meeting.is_birthday) {
+      const birthdayDate = new Date(meeting.start_time)
+      const birthdayEmployeeId = meeting.employee_id
+      
+      // Find the birthday party meeting for this date and employee
+      const birthdayMeeting = meetings.find(m => {
+        // Check if it's a birthday party meeting
+        const metadata = m.meeting_metadata || {}
+        if (!metadata.is_birthday_party) return false
+        
+        // Check if it matches the birthday employee
+        if (birthdayEmployeeId && metadata.birthday_employee_id === birthdayEmployeeId) {
+          return true
+        }
+        
+        // Also check by date and title
+        const meetingDate = new Date(m.start_time)
+        const sameDate = meetingDate.getFullYear() === birthdayDate.getFullYear() &&
+                         meetingDate.getMonth() === birthdayDate.getMonth() &&
+                         meetingDate.getDate() === birthdayDate.getDate()
+        
+        if (sameDate && m.title && m.title.includes('Birthday Party')) {
+          // Check if the title contains the employee name from the birthday event
+          const employeeName = meeting.employee_name || ''
+          if (employeeName && m.title.includes(employeeName)) {
+            return true
+          }
+        }
+        
+        return false
+      })
+      
+      if (birthdayMeeting) {
+        setSelectedMeeting({ ...birthdayMeeting, is_birthday: true, birthday_data: meeting })
+      } else {
+        // If no meeting found, still show birthday info
+        setSelectedMeeting({ ...meeting, is_birthday: true })
+      }
+      return
+    }
+    
+    // Ensure meeting status is set to 'in_progress' if it's currently happening
+    const meetingToView = { ...meeting }
+    if (isMeetingInProgress(meeting) && meeting.status !== 'in_progress') {
+      meetingToView.status = 'in_progress'
+    }
+    setSelectedMeeting(meetingToView)
   }
 
   const handleCloseDetail = () => {
@@ -147,7 +280,12 @@ function CalendarView({ employees = [] }) {
   }
 
   const handleJoinLiveMeeting = (meeting) => {
-    setSelectedMeeting(meeting)
+    // Ensure meeting status is set to 'in_progress' if it's currently happening
+    const meetingToJoin = { ...meeting }
+    if (isMeetingInProgress(meeting) && meeting.status !== 'in_progress') {
+      meetingToJoin.status = 'in_progress'
+    }
+    setSelectedMeeting(meetingToJoin)
   }
 
   const handleDayClick = (day) => {
@@ -173,34 +311,48 @@ function CalendarView({ employees = [] }) {
             <div
               key={meeting.id}
               onClick={() => handleMeetingClick(meeting)}
-              className="bg-white border-2 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className={`bg-white border-2 rounded-lg p-4 transition-shadow ${
+                meeting.is_birthday ? 'cursor-pointer hover:shadow-md' : 'cursor-pointer hover:shadow-md'
+              }`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">{meeting.title}</h4>
                   <p className="text-sm text-gray-600 mb-2">{meeting.description}</p>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <span>🕐</span>
-                      {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span>👤</span>
-                      {meeting.organizer_name}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span>👥</span>
-                      {meeting.attendee_names?.length || 0} attendees
-                    </span>
-                  </div>
+                  {meeting.is_birthday ? (
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span>🎂</span>
+                        {meeting.days_until === 0 ? 'Today!' : `${meeting.days_until} day${meeting.days_until !== 1 ? 's' : ''} away`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span>🕐</span>
+                        {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>👤</span>
+                        {meeting.organizer_name}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>👥</span>
+                        {meeting.attendee_names?.length || 0} attendees
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="ml-4">
-                  <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(meeting.status)}`}>
-                    {meeting.status === 'in_progress' ? '🔴 Live' : meeting.status}
+                  <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(meeting.status, meeting)}`}>
+                    {meeting.is_birthday 
+                      ? (meeting.days_until === 0 ? '🎉 Today!' : 'Birthday')
+                      : (isMeetingInProgress(meeting) ? '🔴 Live' : meeting.status)
+                    }
                   </span>
                 </div>
               </div>
-              {meeting.status === 'in_progress' && (
+              {isMeetingInProgress(meeting) && !meeting.is_birthday && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -251,10 +403,14 @@ function CalendarView({ employees = [] }) {
                   <div
                     key={meeting.id}
                     onClick={() => handleMeetingClick(meeting)}
-                    className={`text-xs p-2 rounded cursor-pointer hover:shadow-sm transition-shadow ${getStatusColor(meeting.status)}`}
+                    className={`text-xs p-2 rounded transition-shadow ${getStatusColor(meeting.status, meeting)} ${
+                      meeting.is_birthday ? 'cursor-default' : 'cursor-pointer hover:shadow-sm'
+                    }`}
                   >
                     <div className="font-medium truncate">{meeting.title}</div>
-                    <div className="text-xs opacity-75">{formatTime(meeting.start_time)}</div>
+                    {!meeting.is_birthday && (
+                      <div className="text-xs opacity-75">{formatTime(meeting.start_time)}</div>
+                    )}
                   </div>
                 ))}
                 {dayMeetings.length > 3 && (
@@ -336,10 +492,14 @@ function CalendarView({ employees = [] }) {
                       <div
                         key={meeting.id}
                         onClick={() => handleMeetingClick(meeting)}
-                        className={`text-xs p-1 rounded cursor-pointer hover:shadow-sm transition-shadow truncate ${getStatusColor(meeting.status)}`}
+                        className={`text-xs p-1 rounded transition-shadow truncate ${getStatusColor(meeting.status, meeting)} ${
+                          meeting.is_birthday ? 'cursor-default' : 'cursor-pointer hover:shadow-sm'
+                        }`}
                         title={meeting.title}
                       >
-                        <div className="truncate">{formatTime(meeting.start_time)}</div>
+                        <div className="truncate">
+                          {meeting.is_birthday ? '🎂' : formatTime(meeting.start_time)}
+                        </div>
                       </div>
                     ))}
                     {dayMeetings.length > 2 && (
@@ -365,7 +525,14 @@ function CalendarView({ employees = [] }) {
 
   return (
     <div className="h-full flex flex-col">
-      {selectedMeeting && selectedMeeting.status === 'in_progress' ? (
+      {selectedMeeting?.is_birthday ? (
+        <BirthdayDetail 
+          birthday={selectedMeeting.birthday_data || selectedMeeting}
+          meeting={selectedMeeting.birthday_data ? selectedMeeting : null}
+          onClose={handleCloseDetail}
+          employees={employees}
+        />
+      ) : selectedMeeting && isMeetingInProgress(selectedMeeting) ? (
         <LiveMeetingView 
           meeting={selectedMeeting} 
           onClose={handleCloseDetail}

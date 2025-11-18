@@ -9,13 +9,14 @@ from business.meeting_manager import MeetingManager
 from database.models import Meeting
 from sqlalchemy import select
 from datetime import datetime, timedelta
+from config import now as local_now
 
 
 async def generate_meetings_now():
     """Generate meetings for last week, today, and an in-progress meeting."""
     async with async_session_maker() as db:
         meeting_manager = MeetingManager(db)
-        now = datetime.utcnow()
+        now = local_now()
         
         # Generate meetings for last week (7 days ago to today)
         last_week_start = now - timedelta(days=7)

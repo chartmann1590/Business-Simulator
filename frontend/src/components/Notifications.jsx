@@ -36,8 +36,10 @@ function Notifications() {
     try {
       const response = await fetch('/api/notifications?limit=20&unread_only=true')
       const data = await response.json()
+      // Handle both old format (array) and new format (object with notifications array)
+      const notificationsData = Array.isArray(data) ? data : (data.notifications || [])
       // Filter out read notifications to only show unread ones
-      setNotifications(data.filter(n => !n.read))
+      setNotifications(notificationsData.filter(n => !n.read))
     } catch (error) {
       console.error('Error fetching notifications:', error)
     }
@@ -155,14 +157,23 @@ function Notifications() {
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-              {unreadNotifications.length > 0 && (
-                <button
-                  onClick={markAllAsRead}
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/notifications"
+                  onClick={() => setIsOpen(false)}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  Mark all as read
-                </button>
-              )}
+                  View All
+                </Link>
+                {unreadNotifications.length > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Mark all as read
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Notifications List */}

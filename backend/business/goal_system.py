@@ -5,6 +5,7 @@ from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from sqlalchemy import select, func
 from datetime import datetime, timedelta, timezone
+from config import now as local_now
 
 class GoalSystem:
     def __init__(self, db: AsyncSession):
@@ -165,7 +166,7 @@ class GoalSystem:
         employee_count = len(active_employees)
         
         # Get completed projects this quarter
-        quarter_start = datetime.now(timezone.utc) - timedelta(days=90)
+        quarter_start = local_now() - timedelta(days=90)
         result = await self.db.execute(
             select(Project)
             .where(
@@ -262,7 +263,7 @@ class GoalSystem:
             })
         
         # Deactivate old goals first
-        today = datetime.now(timezone.utc).date()
+        today = local_now().date()
         result = await self.db.execute(
             select(BusinessGoal).where(BusinessGoal.is_active == True)
         )
@@ -279,7 +280,7 @@ class GoalSystem:
                 goal_text=goal_data["goal_text"],
                 goal_key=goal_data["goal_key"],
                 is_active=True,
-                last_updated_date=datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                last_updated_date=local_now().replace(hour=0, minute=0, second=0, microsecond=0)
             )
             self.db.add(new_goal)
         
@@ -303,7 +304,7 @@ class GoalSystem:
         profit_margin = (profit / revenue * 100) if revenue > 0 else 0
         
         # Get completed projects this quarter
-        quarter_start = datetime.now(timezone.utc) - timedelta(days=90)
+        quarter_start = local_now() - timedelta(days=90)
         result = await self.db.execute(
             select(Project)
             .where(
@@ -488,7 +489,7 @@ class GoalSystem:
                         else:
                             hired_at_naive = hired_at
                         
-                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        time_since_hire = local_now() - hired_at_naive
                         if time_since_hire <= timedelta(hours=1):
                             is_in_training = True
                     except Exception:
@@ -497,14 +498,48 @@ class GoalSystem:
                 if not is_in_training:
                     idle_employees.append(employee)
         
-        # Assign tasks to idle employees
+        # PRIORITY: Sort tasks by: 1) Project priority (high > medium > low), 2) Revenue, 3) Progress
+        # This ensures we focus on high-priority, high-revenue projects first
+        from sqlalchemy import select
+        from database.models import Project
+        
+        task_priorities = []
+        priority_weights = {"high": 3, "medium": 2, "low": 1}
+        
+        for task in unassigned_list:
+            if task.project_id:
+                result = await self.db.execute(
+                    select(Project).where(Project.id == task.project_id)
+                )
+                project = result.scalar_one_or_none()
+                
+                if project:
+                    project_progress = await self.project_manager.calculate_project_progress(task.project_id)
+                    priority_weight = priority_weights.get(project.priority, 1)
+                    revenue = project.revenue or 0.0
+                    
+                    # Calculate priority score: priority (0-3) * 1000 + revenue + progress
+                    # This ensures high-priority projects always come first, then by revenue, then by progress
+                    priority_score = (priority_weight * 1000) + (revenue / 1000) + project_progress
+                    task_priorities.append((task, priority_score, project.priority, revenue, project_progress))
+                else:
+                    task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+            else:
+                task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+        
+        # Sort by priority score (descending) - high-priority, high-revenue projects get priority
+        task_priorities.sort(key=lambda x: x[1], reverse=True)
+        prioritized_tasks = [task for task, _, _, _, _ in task_priorities]
+        
+        # Assign tasks to idle employees (prioritizing high-priority, high-revenue projects)
         for employee in idle_employees:
-            if unassigned_list:
-                task = random.choice(unassigned_list)
+            if prioritized_tasks:
+                # Take highest priority task (from highest priority, highest revenue project)
+                task = prioritized_tasks[0]
                 task.employee_id = employee.id
                 task.status = "in_progress"
                 employee.current_task_id = task.id
-                unassigned_list.remove(task)
+                prioritized_tasks.remove(task)
                 assigned_count += 1
                 
                 # Update project activity

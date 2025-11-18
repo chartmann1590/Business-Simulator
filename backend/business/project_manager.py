@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Project, Task, Employee
 from sqlalchemy import select
 from datetime import datetime, timedelta
+from config import now as local_now
 import random
 
 class ProjectManager:
@@ -16,7 +17,7 @@ class ProjectManager:
         budget: float = 0.0
     ) -> Project:
         """Create a new project."""
-        now = datetime.utcnow()
+        now = local_now()
         project = Project(
             name=name,
             description=description,
@@ -147,11 +148,31 @@ class ProjectManager:
                 progress = (total_progress / len(tasks)) if tasks else 0.0
                 progress = max(0.0, min(100.0, progress))
             
-            # Mark project as completed if progress is 100%
-            if progress >= 100.0 and project.status != "completed":
+            # Mark project as completed if progress is 100% OR all tasks are completed
+            # Check both conditions to be more reliable
+            result = await self.db.execute(
+                select(Task).where(Task.project_id == project_id)
+            )
+            all_tasks = list(result.scalars().all())
+            
+            # Ensure all completed tasks have progress = 100.0
+            for task in all_tasks:
+                if task.status == "completed" and (task.progress is None or task.progress < 100.0):
+                    task.progress = 100.0
+            
+            # Check if all tasks are completed
+            all_tasks_completed = len(all_tasks) > 0 and all(
+                task.status == "completed" for task in all_tasks
+            )
+            
+            # Mark as completed if progress is 100% OR all tasks are completed
+            # Only complete at 100% progress
+            should_complete = (progress >= 100.0) or (all_tasks_completed and len(all_tasks) > 0)
+            
+            if should_complete and project.status != "completed":
                 project.status = "completed"
                 if not project.completed_at:
-                    project.completed_at = datetime.utcnow()
+                    project.completed_at = local_now()
                     
                     # Create notification for project completion
                     from database.models import Notification
@@ -164,6 +185,7 @@ class ProjectManager:
                         read=False
                     )
                     self.db.add(notification)
+                    print(f"✅ Project '{project.name}' (ID: {project_id}) marked as completed - Progress: {progress:.1f}%, All tasks completed: {all_tasks_completed}")
         except Exception as e:
             print(f"Error ensuring project completion for {project_id}: {e}")
             import traceback
@@ -172,11 +194,13 @@ class ProjectManager:
     async def is_project_stalled(self, project_id: int, days_threshold: int = 7) -> bool:
         """Check if a project is stalled (no activity in X days)."""
         try:
+            from config import utc_to_local
+            
             project = await self.get_project_by_id(project_id)
             if not project:
                 return False
             
-            now = datetime.utcnow()
+            now = local_now()
             
             # Check if project has no tasks at all
             result = await self.db.execute(
@@ -188,10 +212,14 @@ class ProjectManager:
                 # Project with no tasks is considered stalled if created more than threshold days ago
                 if project.created_at:
                     created = project.created_at
-                    if hasattr(created, 'replace'):
-                        created = created.replace(tzinfo=None)
-                    elif hasattr(created, 'tzinfo') and created.tzinfo:
-                        created = created.replace(tzinfo=None)
+                    # Normalize to timezone-aware datetime
+                    if created.tzinfo is None:
+                        # If naive, assume it's UTC and convert to local timezone
+                        from datetime import timezone as tz
+                        created = utc_to_local(created.replace(tzinfo=tz.utc))
+                    else:
+                        # If already timezone-aware, convert to local timezone
+                        created = utc_to_local(created)
                     days_since_creation = (now - created).days
                     return days_since_creation >= days_threshold
                 return True
@@ -199,10 +227,14 @@ class ProjectManager:
             # Check last activity (if column exists)
             if hasattr(project, 'last_activity_at') and project.last_activity_at:
                 last_activity = project.last_activity_at
-                if hasattr(last_activity, 'replace'):
-                    last_activity = last_activity.replace(tzinfo=None)
-                elif hasattr(last_activity, 'tzinfo') and last_activity.tzinfo:
-                    last_activity = last_activity.replace(tzinfo=None)
+                # Normalize to timezone-aware datetime
+                if last_activity.tzinfo is None:
+                    # If naive, assume it's UTC and convert to local timezone
+                    from datetime import timezone as tz
+                    last_activity = utc_to_local(last_activity.replace(tzinfo=tz.utc))
+                else:
+                    # If already timezone-aware, convert to local timezone
+                    last_activity = utc_to_local(last_activity)
                 days_since_activity = (now - last_activity).days
                 return days_since_activity >= days_threshold
             
@@ -211,10 +243,14 @@ class ProjectManager:
                 latest_task = max(tasks, key=lambda t: t.created_at if t.created_at else datetime.min)
                 if latest_task.created_at:
                     task_created = latest_task.created_at
-                    if hasattr(task_created, 'replace'):
-                        task_created = task_created.replace(tzinfo=None)
-                    elif hasattr(task_created, 'tzinfo') and task_created.tzinfo:
-                        task_created = task_created.replace(tzinfo=None)
+                    # Normalize to timezone-aware datetime
+                    if task_created.tzinfo is None:
+                        # If naive, assume it's UTC and convert to local timezone
+                        from datetime import timezone as tz
+                        task_created = utc_to_local(task_created.replace(tzinfo=tz.utc))
+                    else:
+                        # If already timezone-aware, convert to local timezone
+                        task_created = utc_to_local(task_created)
                     days_since_task = (now - task_created).days
                     return days_since_task >= days_threshold
             
@@ -222,19 +258,22 @@ class ProjectManager:
         except Exception as e:
             # If there's an error (e.g., column doesn't exist), return False
             print(f"Error checking if project is stalled: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def update_project_activity(self, project_id: int):
-        """Update the last_activity_at timestamp for a project."""
+        """Update the last_activity_at timestamp for a project and check for completion."""
         project = await self.get_project_by_id(project_id)
         if project:
-            project.last_activity_at = datetime.utcnow()
+            project.last_activity_at = local_now()
             # Check if project should be marked as completed after activity update
             # Only check if project is not already completed or cancelled
             if project.status not in ["completed", "cancelled"]:
+                # Calculate progress and ensure completion - this will mark as completed if ready
                 progress = await self.calculate_project_progress(project_id)
-                # Note: calculate_project_progress already calls ensure_project_completion,
-                # so we don't need to call it again here
+                # Explicitly ensure completion to catch edge cases
+                await self.ensure_project_completion(project_id, progress)
     
     async def check_capacity_for_new_project(self):
         """

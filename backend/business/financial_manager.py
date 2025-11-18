@@ -78,3 +78,5 @@ class FinancialManager:
         return result.scalar() or 0.0
 
 
+
+

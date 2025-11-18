@@ -10,6 +10,7 @@ function EmployeeDetail() {
   const [emails, setEmails] = useState([])
   const [chats, setChats] = useState([])
   const [reviews, setReviews] = useState([])
+  const [meetings, setMeetings] = useState([])
   const [loading, setLoading] = useState(true)
   const [showChatModal, setShowChatModal] = useState(false)
   const [timeUntilReview, setTimeUntilReview] = useState(null)
@@ -56,29 +57,39 @@ function EmployeeDetail() {
 
   const fetchEmployee = async () => {
     try {
-      const [employeeRes, emailsRes, chatsRes, reviewsRes] = await Promise.all([
+      const [employeeRes, emailsRes, chatsRes, reviewsRes, meetingsRes] = await Promise.all([
         fetch(`/api/employees/${id}`),
         fetch(`/api/employees/${id}/emails`),
         fetch(`/api/employees/${id}/chats`),
-        fetch(`/api/employees/${id}/reviews`)
+        fetch(`/api/employees/${id}/reviews`),
+        fetch(`/api/employees/${id}/meetings`)
       ])
       const employeeData = await employeeRes.json()
       const emailsData = await emailsRes.json()
       const chatsData = await chatsRes.json()
       const reviewsData = await reviewsRes.json()
+      const meetingsDataRaw = await meetingsRes.json()
+      // Handle wrapped response (PowerShell/API might wrap arrays)
+      const meetingsData = Array.isArray(meetingsDataRaw) ? meetingsDataRaw : (meetingsDataRaw?.value || meetingsDataRaw || [])
       // Debug: Check award status
       if (employeeData.has_performance_award) {
         console.log('Employee has award:', employeeData.name, employeeData.has_performance_award)
       }
+      // Debug: Check meetings
+      console.log(`Fetched ${meetingsData?.length || 0} meetings for employee ${id}:`, meetingsData)
+      console.log('Meetings data type:', typeof meetingsData, 'Is array:', Array.isArray(meetingsData))
       setEmployee(employeeData)
       setEmails(emailsData)
       setChats(chatsData)
       setReviews(reviewsData || [])
+      setMeetings(meetingsData || [])
+      console.log('Set meetings state to:', meetingsData)
       setLoading(false)
     } catch (error) {
       console.error('Error fetching employee:', error)
       // Set empty array for reviews if there's an error
       setReviews([])
+      setMeetings([])
       setLoading(false)
     }
   }
@@ -103,19 +114,20 @@ function EmployeeDetail() {
   }, [id])
 
   // Fetch thoughts only once when employee profile first loads (when id changes)
+  // Only fetch for non-terminated employees
   useEffect(() => {
     // Reset thoughts when employee ID changes
     setThoughts(null)
     setLoadingThoughts(false)
     
-    // Fetch thoughts only once when the employee ID changes
-    if (id) {
+    // Fetch thoughts only once when the employee ID changes, and only if employee is not terminated
+    if (id && employee && !employee.fired_at && employee.status !== 'fired') {
       fetchThoughts()
     }
     
     // Cleanup: don't refetch when component unmounts or id changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]) // Only depend on id - fetchThoughts is stable due to useCallback
+  }, [id, employee]) // Depend on employee to check termination status
 
   if (loading) {
     return <div className="text-center py-12">Loading employee details...</div>
@@ -151,10 +163,22 @@ function EmployeeDetail() {
                   Hired: {new Date(employee.hired_at).toLocaleDateString()}
                 </p>
               )}
-              {employee.fired_at && (
-                <p className="text-xs text-red-600 mt-1">
-                  Terminated: {new Date(employee.fired_at).toLocaleDateString()}
+              {employee.birthday_month && employee.birthday_day && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Birthday: {new Date(2000, employee.birthday_month - 1, employee.birthday_day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                 </p>
+              )}
+              {(employee.fired_at || employee.status === 'fired') && (
+                <div className="mt-1">
+                  <p className="text-xs text-red-600">
+                    Terminated: {employee.fired_at ? new Date(employee.fired_at).toLocaleDateString() : 'Date not available'}
+                  </p>
+                  {employee.termination_reason && (
+                    <p className="text-xs text-red-700 mt-1 italic font-medium">
+                      Reason: {employee.termination_reason}
+                    </p>
+                  )}
+                </div>
               )}
               {employee.has_performance_award === true && (
                 <div 
@@ -231,41 +255,131 @@ function EmployeeDetail() {
           </div>
         )}
 
-        {/* AI-Generated Thoughts */}
-        <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              What {employee.name} is Thinking
-            </h3>
-            <button
-              onClick={fetchThoughts}
-              disabled={loadingThoughts}
-              className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1"
-              title="Refresh thoughts"
-            >
-              <svg className={`w-4 h-4 ${loadingThoughts ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {loadingThoughts ? 'Generating...' : 'Refresh'}
-            </button>
-          </div>
-          {loadingThoughts ? (
-            <div className="flex items-center gap-2 text-gray-600">
-              <svg className="animate-spin h-5 w-5 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Generating thoughts...</span>
+        {/* Calendar/Meetings Section - Always visible */}
+        <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6" data-testid="calendar-section">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Calendar & Meetings ({meetings && Array.isArray(meetings) ? meetings.length : 0})
+          </h3>
+          {meetings && Array.isArray(meetings) && meetings.length > 0 ? (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {meetings.map((meeting) => {
+                const startTime = meeting.start_time ? new Date(meeting.start_time) : null
+                const endTime = meeting.end_time ? new Date(meeting.end_time) : null
+                const isPast = startTime && startTime < new Date()
+                const isUpcoming = startTime && startTime >= new Date()
+                const isInProgress = meeting.status === 'in_progress'
+                
+                const getStatusColor = () => {
+                  if (meeting.status === 'completed') return 'bg-gray-100 text-gray-700 border-gray-300'
+                  if (meeting.status === 'cancelled') return 'bg-red-50 text-red-700 border-red-300'
+                  if (isInProgress) return 'bg-blue-100 text-blue-700 border-blue-300'
+                  if (isUpcoming) return 'bg-green-50 text-green-700 border-green-300'
+                  return 'bg-gray-50 text-gray-700 border-gray-300'
+                }
+                
+                return (
+                  <div key={meeting.id} className={`border-l-4 rounded p-4 ${getStatusColor()}`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-1">{meeting.title}</h4>
+                        {meeting.description && (
+                          <p className="text-sm text-gray-600 mb-2">{meeting.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                          {startTime && (
+                            <div className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span>
+                                {startTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                {' '}
+                                {startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                {endTime && ` - ${endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+                              </span>
+                            </div>
+                          )}
+                          {meeting.organizer_name && (
+                            <div className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              <span>Organizer: {meeting.organizer_name}</span>
+                            </div>
+                          )}
+                        </div>
+                        {meeting.attendee_names && meeting.attendee_names.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            <span className="font-medium">Attendees:</span> {meeting.attendee_names.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        meeting.status === 'completed' ? 'bg-gray-200 text-gray-800' :
+                        meeting.status === 'cancelled' ? 'bg-red-200 text-red-800' :
+                        meeting.status === 'in_progress' ? 'bg-blue-200 text-blue-800' :
+                        'bg-green-200 text-green-800'
+                      }`}>
+                        {meeting.status === 'in_progress' ? 'In Progress' :
+                         meeting.status === 'completed' ? 'Completed' :
+                         meeting.status === 'cancelled' ? 'Cancelled' :
+                         'Scheduled'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ) : thoughts ? (
-            <p className="text-gray-700 leading-relaxed italic">"{thoughts}"</p>
           ) : (
-            <p className="text-gray-500">Click refresh to generate thoughts.</p>
+            <div className="text-center py-8 text-gray-500">
+              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">No meetings scheduled</p>
+            </div>
           )}
         </div>
+
+        {/* AI-Generated Thoughts - Only show for non-terminated employees */}
+        {!employee.fired_at && employee.status !== 'fired' && (
+          <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                What {employee.name} is Thinking
+              </h3>
+              <button
+                onClick={fetchThoughts}
+                disabled={loadingThoughts}
+                className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1"
+                title="Refresh thoughts"
+              >
+                <svg className={`w-4 h-4 ${loadingThoughts ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {loadingThoughts ? 'Generating...' : 'Refresh'}
+              </button>
+            </div>
+            {loadingThoughts ? (
+              <div className="flex items-center gap-2 text-gray-600">
+                <svg className="animate-spin h-5 w-5 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Generating thoughts...</span>
+              </div>
+            ) : thoughts ? (
+              <p className="text-gray-700 leading-relaxed italic">"{thoughts}"</p>
+            ) : (
+              <p className="text-gray-500">Click refresh to generate thoughts.</p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
@@ -278,6 +392,37 @@ function EmployeeDetail() {
           </div>
         </div>
       </div>
+
+      {/* Termination Notice - Prominent section for terminated employees */}
+      {(employee.fired_at || employee.status === 'fired') && (
+        <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-6 mb-6 shadow">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-red-900 mb-2">Employee Terminated</h3>
+              <div className="space-y-2">
+                {employee.fired_at && (
+                  <p className="text-sm text-red-800">
+                    <span className="font-medium">Termination Date:</span> {new Date(employee.fired_at).toLocaleDateString()} at {new Date(employee.fired_at).toLocaleTimeString()}
+                  </p>
+                )}
+                {employee.termination_reason ? (
+                  <div>
+                    <p className="text-sm font-medium text-red-800 mb-1">Termination Reason:</p>
+                    <p className="text-sm text-red-700 leading-relaxed">{employee.termination_reason}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-red-700 italic">Termination reason not available.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Next Review Countdown */}
       {employee.next_review && (

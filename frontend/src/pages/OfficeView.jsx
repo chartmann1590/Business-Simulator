@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import OfficeLayout from '../components/OfficeLayout'
 import RoomDetailModal from '../components/RoomDetailModal'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 // Animated number component
 function AnimatedNumber({ value, duration = 500 }) {
@@ -82,11 +82,97 @@ function OfficeView() {
   const [selectedRoom, setSelectedRoom] = useState(null)
   const [selectedFloor, setSelectedFloor] = useState(1)  // Default to floor 1
   const [soundEnabled, setSoundEnabled] = useState(false) // Muted by default
+  const [weather, setWeather] = useState(null)
+  const [pets, setPets] = useState([])
+  const [birthdayParties, setBirthdayParties] = useState([])
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState([])
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const audioContextRef = useRef(null)
   
   // Get WebSocket messages for real-time updates
   const wsMessages = useWebSocket()
+  
+  // Handle URL parameters for employee, pet, and floor navigation
+  useEffect(() => {
+    const employeeId = searchParams.get('employee')
+    const petId = searchParams.get('pet')
+    const floorParam = searchParams.get('floor')
+    
+    if (floorParam) {
+      const floorNum = parseInt(floorParam, 10)
+      if (!isNaN(floorNum) && floorNum > 0) {
+        setSelectedFloor(floorNum)
+      }
+    }
+    
+    // If pet ID is provided, try to find their room and select it
+    if (petId && pets.length > 0) {
+      const petIdNum = parseInt(petId, 10)
+      if (!isNaN(petIdNum)) {
+        const foundPet = pets.find(p => p.id === petIdNum)
+        if (foundPet && foundPet.current_room) {
+          // Set the floor to the pet's floor
+          if (foundPet.floor) {
+            setSelectedFloor(foundPet.floor)
+          }
+          
+          // Find the room where the pet is located
+          // Pet's current_room might have floor suffix (e.g., "breakroom_floor2") or just be the base name
+          if (officeData && officeData.rooms) {
+            // Try exact match first
+            let petRoom = officeData.rooms.find(room => 
+              room.id === foundPet.current_room && 
+              room.floor === foundPet.floor
+            )
+            
+            // If no exact match, try matching base room name (remove floor suffix)
+            if (!petRoom) {
+              const baseRoomName = foundPet.current_room.replace(/_floor\d+$/, '')
+              petRoom = officeData.rooms.find(room => 
+                room.id === baseRoomName && 
+                room.floor === foundPet.floor
+              )
+            }
+            
+            if (petRoom) {
+              setSelectedRoom(petRoom)
+              // Clear the URL parameter after a short delay to allow the view to update
+              setTimeout(() => {
+                setSearchParams({}, { replace: true })
+              }, 1000)
+            }
+          }
+        }
+      }
+    }
+    
+    // If employee ID is provided, try to find their room and select it
+    if (employeeId && officeData) {
+      const employeeIdNum = parseInt(employeeId, 10)
+      if (!isNaN(employeeIdNum)) {
+        // Find the employee's room
+        for (const room of officeData.rooms || []) {
+          if (room.employees && Array.isArray(room.employees)) {
+            const foundEmployee = room.employees.find(emp => emp.id === employeeIdNum)
+            if (foundEmployee) {
+              // Set the floor if not already set
+              if (room.floor && !floorParam) {
+                setSelectedFloor(room.floor)
+              }
+              // Select the room to highlight the employee
+              setSelectedRoom(room)
+              // Clear the URL parameter after a short delay to allow the view to update
+              setTimeout(() => {
+                setSearchParams({}, { replace: true })
+              }, 1000)
+              break
+            }
+          }
+        }
+      }
+    }
+  }, [searchParams, officeData, pets, setSearchParams])
   
   // Simple sound effect generator - defined early so it can be used in useEffects
   const playSound = useCallback((type) => {
@@ -154,12 +240,49 @@ function OfficeView() {
       setLoading(false)
     }
   }, [])
+
+  const fetchWeatherAndPets = useCallback(async () => {
+    try {
+      const [weatherRes, petsRes, partiesRes, birthdaysRes] = await Promise.all([
+        fetch('/api/weather'),
+        fetch('/api/pets'),
+        fetch('/api/birthdays/parties'),
+        fetch('/api/birthdays/upcoming?days=90')
+      ])
+      
+      if (weatherRes.ok) {
+        const weatherData = await weatherRes.json()
+        setWeather(weatherData)
+      }
+      
+      if (petsRes.ok) {
+        const petsData = await petsRes.json()
+        setPets(petsData)
+      }
+      
+      if (partiesRes.ok) {
+        const partiesData = await partiesRes.json()
+        setBirthdayParties(partiesData)
+      }
+      
+      if (birthdaysRes.ok) {
+        const birthdaysData = await birthdaysRes.json()
+        setUpcomingBirthdays(birthdaysData)
+      }
+    } catch (error) {
+      console.error('Error fetching weather/pets/parties/birthdays:', error)
+    }
+  }, [])
   
   useEffect(() => {
     fetchOfficeLayout()
-    const interval = setInterval(fetchOfficeLayout, 5000) // Refresh every 5 seconds
+    fetchWeatherAndPets()
+    const interval = setInterval(() => {
+      fetchOfficeLayout()
+      fetchWeatherAndPets()
+    }, 5000) // Refresh every 5 seconds
     return () => clearInterval(interval)
-  }, [fetchOfficeLayout])
+  }, [fetchOfficeLayout, fetchWeatherAndPets])
   
   // Initialize audio context for sound effects
   useEffect(() => {
@@ -282,9 +405,6 @@ function OfficeView() {
     )
   }
   
-  const terminatedEmployees = officeData?.terminated_employees || []
-  const hasTerminated = terminatedEmployees.length > 0
-
   // Get rooms for selected floor
   const roomsForFloor = officeData?.rooms_by_floor?.[selectedFloor] || officeData?.rooms?.filter(r => r.floor === selectedFloor) || []
   const availableFloors = officeData?.floors || [1]
@@ -298,14 +418,29 @@ function OfficeView() {
             <p className="text-gray-600">
               <AnimatedNumber value={officeData?.total_employees || 0} /> active employees across{' '}
               <AnimatedNumber value={officeData?.rooms?.length || 0} /> rooms
-              {hasTerminated && (
-                <>
-                  {' • '}
-                  <AnimatedNumber value={officeData?.total_terminated || 0} /> terminated
-                </>
-              )}
             </p>
           </div>
+          
+          {/* Weather Display */}
+          {weather && (
+            <div className="mb-4 flex items-center space-x-3 bg-white rounded-lg shadow-sm p-3 border border-gray-200 inline-block">
+              <div className="text-3xl">
+                {weather.condition === 'sunny' && '☀️'}
+                {weather.condition === 'cloudy' && '☁️'}
+                {weather.condition === 'rainy' && '🌧️'}
+                {weather.condition === 'stormy' && '⛈️'}
+                {weather.condition === 'snowy' && '❄️'}
+              </div>
+              <div>
+                <p className="text-lg font-semibold">{Math.round(weather.temperature)}°F</p>
+                <p className="text-xs text-gray-600">{weather.description}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center justify-between mb-4">
+          <div></div>
           
           {/* Controls */}
           <div className="flex items-center space-x-4">
@@ -362,9 +497,161 @@ function OfficeView() {
       <OfficeLayout
         rooms={roomsForFloor}
         employees={[]}
+        pets={pets.filter(pet => pet.floor === selectedFloor)}
         onEmployeeClick={handleEmployeeClick}
         onRoomClick={handleRoomClick}
       />
+      
+      {/* Birthday Parties Section */}
+      {birthdayParties.length > 0 && (
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">🎉 Birthday Parties</h3>
+            <p className="text-sm text-gray-500">
+              Scheduled birthday celebrations
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {birthdayParties.map((party) => {
+              const partyDate = new Date(party.party_time || party.celebration_date)
+              const isToday = partyDate.toDateString() === new Date().toDateString()
+              const isHappening = isToday && partyDate <= new Date()
+              
+              return (
+                <div
+                  key={party.id}
+                  className={`bg-white rounded-lg p-4 border-2 transition-colors ${
+                    isHappening
+                      ? 'border-pink-400 bg-pink-50'
+                      : 'border-gray-200 hover:border-pink-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-semibold text-lg">{party.employee_name}</p>
+                      <p className="text-sm text-gray-600">Turning {party.age}!</p>
+                    </div>
+                    {isHappening && (
+                      <span className="text-2xl animate-bounce">🎉</span>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <p className="text-gray-700">
+                      <span className="font-medium">When:</span>{' '}
+                      {isToday ? 'Today' : partyDate.toLocaleDateString()} at {partyDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-medium">Where:</span>{' '}
+                      {party.room_name} on Floor {party.party_floor}
+                    </p>
+                    <p className="text-gray-600">
+                      <span className="font-medium">Attendees:</span>{' '}
+                      {party.attendees_count + 1} people (including {party.employee_name})
+                    </p>
+                  </div>
+                  {isHappening && (
+                    <div className="mt-3 pt-3 border-t border-pink-200">
+                      <p className="text-sm font-semibold text-pink-600">🎊 Party happening now!</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Office Pets Section */}
+      {pets.length > 0 && (
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">🐾 Office Pets</h3>
+              <p className="text-sm text-gray-500">
+                {pets.length} pet{pets.length !== 1 ? 's' : ''} roaming the office
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/pet-care')}
+              className="px-4 py-2 bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all transform hover:scale-105"
+            >
+              🎮 Play Pet Care Game
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {pets.map((pet) => (
+              <div
+                key={pet.id}
+                className="bg-white rounded-lg p-4 border-2 border-gray-200 hover:border-yellow-400 transition-colors"
+              >
+                <div className="text-center">
+                  <img
+                    src={pet.avatar_path}
+                    alt={pet.name}
+                    className="w-16 h-16 mx-auto rounded-full object-cover border-2 border-yellow-400 mb-2"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                    }}
+                  />
+                  <p className="font-semibold text-sm">{pet.name}</p>
+                  <p className="text-xs text-gray-600 capitalize">{pet.pet_type}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Floor {pet.floor} • {pet.current_room || 'Unknown'}
+                  </p>
+                  {pet.personality && (
+                    <p className="text-xs text-gray-400 mt-1 italic">{pet.personality}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Upcoming Birthdays Section */}
+      {upcomingBirthdays.length > 0 && (
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">🎂 Upcoming Birthdays</h3>
+            <p className="text-sm text-gray-500">
+              Birthdays in the next 90 days
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {upcomingBirthdays.map((bday) => {
+              const birthdayDate = new Date(bday.date)
+              const isToday = bday.days_until === 0
+              
+              return (
+                <div
+                  key={bday.employee_id}
+                  className={`bg-white rounded-lg p-4 border-2 transition-colors ${
+                    isToday
+                      ? 'border-pink-400 bg-pink-50'
+                      : 'border-gray-200 hover:border-pink-200'
+                  }`}
+                >
+                  <div className="text-center">
+                    <p className="font-semibold text-sm">{bday.employee_name}</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {isToday ? (
+                        <span className="font-semibold text-pink-600">🎉 Today!</span>
+                      ) : (
+                        <>
+                          {bday.days_until} day{bday.days_until !== 1 ? 's' : ''} away
+                        </>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {birthdayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
       
       <RoomDetailModal
         room={selectedRoom}
@@ -373,51 +660,6 @@ function OfficeView() {
         onEmployeeClick={handleEmployeeClick}
       />
       
-      {hasTerminated && (
-        <div className="mt-8 border-t border-gray-200 pt-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">Terminated Employees</h3>
-            <p className="text-sm text-gray-500">
-              {terminatedEmployees.length} former employee{terminatedEmployees.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {terminatedEmployees.map((employee) => (
-              <div
-                key={employee.id}
-                onClick={() => handleEmployeeClick(employee)}
-                className="bg-gray-100 rounded-lg p-4 border-2 border-gray-300 hover:border-gray-400 cursor-pointer transition-colors opacity-75"
-              >
-                <div className="flex items-center space-x-3">
-                  {employee.avatar_path ? (
-                    <img
-                      src={employee.avatar_path}
-                      alt={employee.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                        e.target.nextSibling.style.display = 'flex'
-                      }}
-                    />
-                  ) : null}
-                  <div className={`w-12 h-12 rounded-full bg-gray-400 flex items-center justify-center text-white font-semibold ${employee.avatar_path ? 'hidden' : 'flex'}`}>
-                    {employee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">{employee.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{employee.title}</p>
-                    {employee.fired_at && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Terminated: {new Date(employee.fired_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

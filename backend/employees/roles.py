@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Employee, Task, Project
 from llm.ollama_client import OllamaClient
 from sqlalchemy import select
+from config import now as local_now
 import random
 
 class CEOAgent(EmployeeAgent):
@@ -135,12 +136,13 @@ class CEOAgent(EmployeeAgent):
         from business.project_manager import ProjectManager
         from database.models import Activity
         from datetime import datetime, timedelta
+        from config import now as local_now
         from sqlalchemy import select
         
         project_manager = ProjectManager(self.db)
         
         # Check for projects completed in the last hour (recently completed)
-        cutoff_time = datetime.utcnow() - timedelta(hours=1)
+        cutoff_time = local_now() - timedelta(hours=1)
         result = await self.db.execute(
             select(Project).where(
                 Project.status == "completed",
@@ -247,7 +249,17 @@ class CEOAgent(EmployeeAgent):
                 # Check how long it's been active
                 from datetime import datetime
                 if hasattr(project, 'last_activity_at') and project.last_activity_at:
-                    days_since_activity = (datetime.utcnow() - project.last_activity_at.replace(tzinfo=None)).days
+                    from config import utc_to_local
+                    from datetime import timezone as tz
+                    last_activity = project.last_activity_at
+                    # Normalize to timezone-aware datetime
+                    if last_activity.tzinfo is None:
+                        # If naive, assume it's UTC and convert to local timezone
+                        last_activity = utc_to_local(last_activity.replace(tzinfo=tz.utc))
+                    else:
+                        # If already timezone-aware, convert to local timezone
+                        last_activity = utc_to_local(last_activity)
+                    days_since_activity = (local_now() - last_activity).days
                     if days_since_activity > 3:  # No activity in 3+ days
                         slow_projects.append(project)
         
@@ -560,6 +572,21 @@ class ManagerAgent(EmployeeAgent):
     async def execute_decision(self, decision: Dict, business_context: Dict):
         activity = await super().execute_decision(decision, business_context)
         
+        # PRIORITY 0: Check for employees on break longer than 30 minutes and return them to work
+        try:
+            from business.coffee_break_manager import CoffeeBreakManager
+            break_manager = CoffeeBreakManager(self.db)
+            returned_employees = await break_manager.check_and_return_long_breaks(
+                manager_id=self.employee.id,
+                manager_name=self.employee.name
+            )
+            if returned_employees:
+                print(f"⏰ Manager {self.employee.name} returned {len(returned_employees)} employee(s) to work from extended breaks")
+        except Exception as e:
+            import traceback
+            print(f"❌ Error checking long breaks: {e}")
+            print(traceback.format_exc())
+        
         # PRIORITY 1: Focus on getting projects completed
         await self._focus_on_project_completion()
         
@@ -633,7 +660,17 @@ class ManagerAgent(EmployeeAgent):
                 # Check how long it's been active
                 from datetime import datetime
                 if hasattr(project, 'last_activity_at') and project.last_activity_at:
-                    days_since_activity = (datetime.utcnow() - project.last_activity_at.replace(tzinfo=None)).days
+                    from config import utc_to_local
+                    from datetime import timezone as tz
+                    last_activity = project.last_activity_at
+                    # Normalize to timezone-aware datetime
+                    if last_activity.tzinfo is None:
+                        # If naive, assume it's UTC and convert to local timezone
+                        last_activity = utc_to_local(last_activity.replace(tzinfo=tz.utc))
+                    else:
+                        # If already timezone-aware, convert to local timezone
+                        last_activity = utc_to_local(last_activity)
+                    days_since_activity = (local_now() - last_activity).days
                     if days_since_activity > 3:  # No activity in 3+ days
                         slow_projects.append(project)
         
@@ -793,11 +830,41 @@ class ManagerAgent(EmployeeAgent):
                                 unassigned_tasks = result.scalars().all()
                                 break  # Created tasks, now assign them
                 
-                unassigned_list = list(unassigned_tasks)
+                # PRIORITY: Sort tasks by: 1) Project priority (high > medium > low), 2) Revenue, 3) Progress
+                # This ensures we focus on high-priority, high-revenue projects first
+                task_priorities = []
+                priority_weights = {"high": 3, "medium": 2, "low": 1}
+                
+                for task in unassigned_tasks:
+                    if task.project_id:
+                        result = await self.db.execute(
+                            select(Project).where(Project.id == task.project_id)
+                        )
+                        project = result.scalar_one_or_none()
+                        
+                        if project:
+                            project_progress = await project_manager.calculate_project_progress(task.project_id)
+                            priority_weight = priority_weights.get(project.priority, 1)
+                            revenue = project.revenue or 0.0
+                            
+                            # Calculate priority score: priority (0-3) * 1000 + revenue + progress
+                            # This ensures high-priority projects always come first, then by revenue, then by progress
+                            priority_score = (priority_weight * 1000) + (revenue / 1000) + project_progress
+                            task_priorities.append((task, priority_score, project.priority, revenue, project_progress))
+                        else:
+                            task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+                    else:
+                        task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+                
+                # Sort by priority score (descending) - high-priority, high-revenue projects get priority
+                task_priorities.sort(key=lambda x: x[1], reverse=True)
+                unassigned_list = [task for task, _, _, _, _ in task_priorities]
+                
                 # Assign tasks to ALL team members who don't have a task
                 # IMPORTANT: Do NOT assign tasks to employees who are still in training
                 assigned_count = 0
                 from datetime import datetime, timedelta
+                from config import now as local_now
                 from employees.room_assigner import ROOM_TRAINING_ROOM
                 
                 for member in team_members:
@@ -831,15 +898,17 @@ class ManagerAgent(EmployeeAgent):
                             else:
                                 hired_at_naive = hired_at
                             
-                            time_since_hire = datetime.utcnow() - hired_at_naive
+                            time_since_hire = local_now() - hired_at_naive
                             if time_since_hire <= timedelta(hours=1):
                                 is_in_training = True
                         except Exception:
                             pass
                     
                     # Only assign tasks if not in training and doesn't have a task
+                    # FOCUS: Employees must complete their current task to 100% before getting a new one
                     if not is_in_training and member.current_task_id is None and unassigned_list:
-                        task = random.choice(unassigned_list)
+                        # Take highest priority task (from project closest to 100% completion)
+                        task = unassigned_list[0]
                         task.employee_id = member.id
                         task.status = "in_progress"
                         member.current_task_id = task.id
@@ -899,7 +968,7 @@ class ManagerAgent(EmployeeAgent):
                                 else:
                                     hired_at_naive = hired_at
                                 
-                                time_since_hire = datetime.utcnow() - hired_at_naive
+                                time_since_hire = local_now() - hired_at_naive
                                 if time_since_hire <= timedelta(hours=1):
                                     is_in_training = True
                             except Exception:
@@ -907,7 +976,8 @@ class ManagerAgent(EmployeeAgent):
                         
                         # Only assign tasks if not in training
                         if not is_in_training and unassigned_list:
-                            task = random.choice(unassigned_list)
+                            # Prioritize tasks from projects near completion (already sorted by progress)
+                            task = unassigned_list[0]  # Take highest priority task (from project closest to 100%)
                             task.employee_id = employee.id
                             task.status = "in_progress"
                             employee.current_task_id = task.id
@@ -1131,6 +1201,7 @@ class EmployeeAgentBase(EmployeeAgent):
     async def _work_on_task(self, decision: Dict):
         """Work on current task, making progress based on AI decision."""
         from sqlalchemy import select
+        from business.project_manager import ProjectManager
         
         if self.employee.current_task_id:
             result = await self.db.execute(
@@ -1140,7 +1211,8 @@ class EmployeeAgentBase(EmployeeAgent):
             
             if task and task.status != "completed":
                 # Determine work amount based on decision quality and employee role
-                base_progress = 5.0  # Base 5% per work session
+                # INCREASED base progress to focus on completing projects to 100%
+                base_progress = 8.0  # Increased from 5% to 8% per work session to complete faster
                 
                 # Managers and C-level executives work faster
                 if self.employee.role in ["CTO", "COO", "CFO"]:
@@ -1149,6 +1221,10 @@ class EmployeeAgentBase(EmployeeAgent):
                     base_progress *= 1.5
                 elif self.employee.role == "CEO":
                     base_progress *= 2.0
+                
+                # If task is close to completion (>80%), work faster to reach 100%
+                if task.progress and task.progress >= 80.0:
+                    base_progress *= 1.5  # 50% faster when near completion
                 
                 # Add some randomness
                 progress_increment = base_progress * random.uniform(0.8, 1.2)
@@ -1163,6 +1239,20 @@ class EmployeeAgentBase(EmployeeAgent):
                 # Set status to in_progress if not already
                 if task.status == "pending":
                     task.status = "in_progress"
+                
+                # IMPORTANT: Update project activity whenever work is done on a task
+                # This ensures projects show as actively being worked on
+                if task.project_id:
+                    project_manager = ProjectManager(self.db)
+                    await project_manager.update_project_activity(task.project_id)
+                    
+                    # Ensure project is activated if it's in planning status
+                    result = await self.db.execute(
+                        select(Project).where(Project.id == task.project_id)
+                    )
+                    project = result.scalar_one_or_none()
+                    if project and project.status == "planning":
+                        project.status = "active"
                 
                 # Complete task if progress reaches 100%
                 if task.progress >= 100.0:
@@ -1183,7 +1273,7 @@ class EmployeeAgentBase(EmployeeAgent):
             if task and task.status != "completed":
                 task.status = "completed"
                 task.progress = 100.0
-                task.completed_at = datetime.utcnow()
+                task.completed_at = local_now()
                 self.employee.current_task_id = None
                 
                 # Create activity for task completion
@@ -1226,7 +1316,7 @@ class EmployeeAgentBase(EmployeeAgent):
                             self.db.add(activation_activity)
                         
                         
-                        # Check if all tasks are completed AND at 100% progress
+                        # Check if all tasks are completed
                         result = await self.db.execute(
                             select(Task).where(
                                 Task.project_id == project.id,
@@ -1235,28 +1325,30 @@ class EmployeeAgentBase(EmployeeAgent):
                         )
                         remaining_tasks = result.scalars().all()
                         
-                        # Also check if all completed tasks are at 100% progress
+                        # Get all tasks for the project
                         all_tasks_result = await self.db.execute(
                             select(Task).where(Task.project_id == project.id)
                         )
-                        all_tasks = all_tasks_result.scalars().all()
+                        all_tasks = list(all_tasks_result.scalars().all())
                         
-                        # Check if all tasks are completed and at 100% progress
-                        all_tasks_completed = not remaining_tasks
-                        all_tasks_at_100_percent = all(
-                            task.status == "completed" and 
-                            (task.progress is not None and task.progress >= 100.0)
-                            for task in all_tasks
-                        ) if all_tasks else False
+                        # Ensure all completed tasks have progress = 100.0
+                        for task in all_tasks:
+                            if task.status == "completed" and (task.progress is None or task.progress < 100.0):
+                                task.progress = 100.0
                         
-                        # Also check project-level progress
+                        # Check if all tasks are completed
+                        all_tasks_completed = len(all_tasks) > 0 and not remaining_tasks
+                        
+                        # Calculate project-level progress
                         project_progress = await project_manager.calculate_project_progress(project.id)
-                        project_at_100_percent = project_progress >= 100.0
                         
-                        # Only mark as completed if all conditions are met
-                        if all_tasks_completed and all_tasks_at_100_percent and project_at_100_percent:
+                        # Mark as completed if: (all tasks completed) OR (progress >= 100%)
+                        # Only complete at 100% progress
+                        should_complete = (all_tasks_completed and len(all_tasks) > 0) or (project_progress >= 100.0)
+                        
+                        if should_complete:
                             project.status = "completed"
-                            project.completed_at = datetime.utcnow()
+                            project.completed_at = local_now()
                             
                             # Create activity for project completion
                             activity = Activity(

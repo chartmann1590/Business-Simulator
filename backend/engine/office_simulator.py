@@ -1,7 +1,7 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from database.models import Employee, Activity, BusinessMetric, Financial, EmployeeReview
+from database.models import Employee, Activity, BusinessMetric, Financial, EmployeeReview, Project
 from database.database import async_session_maker
 from employees.roles import create_employee_agent
 from employees.room_assigner import assign_home_room, assign_rooms_to_existing_employees
@@ -13,6 +13,7 @@ from business.goal_system import GoalSystem
 from typing import Set
 from datetime import datetime, timedelta
 import random
+from config import now as local_now, get_midnight_tomorrow
 
 async def get_business_context(db: AsyncSession) -> dict:
     """Get current business context for decision making (standalone function)."""
@@ -46,6 +47,11 @@ class OfficeSimulator:
         self.boardroom_discussion_counter = 0  # Counter for boardroom discussions (every 15 ticks = 2 minutes)
         self.meeting_generation_counter = 0  # Counter for meeting generation (every 450 ticks = 1 hour)
         self.last_meeting_check_date = None  # Track the last date we checked for meetings
+        self.award_update_counter = 0  # Counter for award updates (every 30 ticks = 4 minutes)
+        self.quick_wins_counter = 0  # Counter for quick wins features
+        self.last_weather_date = None  # Track last weather update date
+        self.last_birthday_meeting_generation = None  # Track last birthday meeting generation date
+        self.last_birthday_check_date = None  # Track last birthday check date
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -150,6 +156,23 @@ class OfficeSimulator:
             print(f"❌ Error conducting periodic reviews: {e}")
             print(f"Traceback: {traceback.format_exc()}")
         
+        # Update performance award periodically (every 4 minutes = 30 ticks)
+        self.award_update_counter += 1
+        if self.award_update_counter >= 30:  # 30 * 8 seconds = 240 seconds = 4 minutes
+            self.award_update_counter = 0
+            try:
+                async with async_session_maker() as award_db:
+                    from business.review_manager import ReviewManager
+                    review_manager = ReviewManager(award_db)
+                    print("🏆 [AWARD] Running performance award update from simulation tick...")
+                    await review_manager._update_performance_award()
+                    await award_db.commit()
+                    print("🏆 [AWARD] Award update from simulation tick completed!")
+            except Exception as e:
+                import traceback
+                print(f"❌ [AWARD] Error updating award in simulation tick: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+        
         # Generate boardroom discussions every 2 minutes (120 seconds)
         # Check every tick (8 seconds), so every 15 ticks = 2 minutes
         self.boardroom_discussion_counter += 1
@@ -170,12 +193,109 @@ class OfficeSimulator:
         # Customer reviews are now handled by a dedicated background task (every 2 hours)
         # See generate_customer_reviews_periodically() method
         
+        # Quick Wins Features Integration
+        self.quick_wins_counter += 1
+        now = local_now()
+        current_date = now.date()
+        
+        # Check birthdays daily
+        if self.last_birthday_check_date != current_date:
+            self.last_birthday_check_date = current_date
+            try:
+                async with async_session_maker() as birthday_db:
+                    from business.birthday_manager import BirthdayManager
+                    birthday_manager = BirthdayManager(birthday_db)
+                    birthdays = await birthday_manager.check_birthdays_today()
+                    for emp in birthdays:
+                        celebration = await birthday_manager.celebrate_birthday(emp)
+                        if celebration:
+                            print(f"🎂 Birthday celebration for {emp.name}!")
+            except Exception as e:
+                print(f"❌ Error checking birthdays: {e}")
+        
+        # Update weather daily
+        if self.last_weather_date != current_date:
+            self.last_weather_date = current_date
+            try:
+                async with async_session_maker() as weather_db:
+                    from business.weather_manager import WeatherManager
+                    weather_manager = WeatherManager(weather_db)
+                    await weather_manager.get_today_weather()
+            except Exception as e:
+                print(f"❌ Error updating weather: {e}")
+        
+        # Check for random events (every 20 ticks = ~2.5 minutes)
+        if self.quick_wins_counter % 20 == 0:
+            try:
+                async with async_session_maker() as event_db:
+                    from business.random_event_manager import RandomEventManager
+                    event_manager = RandomEventManager(event_db)
+                    await event_manager.resolve_expired_events()
+                    event = await event_manager.check_for_random_event()
+                    if event:
+                        print(f"⚠️ Random event: {event.title}")
+            except Exception as e:
+                print(f"❌ Error checking random events: {e}")
+        
+        # Publish newsletter weekly (on Fridays)
+        if now.weekday() == 4:  # Friday
+            try:
+                async with async_session_maker() as newsletter_db:
+                    from business.newsletter_manager import NewsletterManager
+                    newsletter_manager = NewsletterManager(newsletter_db)
+                    if await newsletter_manager.should_publish_newsletter():
+                        newsletter = await newsletter_manager.publish_newsletter()
+                        if newsletter:
+                            print(f"📰 Published newsletter issue #{newsletter.issue_number}")
+            except Exception as e:
+                print(f"❌ Error publishing newsletter: {e}")
+        
+        # Move pets occasionally (every 50 ticks = ~6.5 minutes)
+        if self.quick_wins_counter % 50 == 0:
+            try:
+                async with async_session_maker() as pet_db:
+                    from business.pet_manager import PetManager
+                    pet_manager = PetManager(pet_db)
+                    pets = await pet_manager.get_all_pets()
+                    if not pets:
+                        pets = await pet_manager.initialize_pets()
+                    for pet in pets:
+                        await pet_manager.move_pet_randomly(pet)
+            except Exception as e:
+                print(f"❌ Error moving pets: {e}")
+        
+        # Check for pet interactions (every 30 ticks = ~4 minutes)
+        if self.quick_wins_counter % 30 == 0:
+            try:
+                async with async_session_maker() as pet_interaction_db:
+                    from business.pet_manager import PetManager
+                    pet_manager = PetManager(pet_interaction_db, self.llm_client)
+                    interactions = await pet_manager.check_pet_interactions()
+                    if interactions:
+                        print(f"🐾 {len(interactions)} pet interaction(s) occurred")
+            except Exception as e:
+                print(f"❌ Error checking pet interactions: {e}")
+        
+        # Check for pets needing care and provide AI-powered care (every 60 ticks = ~8 minutes)
+        if self.quick_wins_counter % 60 == 0:
+            try:
+                async with async_session_maker() as pet_care_db:
+                    from business.pet_manager import PetManager
+                    pet_manager = PetManager(pet_care_db, self.llm_client)
+                    business_context = await get_business_context(pet_care_db)
+                    care_logs = await pet_manager.check_and_provide_pet_care(business_context)
+                    if care_logs:
+                        print(f"🐾 AI provided care for {len(care_logs)} pet(s)")
+            except Exception as e:
+                print(f"❌ Error providing AI pet care: {e}")
+                import traceback
+                traceback.print_exc()
+        
         # Check for meeting generation every hour (3600 seconds)
         # Check every tick (8 seconds), so every 450 ticks = 1 hour
         # Also check if it's a new day to ensure meetings are scheduled
         self.meeting_generation_counter += 1
-        now = datetime.utcnow()
-        current_date = now.date()
+        # now and current_date already defined above for quick wins
         
         # Check if it's a new day or if we should check (every hour)
         is_new_day = self.last_meeting_check_date is None or self.last_meeting_check_date != current_date
@@ -271,6 +391,71 @@ class OfficeSimulator:
                             # Execute decision
                             activity = await agent.execute_decision(decision, business_context)
                             
+                            # Quick Wins: Coffee break check
+                            try:
+                                from business.coffee_break_manager import CoffeeBreakManager
+                                coffee_manager = CoffeeBreakManager(db)
+                                if await coffee_manager.should_take_coffee_break(employee_instance):
+                                    coffee_activity = await coffee_manager.take_coffee_break(employee_instance)
+                                    # Broadcast coffee break
+                                    await self.broadcast_activity({
+                                        "type": "activity",
+                                        "data": {
+                                            "activity_type": coffee_activity.activity_type,
+                                            "employee_id": employee_instance.id,
+                                            "description": coffee_activity.description,
+                                            "timestamp": coffee_activity.timestamp.isoformat()
+                                        }
+                                    })
+                            except Exception as e:
+                                pass  # Don't fail on coffee break errors
+                            
+                            # Quick Wins: Generate suggestion occasionally
+                            try:
+                                from business.suggestion_manager import SuggestionManager
+                                suggestion_manager = SuggestionManager(db)
+                                suggestion = await suggestion_manager.generate_suggestion(employee_instance)
+                                if suggestion:
+                                    await self.broadcast_activity({
+                                        "type": "activity",
+                                        "data": {
+                                            "activity_type": "suggestion_submitted",
+                                            "employee_id": employee_instance.id,
+                                            "description": f"💡 {employee_instance.name} submitted a suggestion: {suggestion.title}",
+                                            "timestamp": suggestion.created_at.isoformat()
+                                        }
+                                    })
+                            except Exception as e:
+                                pass  # Don't fail on suggestion errors
+                            
+                            # Quick Wins: Generate gossip occasionally when employees interact
+                            if activity and activity.activity_type in ["communication", "meeting", "collaboration"]:
+                                try:
+                                    from business.gossip_manager import GossipManager
+                                    gossip_manager = GossipManager(db)
+                                    # Get a random other employee
+                                    other_employees_result = await db.execute(
+                                        select(Employee)
+                                        .where(Employee.status == "active")
+                                        .where(Employee.id != employee_instance.id)
+                                    )
+                                    other_employees = other_employees_result.scalars().all()
+                                    if other_employees:
+                                        recipient = random.choice(other_employees)
+                                        gossip = await gossip_manager.generate_gossip(employee_instance, recipient)
+                                        if gossip:
+                                            await self.broadcast_activity({
+                                                "type": "activity",
+                                                "data": {
+                                                    "activity_type": "gossip",
+                                                    "employee_id": employee_instance.id,
+                                                    "description": f"💬 {employee_instance.name} shared some gossip",
+                                                    "timestamp": gossip.created_at.isoformat()
+                                                }
+                                            })
+                                except Exception as e:
+                                    pass  # Don't fail on gossip errors
+                            
                             # Process employee movement based on activity
                             try:
                                 await process_employee_movement(
@@ -299,7 +484,7 @@ class OfficeSimulator:
                                 "employee_name": employee_instance.name,
                                 "activity_type": activity.activity_type,
                                 "description": activity.description,
-                                "timestamp": (activity.timestamp or datetime.utcnow()).isoformat(),
+                                "timestamp": (activity.timestamp or local_now()).isoformat(),
                                 "current_room": employee_instance.current_room,
                                 "activity_state": employee_instance.activity_state
                             }
@@ -313,7 +498,7 @@ class OfficeSimulator:
                                 "current_room": employee_instance.current_room,
                                 "home_room": employee_instance.home_room,
                                 "activity_state": employee_instance.activity_state,
-                                "timestamp": datetime.utcnow().isoformat()
+                                "timestamp": local_now().isoformat()
                             }
                             await self.broadcast_activity(location_data)
                             
@@ -393,6 +578,25 @@ class OfficeSimulator:
                                 except Exception as e:
                                     print(f"Error handling completed projects: {e}")
                                     await completion_db.rollback()
+                        
+                        # Check for projects at 100% and mark them as completed (EVERY TICK - critical for completion!)
+                        async with async_session_maker() as completion_check_db:
+                            try:
+                                await self._check_and_complete_projects(completion_check_db)
+                                await completion_check_db.commit()
+                            except Exception as e:
+                                print(f"Error checking project completion: {e}")
+                                await completion_check_db.rollback()
+                        
+                        # Ensure projects and tasks are actively being worked on (50% chance per tick)
+                        if random.random() < 0.5:  # 50% chance per tick
+                            async with async_session_maker() as activity_db:
+                                try:
+                                    await self._ensure_active_work(activity_db)
+                                    await activity_db.commit()
+                                except Exception as e:
+                                    print(f"Error ensuring active work: {e}")
+                                    await activity_db.rollback()
                 
                 # Handle employee hiring/firing based on business performance (use separate session)
                 async with async_session_maker() as manage_db:
@@ -549,7 +753,7 @@ class OfficeSimulator:
             
             # Record salary expenses (only if we haven't recorded them recently)
             # Check if we've recorded salaries in the last 30 days
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = local_now() - timedelta(days=30)
             result = await db.execute(
                 select(Financial).where(
                     Financial.type == "expense",
@@ -610,32 +814,60 @@ class OfficeSimulator:
         
         # Minimum staffing requirement: Office needs at least 15 employees to run
         MIN_EMPLOYEES = 15
-        # Maximum staffing cap: Don't hire beyond 215 employees
-        MAX_EMPLOYEES = 215
+        # Maximum staffing cap: Don't hire beyond 300 employees
+        MAX_EMPLOYEES = 300
         
-        # Firing logic: Can fire employees with cause (performance issues, budget cuts, etc.)
+        # Firing logic: Can fire employees with cause (performance issues, budget cuts, restructuring, etc.)
         # But we must maintain minimum staffing
         fired_this_tick = False
         if active_count > MIN_EMPLOYEES:
-            # Can fire if losing money significantly OR for performance reasons
-            should_fire = False
-            if profit < -20000:
-                # Financial reasons - 40% chance
-                should_fire = random.random() < 0.4
-            elif profit < 0:
-                # Minor losses - 10% chance (performance-based firing)
-                should_fire = random.random() < 0.1
-            else:
-                # Even when profitable, might fire for performance (5% chance)
-                should_fire = random.random() < 0.05
+            # Priority 1: Check for employees with consistently bad performance reviews
+            # These should be terminated regardless of budget
+            employees_with_bad_reviews = await self._check_employees_with_bad_reviews(db, active_employees)
+            if employees_with_bad_reviews:
+                print(f"⚠️  Found {len(employees_with_bad_reviews)} employee(s) with consistently bad performance reviews - terminating")
+                for employee in employees_with_bad_reviews:
+                    if active_count > MIN_EMPLOYEES:
+                        await self._fire_employee_for_performance(db, employee)
+                        fired_this_tick = True
+                        active_count -= 1
+                        # Re-fetch active employees after firing
+                        result = await db.execute(select(Employee).where(Employee.status == "active"))
+                        active_employees = result.scalars().all()
             
-            if should_fire:
-                await self._fire_employee(db, active_employees)
-                fired_this_tick = True
-                # Re-fetch active count after firing
-                result = await db.execute(select(Employee).where(Employee.status == "active"))
-                active_employees_after = result.scalars().all()
-                active_count = len(active_employees_after)
+            # Priority 2: Check for restructuring needs (overstaffing, department changes, etc.)
+            if active_count > MIN_EMPLOYEES:
+                restructuring_needed, restructuring_reason = await self._check_restructuring_needs(db, active_employees, business_context)
+                if restructuring_needed:
+                    print(f"⚠️  Restructuring needed: {restructuring_reason}")
+                    if random.random() < 0.3:  # 30% chance to fire for restructuring
+                        await self._fire_employee_for_restructuring(db, active_employees, restructuring_reason)
+                        fired_this_tick = True
+                        # Re-fetch active count after firing
+                        result = await db.execute(select(Employee).where(Employee.status == "active"))
+                        active_employees_after = result.scalars().all()
+                        active_count = len(active_employees_after)
+            
+            # Priority 3: Budget-based termination (if losing money)
+            if active_count > MIN_EMPLOYEES:
+                should_fire = False
+                if profit < -20000:
+                    # Financial reasons - 40% chance
+                    should_fire = random.random() < 0.4
+                elif profit < 0:
+                    # Minor losses - 10% chance (performance-based firing)
+                    should_fire = random.random() < 0.1
+                else:
+                    # Even when profitable, might fire for performance (5% chance)
+                    should_fire = random.random() < 0.05
+                
+                if should_fire:
+                    await self._fire_employee(db, active_employees)
+                    fired_this_tick = True
+                    # Re-fetch active count after firing
+                    result = await db.execute(select(Employee).where(Employee.status == "active"))
+                    active_employees_after = result.scalars().all()
+                    active_count = len(active_employees_after)
         
         # Priority 1: Hire to meet minimum staffing requirement (including replacing fired employees)
         if active_count < MIN_EMPLOYEES and active_count < MAX_EMPLOYEES:
@@ -982,9 +1214,21 @@ class OfficeSimulator:
         departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration", "HR", "Design"]
         roles = ["Employee", "Manager"]
         
-        # Generate employee data
-        first_names = ["Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage", "Blake", "Cameron"]
-        last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark", "Lewis", "Walker"]
+        # Get existing employee names to avoid duplicates
+        result = await db.execute(select(Employee.name))
+        existing_names = [row[0] for row in result.all()]
+        
+        # Generate unique employee name using AI
+        role = random.choice(roles)
+        department = random.choice(departments)
+        hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
+        
+        name = await self.llm_client.generate_unique_employee_name(
+            existing_names=existing_names,
+            department=department,
+            role=role
+        )
+        
         titles_by_role = {
             "Employee": [
                 "Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", 
@@ -997,11 +1241,6 @@ class OfficeSimulator:
                 "Operations Manager", "IT Manager", "HR Manager", "Human Resources Manager", "Design Manager"
             ]
         }
-        
-        name = f"{random.choice(first_names)} {random.choice(last_names)}"
-        role = random.choice(roles)
-        department = random.choice(departments)
-        hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
         
         # Special handling for IT and Reception to ensure they get appropriate titles
         if department == "IT":
@@ -1024,6 +1263,26 @@ class OfficeSimulator:
             k=3
         )
         
+        # Assign random birthday
+        birthday_month = random.randint(1, 12)
+        if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
+            max_day = 31
+        elif birthday_month in [4, 6, 9, 11]:
+            max_day = 30
+        else:  # February
+            max_day = 28
+        birthday_day = random.randint(1, max_day)
+        
+        # Assign random hobbies
+        hobbies_list = [
+            ["photography", "hiking", "cooking"],
+            ["reading", "yoga", "gardening"],
+            ["gaming", "music", "traveling"],
+            ["sports", "writing", "painting"],
+            ["reading", "chess", "puzzles"]
+        ]
+        hobbies = random.choice(hobbies_list)
+        
         new_employee = Employee(
             name=name,
             title=title,
@@ -1033,7 +1292,10 @@ class OfficeSimulator:
             status="active",
             personality_traits=personality_traits,
             backstory=f"{name} joined the team to help drive growth and innovation.",
-            hired_at=datetime.utcnow()
+            hired_at=local_now(),
+            birthday_month=birthday_month,
+            birthday_day=birthday_day,
+            hobbies=hobbies
         )
         db.add(new_employee)
         await db.flush()  # Flush to get the employee ID
@@ -1091,6 +1353,17 @@ class OfficeSimulator:
         db.add(notification)
         
         await db.commit()
+        
+        # Generate birthday party meeting for new employee if birthday is within 90 days
+        try:
+            from business.birthday_manager import BirthdayManager
+            birthday_manager = BirthdayManager(db)
+            result = await birthday_manager.generate_birthday_party_for_employee(new_employee)
+            if result and result.get("created"):
+                print(f"🎂 Generated birthday party meeting for {name}")
+        except Exception as e:
+            print(f"Warning: Could not generate birthday party for {name}: {e}")
+        
         print(f"Hired new employee: {name} ({title})")
     
     async def _hire_employee_specific(self, db: AsyncSession, business_context: dict, 
@@ -1100,12 +1373,18 @@ class OfficeSimulator:
         from datetime import datetime
         import random
         
-        # Generate employee data
-        first_names = ["Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage", "Blake", "Cameron"]
-        last_names = ["Anderson", "Martinez", "Thompson", "Garcia", "Lee", "White", "Harris", "Clark", "Lewis", "Walker"]
+        # Get existing employee names to avoid duplicates
+        result = await db.execute(select(Employee.name))
+        existing_names = [row[0] for row in result.all()]
         
-        name = f"{random.choice(first_names)} {random.choice(last_names)}"
         hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
+        
+        # Generate unique employee name using AI
+        name = await self.llm_client.generate_unique_employee_name(
+            existing_names=existing_names,
+            department=department,
+            role=role
+        )
         
         # Determine title and department based on parameters
         if title:
@@ -1134,6 +1413,26 @@ class OfficeSimulator:
             k=3
         )
         
+        # Assign random birthday
+        birthday_month = random.randint(1, 12)
+        if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
+            max_day = 31
+        elif birthday_month in [4, 6, 9, 11]:
+            max_day = 30
+        else:  # February
+            max_day = 28
+        birthday_day = random.randint(1, max_day)
+        
+        # Assign random hobbies
+        hobbies_list = [
+            ["photography", "hiking", "cooking"],
+            ["reading", "yoga", "gardening"],
+            ["gaming", "music", "traveling"],
+            ["sports", "writing", "painting"],
+            ["reading", "chess", "puzzles"]
+        ]
+        hobbies = random.choice(hobbies_list)
+        
         new_employee = Employee(
             name=name,
             title=employee_title,
@@ -1143,7 +1442,10 @@ class OfficeSimulator:
             status="active",
             personality_traits=personality_traits,
             backstory=f"{name} joined the team to help drive growth and innovation.",
-            hired_at=datetime.utcnow()
+            hired_at=local_now(),
+            birthday_month=birthday_month,
+            birthday_day=birthday_day,
+            hobbies=hobbies
         )
         db.add(new_employee)
         await db.flush()  # Flush to get the employee ID
@@ -1201,6 +1503,17 @@ class OfficeSimulator:
         db.add(notification)
         
         await db.commit()
+        
+        # Generate birthday party meeting for new employee if birthday is within 90 days
+        try:
+            from business.birthday_manager import BirthdayManager
+            birthday_manager = BirthdayManager(db)
+            result = await birthday_manager.generate_birthday_party_for_employee(new_employee)
+            if result and result.get("created"):
+                print(f"🎂 Generated birthday party meeting for {name}")
+        except Exception as e:
+            print(f"Warning: Could not generate birthday party for {name}: {e}")
+        
         print(f"Hired specific employee: {name} ({employee_title}) in {department}")
     
     async def _fire_employee(self, db: AsyncSession, active_employees: list):
@@ -1332,7 +1645,7 @@ class OfficeSimulator:
         )
         
         employee_to_fire.status = "fired"
-        employee_to_fire.fired_at = datetime.utcnow()
+        employee_to_fire.fired_at = local_now()
         
         # Clear current task if any
         employee_to_fire.current_task_id = None
@@ -1364,6 +1677,178 @@ class OfficeSimulator:
         
         await db.commit()
         print(f"Fired employee: {employee_to_fire.name} ({employee_to_fire.title}) - Reason: {termination_reason}")
+    
+    async def _check_employees_with_bad_reviews(self, db: AsyncSession, active_employees: list) -> list:
+        """
+        Check for employees with consistently bad performance reviews.
+        Returns list of employees who have 3+ consecutive reviews below 2.0.
+        """
+        from business.review_manager import ReviewManager
+        from sqlalchemy import desc
+        
+        review_manager = ReviewManager(db)
+        employees_to_terminate = []
+        
+        for employee in active_employees:
+            # Skip CEO and C-level executives
+            if employee.role in ["CEO", "CTO", "COO", "CFO"]:
+                continue
+            
+            # Get recent reviews (last 5)
+            recent_reviews = await review_manager.get_recent_reviews(employee.id, limit=5)
+            
+            if len(recent_reviews) >= 3:
+                # Check if last 3 reviews are all below 2.0
+                last_3_reviews = recent_reviews[:3]
+                all_bad = all(review.overall_rating < 2.0 for review in last_3_reviews)
+                
+                if all_bad:
+                    avg_rating = sum(review.overall_rating for review in last_3_reviews) / 3
+                    print(f"  ⚠️  {employee.name} has 3+ consecutive bad reviews (avg: {avg_rating:.1f}/5.0) - marked for termination")
+                    employees_to_terminate.append(employee)
+        
+        return employees_to_terminate
+    
+    async def _check_restructuring_needs(self, db: AsyncSession, active_employees: list, business_context: dict) -> tuple:
+        """
+        Check if restructuring is needed (overstaffing, department changes, etc.)
+        Returns (needs_restructuring: bool, reason: str)
+        """
+        from sqlalchemy import func
+        
+        # Check for overstaffing in departments
+        department_counts = {}
+        for emp in active_employees:
+            dept = emp.department or "Unassigned"
+            department_counts[dept] = department_counts.get(dept, 0) + 1
+        
+        # If any department has more than 30 employees, consider restructuring
+        for dept, count in department_counts.items():
+            if count > 30:
+                return True, f"Overstaffing in {dept} department ({count} employees)"
+        
+        # Check if we're significantly over the optimal employee count
+        # Optimal is roughly 3 employees per active project
+        active_projects = business_context.get('active_projects', 0)
+        optimal_employee_count = active_projects * 3 + 20  # Base + project support
+        current_count = len(active_employees)
+        
+        if current_count > optimal_employee_count * 1.5:  # 50% over optimal
+            return True, f"Organizational restructuring needed - {current_count} employees vs optimal {optimal_employee_count}"
+        
+        # Check if profit is negative and we have too many employees
+        profit = business_context.get('profit', 0)
+        if profit < -10000 and current_count > 50:
+            return True, f"Cost-cutting restructuring due to financial losses (${profit:,.2f})"
+        
+        return False, ""
+    
+    async def _fire_employee_for_performance(self, db: AsyncSession, employee):
+        """
+        Fire an employee specifically for consistently bad performance reviews.
+        """
+        from database.models import Activity, Notification
+        from datetime import datetime
+        from business.review_manager import ReviewManager
+        
+        review_manager = ReviewManager(db)
+        recent_reviews = await review_manager.get_recent_reviews(employee.id, limit=3)
+        avg_rating = sum(review.overall_rating for review in recent_reviews) / len(recent_reviews) if recent_reviews else 2.0
+        
+        business_context = await self.get_business_context(db)
+        termination_reason = f"Terminated due to consistently poor performance reviews. Average rating over last {len(recent_reviews)} reviews: {avg_rating:.1f}/5.0. Performance did not meet company standards despite feedback and opportunities for improvement."
+        
+        employee.status = "fired"
+        employee.fired_at = local_now()
+        employee.current_task_id = None
+        
+        # Create activity with termination reason
+        activity = Activity(
+            employee_id=None,
+            activity_type="firing",
+            description=f"Terminated {employee.name} ({employee.title}) for consistently poor performance. Average rating: {avg_rating:.1f}/5.0",
+            activity_metadata={
+                "employee_id": employee.id,
+                "action": "fire",
+                "termination_reason": termination_reason,
+                "termination_type": "performance",
+                "average_rating": avg_rating,
+                "review_count": len(recent_reviews)
+            }
+        )
+        db.add(activity)
+        
+        # Create notification
+        notification = Notification(
+            notification_type="employee_fired",
+            title=f"Employee Terminated: {employee.name}",
+            message=f"{employee.name} ({employee.title}) has been terminated due to consistently poor performance reviews (avg: {avg_rating:.1f}/5.0).",
+            employee_id=employee.id,
+            read=False
+        )
+        db.add(notification)
+        
+        await db.commit()
+        print(f"🔥 Fired {employee.name} ({employee.title}) for consistently poor performance (avg rating: {avg_rating:.1f}/5.0)")
+    
+    async def _fire_employee_for_restructuring(self, db: AsyncSession, active_employees: list, restructuring_reason: str):
+        """
+        Fire an employee specifically for restructuring reasons.
+        """
+        from database.models import Activity, Notification
+        from datetime import datetime
+        from sqlalchemy import select
+        
+        # Don't fire CEO or C-level executives
+        candidates = [e for e in active_employees if e.role not in ["CEO", "CTO", "COO", "CFO"]]
+        
+        if not candidates:
+            return
+        
+        # Prefer firing regular employees over managers (70% chance)
+        if random.random() < 0.7:
+            candidates = [e for e in candidates if e.role == "Employee"]
+        
+        if not candidates:
+            candidates = [e for e in active_employees if e.role not in ["CEO", "CTO", "COO", "CFO"]]
+        
+        # Select employee to fire (prefer those in overstaffed departments or with lower performance)
+        employee_to_fire = random.choice(candidates)
+        
+        business_context = await self.get_business_context(db)
+        termination_reason = f"Terminated as part of organizational restructuring. {restructuring_reason}"
+        
+        employee_to_fire.status = "fired"
+        employee_to_fire.fired_at = local_now()
+        employee_to_fire.current_task_id = None
+        
+        # Create activity with termination reason
+        activity = Activity(
+            employee_id=None,
+            activity_type="firing",
+            description=f"Terminated {employee_to_fire.name} ({employee_to_fire.title}) as part of restructuring. {restructuring_reason}",
+            activity_metadata={
+                "employee_id": employee_to_fire.id,
+                "action": "fire",
+                "termination_reason": termination_reason,
+                "termination_type": "restructuring",
+                "restructuring_reason": restructuring_reason
+            }
+        )
+        db.add(activity)
+        
+        # Create notification
+        notification = Notification(
+            notification_type="employee_fired",
+            title=f"Employee Terminated: {employee_to_fire.name}",
+            message=f"{employee_to_fire.name} ({employee_to_fire.title}) has been terminated as part of organizational restructuring. {restructuring_reason}",
+            employee_id=employee_to_fire.id,
+            read=False
+        )
+        db.add(notification)
+        
+        await db.commit()
+        print(f"🔥 Fired {employee_to_fire.name} ({employee_to_fire.title}) for restructuring: {restructuring_reason}")
     
     async def _manage_project_capacity(self, db: AsyncSession):
         """Periodically review project capacity and hire employees if needed instead of canceling."""
@@ -1424,7 +1909,7 @@ class OfficeSimulator:
         project_manager = ProjectManager(db)
         
         # Check for projects completed in the last 2 hours (recently completed)
-        cutoff_time = datetime.utcnow() - timedelta(hours=2)
+        cutoff_time = local_now() - timedelta(hours=2)
         result = await db.execute(
             select(Project).where(
                 Project.status == "completed",
@@ -1518,6 +2003,295 @@ class OfficeSimulator:
                     )
                     db.add(activity)
     
+    async def _check_and_complete_projects(self, db: AsyncSession):
+        """Check all active projects and mark those at 100% as completed."""
+        from business.project_manager import ProjectManager
+        from database.models import Project
+        
+        project_manager = ProjectManager(db)
+        
+        # Get all active projects (planning and active status)
+        active_projects = await project_manager.get_active_projects()
+        
+        if not active_projects:
+            return
+        
+        completed_count = 0
+        for project in active_projects:
+            if project.status not in ["completed", "cancelled"]:
+                # Calculate progress - this will automatically call ensure_project_completion if at 100%
+                progress = await project_manager.calculate_project_progress(project.id)
+                
+                # Explicitly ensure completion - this handles both progress-based and task-based completion
+                await project_manager.ensure_project_completion(project.id, progress)
+                
+                # Refresh project to check if status changed
+                await db.refresh(project, ["status", "completed_at"])
+                if project.status == "completed":
+                    completed_count += 1
+                    print(f"✅ Project '{project.name}' (ID: {project.id}) marked as completed - Progress: {progress:.1f}%")
+        
+        if completed_count > 0:
+            print(f"✅ Completed {completed_count} project(s) that reached completion criteria")
+    
+    async def _ensure_active_work(self, db: AsyncSession):
+        """Ensure projects and tasks are actively being worked on."""
+        from business.project_manager import ProjectManager
+        from database.models import Project, Task, Employee, Activity
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        
+        project_manager = ProjectManager(db)
+        
+        # Get active projects
+        active_projects = await project_manager.get_active_projects()
+        
+        if not active_projects:
+            return
+        
+        # Check for stalled projects (no activity in last 24 hours)
+        now = local_now()
+        cutoff_time = now - timedelta(hours=24)
+        
+        stalled_projects = []
+        for project in active_projects:
+            # Check if project has recent activity
+            if hasattr(project, 'last_activity_at') and project.last_activity_at:
+                from config import utc_to_local
+                from datetime import timezone as tz
+                last_activity = project.last_activity_at
+                # Normalize to timezone-aware datetime
+                if last_activity.tzinfo is None:
+                    # If naive, assume it's UTC and convert to local timezone
+                    last_activity = utc_to_local(last_activity.replace(tzinfo=tz.utc))
+                else:
+                    # If already timezone-aware, convert to local timezone
+                    last_activity = utc_to_local(last_activity)
+                
+                if (now - last_activity) > timedelta(hours=24):
+                    stalled_projects.append(project)
+            else:
+                # No activity timestamp - check if project has tasks
+                result = await db.execute(
+                    select(Task).where(Task.project_id == project.id)
+                )
+                tasks = result.scalars().all()
+                if tasks:
+                    # Has tasks but no activity - might be stalled
+                    stalled_projects.append(project)
+        
+        # For stalled projects, ensure tasks are assigned and being worked on
+        for project in stalled_projects:
+            # Get tasks for this project
+            result = await db.execute(
+                select(Task).where(
+                    Task.project_id == project.id,
+                    Task.status.in_(["pending", "in_progress"])
+                )
+            )
+            project_tasks = result.scalars().all()
+            
+            if not project_tasks:
+                # No tasks - create some
+                task_descriptions = [
+                    f"Work on {project.name}",
+                    f"Continue development for {project.name}",
+                    f"Progress on {project.name}",
+                    f"Implementation for {project.name}",
+                    f"Testing for {project.name}"
+                ]
+                num_tasks = random.randint(2, 4)
+                for i in range(num_tasks):
+                    task = Task(
+                        employee_id=None,
+                        project_id=project.id,
+                        description=random.choice(task_descriptions),
+                        status="pending",
+                        priority=project.priority,
+                        progress=0.0
+                    )
+                    db.add(task)
+                await db.flush()
+                print(f"Created tasks for stalled project: {project.name}")
+            else:
+                # Check for unassigned tasks
+                unassigned_tasks = [t for t in project_tasks if t.employee_id is None]
+                
+                if unassigned_tasks:
+                    # Get available employees (not in training, not busy)
+                    result = await db.execute(
+                        select(Employee).where(
+                            Employee.status == "active",
+                            Employee.current_task_id.is_(None)
+                        )
+                    )
+                    available_employees = result.scalars().all()
+                    
+                    # Filter out employees in training
+                    from employees.room_assigner import ROOM_TRAINING_ROOM
+                    
+                    assignable_employees = []
+                    for emp in available_employees:
+                        is_in_training = False
+                        
+                        if hasattr(emp, 'activity_state') and emp.activity_state == "training":
+                            is_in_training = True
+                        
+                        current_room = getattr(emp, 'current_room', None)
+                        if (current_room == ROOM_TRAINING_ROOM or 
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_2" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_3" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_4" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_5"):
+                            is_in_training = True
+                        
+                        hired_at = getattr(emp, 'hired_at', None)
+                        if hired_at:
+                            try:
+                                if hasattr(hired_at, 'replace'):
+                                    if hired_at.tzinfo is not None:
+                                        hired_at_naive = hired_at.replace(tzinfo=None)
+                                    else:
+                                        hired_at_naive = hired_at
+                                else:
+                                    hired_at_naive = hired_at
+                                
+                                time_since_hire = local_now() - hired_at_naive
+                                if time_since_hire <= timedelta(hours=1):
+                                    is_in_training = True
+                            except Exception:
+                                pass
+                        
+                        if not is_in_training:
+                            assignable_employees.append(emp)
+                    
+                    # PRIORITY: Sort tasks by: 1) Project priority (high > medium > low), 2) Revenue, 3) Progress
+                    # This ensures we focus on high-priority, high-revenue projects first
+                    task_priorities = []
+                    priority_weights = {"high": 3, "medium": 2, "low": 1}
+                    
+                    for task in unassigned_tasks:
+                        if task.project_id:
+                            # Fetch project to get priority and revenue
+                            result = await db.execute(
+                                select(Project).where(Project.id == task.project_id)
+                            )
+                            task_project = result.scalar_one_or_none()
+                            
+                            if task_project:
+                                project_progress = await project_manager.calculate_project_progress(task.project_id)
+                                priority_weight = priority_weights.get(task_project.priority, 1)
+                                revenue = task_project.revenue or 0.0
+                                
+                                # Calculate priority score: priority (0-3) * 1000 + revenue + progress
+                                # This ensures high-priority projects always come first, then by revenue, then by progress
+                                priority_score = (priority_weight * 1000) + (revenue / 1000) + project_progress
+                                task_priorities.append((task, priority_score, task_project.priority, revenue, project_progress))
+                            else:
+                                task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+                        else:
+                            task_priorities.append((task, 0.0, "low", 0.0, 0.0))
+                    
+                    # Sort by priority score (descending) - high-priority, high-revenue projects get priority
+                    task_priorities.sort(key=lambda x: x[1], reverse=True)
+                    prioritized_tasks = [task for task, _, _, _, _ in task_priorities]
+                    
+                    # Assign tasks to available employees (prioritizing high-priority, high-revenue projects)
+                    assigned_count = 0
+                    for task in prioritized_tasks[:len(assignable_employees)]:
+                        if assignable_employees:
+                            employee = random.choice(assignable_employees)
+                            task.employee_id = employee.id
+                            task.status = "in_progress"
+                            employee.current_task_id = task.id
+                            assignable_employees.remove(employee)
+                            assigned_count += 1
+                            
+                            # Update project activity
+                            await project_manager.update_project_activity(project.id)
+                            
+                            # Activate project if in planning
+                            if project.status == "planning":
+                                project.status = "active"
+                    
+                    if assigned_count > 0:
+                        print(f"Assigned {assigned_count} task(s) to restart work on stalled project: {project.name}")
+                
+                # Update project activity even if tasks are assigned (to show it's being monitored)
+                await project_manager.update_project_activity(project.id)
+        
+        # Also check for tasks that haven't made progress in a while
+        result = await db.execute(
+            select(Task).where(
+                Task.status == "in_progress",
+                Task.employee_id.isnot(None)
+            )
+        )
+        in_progress_tasks = result.scalars().all()
+        
+        # Check for tasks with employees that might be stuck
+        stuck_tasks = []
+        for task in in_progress_tasks:
+            # If task has been in progress for more than 2 hours with no progress update
+            # (we can't easily track last progress update, so we'll check if progress is very low)
+            if task.progress is not None and task.progress < 10:
+                # Check if employee is actually working
+                result = await db.execute(
+                    select(Employee).where(Employee.id == task.employee_id)
+                )
+                employee = result.scalar_one_or_none()
+                
+                if employee and employee.current_task_id == task.id:
+                    # Employee has the task assigned - ensure they're working
+                    # Update project activity to show monitoring
+                    if task.project_id:
+                        await project_manager.update_project_activity(task.project_id)
+                else:
+                    # Task assigned but employee doesn't have it as current task - reassign
+                    stuck_tasks.append(task)
+        
+        # Reassign stuck tasks
+        if stuck_tasks:
+            result = await db.execute(
+                select(Employee).where(
+                    Employee.status == "active",
+                    Employee.current_task_id.is_(None)
+                )
+            )
+            available_employees = result.scalars().all()
+            
+            # Filter out training employees
+            from employees.room_assigner import ROOM_TRAINING_ROOM
+            assignable_employees = []
+            for emp in available_employees:
+                is_in_training = False
+                if hasattr(emp, 'activity_state') and emp.activity_state == "training":
+                    is_in_training = True
+                current_room = getattr(emp, 'current_room', None)
+                if (current_room == ROOM_TRAINING_ROOM or 
+                    current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
+                    current_room == f"{ROOM_TRAINING_ROOM}_floor4"):
+                    is_in_training = True
+                if not is_in_training:
+                    assignable_employees.append(emp)
+            
+            reassigned_count = 0
+            for task in stuck_tasks[:len(assignable_employees)]:
+                if assignable_employees:
+                    employee = random.choice(assignable_employees)
+                    task.employee_id = employee.id
+                    employee.current_task_id = task.id
+                    assignable_employees.remove(employee)
+                    reassigned_count += 1
+                    
+                    if task.project_id:
+                        await project_manager.update_project_activity(task.project_id)
+            
+            if reassigned_count > 0:
+                print(f"Reassigned {reassigned_count} stuck task(s) to ensure work continues")
+    
     async def _generate_termination_reason(self, employee, business_context: dict) -> str:
         """Generate an AI-based termination reason for an employee."""
         try:
@@ -1591,6 +2365,43 @@ Return ONLY the termination reason text, nothing else."""
                 traceback.print_exc()
                 await asyncio.sleep(2)  # Wait a bit before retrying
     
+    async def update_performance_award_periodically(self):
+        """Background task to periodically update the performance award (every 5 minutes)."""
+        print("🏆 Starting performance award update background task...")
+        # Run immediately on startup
+        try:
+            async with async_session_maker() as award_db:
+                from business.review_manager import ReviewManager
+                review_manager = ReviewManager(award_db)
+                print("🏆 [AWARD] Running initial performance award update on startup...")
+                await review_manager._update_performance_award()
+                await award_db.commit()
+                print("🏆 [AWARD] Initial award update completed!")
+        except Exception as e:
+            print(f"❌ [AWARD] Error in initial award update: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Then run periodically every 5 minutes
+        while self.running:
+            try:
+                await asyncio.sleep(300)  # Wait 5 minutes (300 seconds)
+                if not self.running:
+                    break
+                    
+                async with async_session_maker() as award_db:
+                    from business.review_manager import ReviewManager
+                    review_manager = ReviewManager(award_db)
+                    print("🏆 [AWARD] Running periodic performance award update...")
+                    await review_manager._update_performance_award()
+                    await award_db.commit()
+                    print("🏆 [AWARD] Periodic award update completed!")
+            except Exception as e:
+                print(f"❌ [AWARD] Error in periodic award update: {e}")
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+    
     async def update_goals_daily(self):
         """Background task to update business goals daily at midnight (00:00)."""
         from datetime import datetime, time, timezone, timedelta
@@ -1617,13 +2428,15 @@ Return ONLY the termination reason text, nothing else."""
         # Main loop: check daily at midnight
         while self.running:
             try:
-                # Calculate time until next midnight (tomorrow at 00:00:00)
-                now = datetime.now(timezone.utc)
-                # Get tomorrow's midnight
-                tomorrow_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                # Calculate time until next midnight (tomorrow at 00:00:00) in configured timezone
+                now = local_now()
+                # Get tomorrow's midnight in local timezone
+                tomorrow_midnight = get_midnight_tomorrow()
                 seconds_until_midnight = (tomorrow_midnight - now).total_seconds()
                 
-                print(f"⏰ Next goal update scheduled for {tomorrow_midnight.strftime('%Y-%m-%d %H:%M:%S UTC')} (in {seconds_until_midnight/3600:.1f} hours)")
+                from config import get_timezone
+                tz_name = get_timezone().zone
+                print(f"⏰ Next goal update scheduled for {tomorrow_midnight.strftime('%Y-%m-%d %H:%M:%S')} {tz_name} (in {seconds_until_midnight/3600:.1f} hours)")
                 
                 # Wait until midnight
                 await asyncio.sleep(seconds_until_midnight)
@@ -1671,6 +2484,30 @@ Return ONLY the termination reason text, nothing else."""
             # Wait 2 hours (7200 seconds) before next generation
             await asyncio.sleep(7200)
     
+    async def process_suggestions_periodically(self):
+        """Background task to process suggestion votes and manager comments every 60 minutes."""
+        print("💡 Starting suggestion processing background task (every 60 minutes)...")
+        while self.running:
+            try:
+                async with async_session_maker() as suggestion_db:
+                    from business.suggestion_manager import SuggestionManager
+                    suggestion_manager = SuggestionManager(suggestion_db)
+                    
+                    # Process votes
+                    await suggestion_manager.process_suggestion_votes()
+                    
+                    # Process manager comments
+                    await suggestion_manager.process_manager_comments()
+                    
+                    print("💡 Suggestion processing completed")
+            except Exception as e:
+                print(f"❌ Error processing suggestions: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 60 minutes (3600 seconds) before next processing
+            await asyncio.sleep(3600)
+    
     async def run(self):
         """Run the simulation loop."""
         self.running = True
@@ -1687,6 +2524,14 @@ Return ONLY the termination reason text, nothing else."""
         # Start the customer review generation task in the background (every 2 hours)
         customer_review_task = asyncio.create_task(self.generate_customer_reviews_periodically())
         print(f"✅ Created customer review generation background task (every 2 hours): {customer_review_task}")
+        
+        # Start the performance award update task in the background (every 5 minutes)
+        award_task = asyncio.create_task(self.update_performance_award_periodically())
+        print(f"✅ Created performance award update background task (every 5 minutes, runs immediately): {award_task}")
+        
+        # Start the suggestion processing task in the background (every 60 minutes)
+        suggestion_task = asyncio.create_task(self.process_suggestions_periodically())
+        print(f"✅ Created suggestion processing background task (every 60 minutes): {suggestion_task}")
         
         while self.running:
             try:

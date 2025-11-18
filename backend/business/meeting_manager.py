@@ -10,6 +10,7 @@ import json
 import httpx
 from typing import List, Optional, Dict
 from llm.ollama_client import OllamaClient
+from config import now as local_now
 
 
 class MeetingManager:
@@ -28,7 +29,7 @@ class MeetingManager:
         if len(all_employees) < 2:
             return 0
         
-        now = datetime.utcnow()
+        now = local_now()
         
         # Check if there are already meetings scheduled for today
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -242,7 +243,7 @@ class MeetingManager:
                     outline = json.dumps(outline) if isinstance(outline, dict) else "\n".join(str(item) for item in outline)
                 
                 # Determine status based on time
-                now = datetime.utcnow()
+                now = local_now()
                 if end_time < now:
                     status = "completed"
                     # Generate transcript for completed meetings
@@ -296,7 +297,7 @@ class MeetingManager:
         from engine.office_simulator import get_business_context
         business_context = await get_business_context(self.db)
         
-        now = datetime.utcnow()
+        now = local_now()
         
         # Meeting types
         meeting_types = [
@@ -496,7 +497,7 @@ Respond in JSON format:
     
     async def update_meeting_status(self):
         """Update meeting status based on current time (scheduled -> in_progress -> completed)."""
-        now = datetime.utcnow()
+        now = local_now()
         
         # Update meetings that should be in progress
         result = await self.db.execute(
@@ -525,6 +526,55 @@ Respond in JSON format:
             # Initialize metadata if needed
             if not meeting.meeting_metadata:
                 meeting.meeting_metadata = {"live_messages": []}
+            
+            # Check if this is a birthday party meeting and send notifications
+            metadata = meeting.meeting_metadata or {}
+            if metadata.get("is_birthday_party"):
+                try:
+                    from database.models import Notification
+                    # Get all active employees
+                    result = await self.db.execute(
+                        select(Employee).where(Employee.status == "active")
+                    )
+                    all_employees = result.scalars().all()
+                    
+                    # Get party details from metadata
+                    room_name = metadata.get("room_name", "Breakroom")
+                    party_floor = metadata.get("party_floor", 1)
+                    birthday_employee_id = metadata.get("birthday_employee_id")
+                    
+                    # Get birthday person name
+                    birthday_person = None
+                    if birthday_employee_id:
+                        birthday_result = await self.db.execute(
+                            select(Employee).where(Employee.id == birthday_employee_id)
+                        )
+                        birthday_person = birthday_result.scalar_one_or_none()
+                    
+                    birthday_name = birthday_person.name if birthday_person else meeting.title.replace("🎂 ", "").replace("'s Birthday Party", "")
+                    
+                    # Send notifications to all employees (with duplicate prevention)
+                    from business.notification_helper import create_notification_if_not_duplicate
+                    for emp in all_employees:
+                        notification = await create_notification_if_not_duplicate(
+                            self.db,
+                            notification_type="birthday_party",
+                            title=f"🎉 Birthday Party: {birthday_name}!",
+                            message=f"{birthday_name}'s birthday party is happening now in the {room_name} on Floor {party_floor}!",
+                            employee_id=emp.id,
+                            duplicate_window_minutes=10  # 10 minute window for birthday parties
+                        )
+                        # Only add if not a duplicate (notification will be None if duplicate)
+                        if notification:
+                            # Already added to session by helper function
+                            pass
+                    
+                    print(f"🎉 Sent birthday party notifications for {birthday_name}'s party in {room_name} on Floor {party_floor}")
+                except Exception as e:
+                    print(f"❌ Error sending birthday party notifications: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
             # Generate initial live messages immediately
             try:
                 await self._generate_live_meeting_content(meeting)
@@ -627,7 +677,7 @@ Respond in JSON format:
                     # Double-check that last_content_update is set
                     final_metadata = meeting.meeting_metadata or {}
                     if "last_content_update" not in final_metadata:
-                        final_metadata["last_content_update"] = datetime.utcnow().isoformat()
+                        final_metadata["last_content_update"] = local_now().isoformat()
                         meeting.meeting_metadata = final_metadata
                         await self.db.commit()
                     
@@ -637,10 +687,10 @@ Respond in JSON format:
                     import traceback
                     traceback.print_exc()
         
-        # Update meetings that should be completed
+        # Update meetings that should be completed (both in_progress and scheduled that have passed)
         result = await self.db.execute(
             select(Meeting).where(
-                Meeting.status == "in_progress",
+                Meeting.status.in_(["in_progress", "scheduled"]),
                 Meeting.end_time <= now
             )
         )
@@ -650,13 +700,17 @@ Respond in JSON format:
             # Refresh to get latest state
             await self.db.refresh(meeting)
             
-            # Generate closing sequence before marking as completed (only if not already generated)
-            metadata = meeting.meeting_metadata or {}
-            if not isinstance(metadata, dict):
-                metadata = {}
-            if not metadata.get("closing_generated", False):
-                await self._generate_meeting_closing(meeting)
-                await self.db.refresh(meeting)
+            was_in_progress = meeting.status == "in_progress"
+            was_scheduled = meeting.status == "scheduled"
+            
+            # Generate closing sequence before marking as completed (only for in_progress meetings)
+            if was_in_progress:
+                metadata = meeting.meeting_metadata or {}
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                if not metadata.get("closing_generated", False):
+                    await self._generate_meeting_closing(meeting)
+                    await self.db.refresh(meeting)
             
             meeting.status = "completed"
             
@@ -677,7 +731,7 @@ Respond in JSON format:
                                 msg_time = msg_time.replace(tzinfo=None)
                             time_str = msg_time.strftime('%H:%M:%S')
                         except:
-                            time_str = datetime.utcnow().strftime('%H:%M:%S')
+                            time_str = local_now().strftime('%H:%M:%S')
                         sender_name = msg.get("sender_name", "Unknown")
                         message_text = msg.get("message", "")
                         transcript_lines.append(f"[{time_str}] {sender_name}: {message_text}")
@@ -687,7 +741,45 @@ Respond in JSON format:
             if meeting.live_transcript:
                 meeting.transcript = meeting.live_transcript
             elif not meeting.transcript:
-                meeting.transcript = await self._generate_final_transcript(meeting)
+                # For scheduled meetings that passed, generate a transcript indicating they happened
+                if was_scheduled:
+                    # Get organizer and attendees for transcript generation
+                    organizer_result = await self.db.execute(
+                        select(Employee).where(Employee.id == meeting.organizer_id)
+                    )
+                    organizer = organizer_result.scalar_one_or_none()
+                    
+                    attendees = []
+                    if meeting.attendee_ids:
+                        attendees_result = await self.db.execute(
+                            select(Employee).where(Employee.id.in_(meeting.attendee_ids))
+                        )
+                        attendees = attendees_result.scalars().all()
+                    
+                    if organizer:
+                        meeting.transcript = await self._generate_final_transcript_for_meeting(
+                            meeting.title, meeting.description or "",
+                            organizer, attendees, meeting.start_time, meeting.end_time
+                        )
+                    else:
+                        # Fallback if organizer not found
+                        meeting.transcript = await self._generate_final_transcript(meeting)
+                else:
+                    meeting.transcript = await self._generate_final_transcript(meeting)
+            
+            # Generate AI summary for completed meetings
+            if meeting.transcript:
+                metadata = meeting.meeting_metadata or {}
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                if not metadata.get("ai_summary_generated", False):
+                    ai_summary = await self._generate_ai_summary(meeting)
+                    if ai_summary:
+                        metadata["ai_summary"] = ai_summary
+                        metadata["ai_summary_generated"] = True
+                        meeting.meeting_metadata = metadata
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(meeting, "meeting_metadata")
         
         await self.db.commit()
     
@@ -814,7 +906,7 @@ Write only the thank you message, nothing else."""
             organizer_goodbye = f"Thank you all for your time and valuable input today. Have a great rest of your day!"
         
         # Add organizer's summary and goodbye to transcript
-        now = datetime.utcnow()
+        now = local_now()
         timestamp = now.strftime('%H:%M:%S')
         
         # Add summary
@@ -1232,7 +1324,7 @@ Write only the goodbye message, nothing else."""
             if is_response and last_question:
                 prompt = f"""You are {sender.name}, {sender.title} in a {meeting.title} meeting.
 
-Meeting Agenda:
+Meeting Agenda (CRITICAL - Stay focused on these items):
 {meeting.agenda}
 {conversation_context}
 Your personality traits: {personality_str}
@@ -1244,16 +1336,18 @@ CRITICAL CONTEXT:
 
 You MUST provide a proper, direct response to this specific question or comment. Your response should:
 1. Directly answer what {last_speaker_name} asked or address what they said
-2. Be relevant to the meeting agenda and your role
+2. Be relevant to the meeting agenda items above - stay focused on the agenda topics
 3. Address {last_speaker_name} by name (e.g., "{last_speaker_name}, ..." or "Thanks {last_speaker_name}, ...")
 4. Be clear, concise, and complete (1-2 sentences)
 5. Show that you understood their question/comment
+6. Keep the discussion aligned with the agenda items
 
 Do NOT:
 - Ignore what they asked
 - Give a generic response
-- Change the topic
+- Change the topic away from agenda items
 - Ask a new question without answering theirs first
+- Discuss topics not related to the agenda
 
 Current business context:
 - Revenue: ${business_context.get('revenue', 0):,.2f}
@@ -1264,7 +1358,7 @@ Write only your direct response to {last_speaker_name}'s question, nothing else.
             else:
                 prompt = f"""You are {sender.name}, {sender.title} in a {meeting.title} meeting.
 
-Meeting Agenda:
+Meeting Agenda (CRITICAL - Stay focused on these items):
 {meeting.agenda}
 {conversation_context}
 Your personality traits: {personality_str}
@@ -1273,12 +1367,14 @@ Attendees in the meeting: {attendee_list}
 
 You are speaking directly to {recipient.name} ({recipient.title}) in this meeting. You MUST address them by name in your message (e.g., "{recipient.name}, ..." or "Hey {recipient.name}, ...").
 
+IMPORTANT: Your message MUST be relevant to the meeting agenda items listed above. Keep the discussion focused on agenda topics. Do not stray from the agenda.
+
 Current business context:
 - Revenue: ${business_context.get('revenue', 0):,.2f}
 - Profit: ${business_context.get('profit', 0):,.2f}
 - Active Projects: {business_context.get('active_projects', 0)}
 
-Write a brief, natural comment or question (1-2 sentences) that {sender.name} would say in this meeting to {recipient.name}. Make it relevant to the meeting agenda and appropriate for the meeting context. Reference the recent conversation if relevant. IMPORTANT: Include {recipient.name}'s name in your message.
+Write a brief, natural comment or question (1-2 sentences) that {sender.name} would say in this meeting to {recipient.name}. Make it relevant to the meeting agenda items and appropriate for the meeting context. Reference the recent conversation if relevant. IMPORTANT: Include {recipient.name}'s name in your message and stay focused on agenda topics.
 
 Write only the message, nothing else."""
 
@@ -1339,7 +1435,7 @@ Write only the message, nothing else."""
             
             # Add message to live messages
             messages_generated += 1
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = local_now().isoformat()
             message_entry = {
                 "sender_id": sender.id,
                 "sender_name": sender.name,
@@ -1384,7 +1480,7 @@ Write only the message, nothing else."""
         # Update the metadata with the complete list
         metadata["live_messages"] = live_messages
         # Always update last_content_update to current time when we generate content
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = local_now().isoformat()
         metadata["last_content_update"] = now_iso
         print(f"   ⏰ Set last_content_update to: {now_iso}")
         
@@ -1403,7 +1499,7 @@ Write only the message, nothing else."""
                     msg_time = msg_time.replace(tzinfo=None)
                 time_str = msg_time.strftime('%H:%M:%S')
             except:
-                time_str = datetime.utcnow().strftime('%H:%M:%S')
+                time_str = local_now().strftime('%H:%M:%S')
             sender_name = msg.get("sender_name", "Unknown")
             message_text = msg.get("message", "")
             transcript_lines.append(f"[{time_str}] {sender_name}: {message_text}")
@@ -1485,4 +1581,80 @@ Format:
         
         # Fallback
         return f"Meeting transcript for {meeting.title}\nAttendees: {attendee_list}\nAgenda items were discussed and action items were assigned."
+    
+    async def _generate_ai_summary(self, meeting: Meeting) -> Optional[str]:
+        """Generate an AI summary of the meeting transcript."""
+        if not meeting.transcript:
+            return None
+        
+        # Get attendees
+        result = await self.db.execute(
+            select(Employee).where(Employee.id.in_(meeting.attendee_ids))
+        )
+        attendees = result.scalars().all()
+        attendee_list = ", ".join([f"{e.name} ({e.title})" for e in attendees])
+        
+        # Get organizer
+        organizer_result = await self.db.execute(
+            select(Employee).where(Employee.id == meeting.organizer_id)
+        )
+        organizer = organizer_result.scalar_one_or_none()
+        organizer_name = organizer.name if organizer else "Unknown"
+        
+        prompt = f"""Generate a comprehensive summary of the following meeting transcript.
+
+Meeting Title: {meeting.title}
+Meeting Description: {meeting.description or 'N/A'}
+Organizer: {organizer_name}
+Attendees: {attendee_list}
+Meeting Agenda:
+{meeting.agenda or 'N/A'}
+
+Meeting Transcript:
+{meeting.transcript}
+
+Please provide a well-structured summary that includes:
+1. Key discussion points and topics covered
+2. Important decisions made
+3. Action items and next steps
+4. Key takeaways and outcomes
+
+Format the summary in clear paragraphs. Be concise but comprehensive. Focus on the most important information from the transcript.
+
+Write only the summary, nothing else."""
+
+        try:
+            client = await self.llm_client._get_client()
+            response = await client.post(
+                f"{self.llm_client.base_url}/api/generate",
+                json={
+                    "model": self.llm_client.model,
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=httpx.Timeout(60.0, connect=10.0)
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                summary = result.get("response", "").strip()
+                # Clean summary to handle encoding issues
+                try:
+                    summary = summary.encode('utf-8', errors='ignore').decode('utf-8')
+                except:
+                    pass
+                # Remove markdown code blocks if present
+                if summary.startswith("```"):
+                    import re
+                    summary = re.sub(r'```[^\n]*\n', '', summary)
+                    summary = re.sub(r'\n```', '', summary)
+                    summary = summary.strip()
+                return summary
+        except Exception as e:
+            print(f"Error generating AI summary: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Fallback summary
+        return f"Meeting Summary: {meeting.title}\n\nAttendees discussed agenda items and key topics. Action items were assigned and next steps were identified."
 

@@ -52,11 +52,19 @@ class CustomerReviewManager:
                 select(CustomerReview).where(CustomerReview.project_id == project.id)
             )
             existing_reviews = result.scalars().all()
+            num_existing = len(existing_reviews)
             
-            # Generate 2-5 reviews per project (randomized)
-            num_reviews_to_generate = random.randint(2, 5) - len(existing_reviews)
-            
-            if num_reviews_to_generate <= 0:
+            # Determine how many reviews to generate
+            # - If project has no reviews, generate 2-5 initial reviews
+            # - If project has reviews but less than 10, generate 1-2 additional reviews periodically
+            # - If project has 10+ reviews, skip (reasonable cap)
+            if num_existing == 0:
+                num_reviews_to_generate = random.randint(2, 5)
+            elif num_existing < 10:
+                # Generate 1-2 additional reviews for projects that already have some
+                num_reviews_to_generate = random.randint(1, 2)
+            else:
+                # Project already has enough reviews (10+)
                 continue
             
             print(f"📝 Generating {num_reviews_to_generate} customer review(s) for project: {project.name}")
@@ -77,6 +85,9 @@ class CustomerReviewManager:
                 await self.db.flush()
                 await self.db.commit()
                 print(f"✅ Committed {len(reviews_created)} customer review(s) to database")
+                
+                # Sync products from reviews after creating reviews
+                await self._sync_products_from_reviews()
             except Exception as e:
                 import traceback
                 print(f"❌ Error committing reviews: {e}")
@@ -84,6 +95,93 @@ class CustomerReviewManager:
                 await self.db.rollback()
         
         return reviews_created
+    
+    async def _sync_products_from_reviews(self):
+        """Sync products from reviews after generating new reviews."""
+        try:
+            from database.models import Product
+            
+            # Find all unique projects that have reviews
+            result = await self.db.execute(
+                select(Project)
+                .join(CustomerReview, CustomerReview.project_id == Project.id)
+                .where(CustomerReview.project_id.isnot(None))
+                .distinct()
+            )
+            projects_with_reviews = result.scalars().all()
+            
+            if not projects_with_reviews:
+                return
+            
+            products_created = 0
+            products_updated = 0
+            
+            for project in projects_with_reviews:
+                if not project:
+                    continue
+                
+                # Check if product already exists for this project
+                existing_product = None
+                if project.product_id:
+                    result = await self.db.execute(select(Product).where(Product.id == project.product_id))
+                    existing_product = result.scalar_one_or_none()
+                
+                # If no product linked, check if a product with the same name exists
+                if not existing_product:
+                    result = await self.db.execute(select(Product).where(Product.name == project.name))
+                    existing_product = result.scalar_one_or_none()
+                
+                if existing_product:
+                    # Product exists, ensure project and reviews are linked
+                    if project.product_id != existing_product.id:
+                        project.product_id = existing_product.id
+                        products_updated += 1
+                    
+                    # Update reviews to link to this product
+                    result = await self.db.execute(
+                        select(CustomerReview).where(
+                            CustomerReview.project_id == project.id,
+                            CustomerReview.product_id.is_(None)
+                        )
+                    )
+                    unlinked_reviews = result.scalars().all()
+                    for review in unlinked_reviews:
+                        review.product_id = existing_product.id
+                        products_updated += 1
+                else:
+                    # Create new product from project
+                    new_product = Product(
+                        name=project.name,
+                        description=project.description or f"Product based on {project.name} project",
+                        category="Service",
+                        status="active" if project.status == "completed" else "development",
+                        price=0.0,
+                        launch_date=project.completed_at if project.completed_at else project.created_at,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    self.db.add(new_product)
+                    await self.db.flush()  # Get the ID
+                    
+                    # Link project to product
+                    project.product_id = new_product.id
+                    
+                    # Link all reviews for this project to the product
+                    result = await self.db.execute(
+                        select(CustomerReview).where(CustomerReview.project_id == project.id)
+                    )
+                    reviews = result.scalars().all()
+                    for review in reviews:
+                        review.product_id = new_product.id
+                    
+                    products_created += 1
+            
+            if products_created > 0 or products_updated > 0:
+                await self.db.commit()
+                print(f"✅ Auto-synced products from reviews: {products_created} created, {products_updated} updated")
+        except Exception as e:
+            print(f"⚠️  Error auto-syncing products from reviews: {e}")
+            # Don't raise - this is a background sync, shouldn't fail the review generation
     
     async def _generate_customer_review(self, project: Project) -> Optional[CustomerReview]:
         """
@@ -107,9 +205,10 @@ class CustomerReviewManager:
             project, customer_name, customer_title, company_name, rating
         )
         
-        # Create review
+        # Create review - link to product if project has a product_id
         review = CustomerReview(
             project_id=project.id,
+            product_id=project.product_id if hasattr(project, 'product_id') and project.product_id else None,
             customer_name=customer_name,
             customer_title=customer_title,
             company_name=company_name,

@@ -212,6 +212,30 @@ The web interface provides several views:
   - Award based on highest performance review rating
   - AI-generated congratulatory messages from managers
   - Award win tracking
+- **Pet Care System**: Office pets that employees can care for
+  - Interactive pet care game with happiness, hunger, and energy stats
+  - Pet care logs tracking employee interactions
+  - Multiple pet types (cats and dogs) with unique personalities
+- **Birthday Celebrations**: Automatic birthday party system
+  - Birthday parties scheduled in breakrooms
+  - Calendar integration for birthday events
+  - Upcoming birthdays tracking
+- **Coffee Breaks**: Natural break system for employees
+  - Automatic coffee break scheduling
+  - Breakroom movement and social interactions
+- **Gossip System**: AI-generated workplace gossip between employees
+  - Realistic workplace conversations
+  - Social dynamics and relationships
+- **Newsletter System**: Company newsletter generation
+  - Periodic company updates and announcements
+- **Random Events**: Dynamic office events
+  - Power outages, fire drills, pizza parties, and more
+  - Event impact on productivity and morale
+- **Suggestion System**: Employee suggestion box
+  - Employees can submit suggestions
+  - Voting and manager feedback system
+- **Weather System**: Office weather tracking
+  - Weather conditions affecting office mood
 
 All views update in real-time as the simulation runs via WebSocket.
 

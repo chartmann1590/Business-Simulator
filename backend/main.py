@@ -12,6 +12,8 @@ from database.database import init_db
 from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
+from datetime import datetime, timedelta
+from config import now as local_now
 
 # Create simulator instance (will be initialized in lifespan)
 simulator = OfficeSimulator()
@@ -81,6 +83,21 @@ async def lifespan(app: FastAPI):
                         import traceback
                         traceback.print_exc()
                 
+                # Generate birthday party meetings for upcoming birthdays (next 90 days)
+                print("Generating birthday party meetings for calendar...")
+                try:
+                    from business.birthday_manager import BirthdayManager
+                    birthday_manager = BirthdayManager(db)
+                    meetings_created = await birthday_manager.generate_birthday_party_meetings(days_ahead=90)
+                    if meetings_created > 0:
+                        print(f"✅ Generated {meetings_created} birthday party meetings for the calendar.")
+                    else:
+                        print("✅ Birthday party meetings check complete (all parties already scheduled).")
+                except Exception as birthday_error:
+                    print(f"❌ Warning: Could not generate birthday meetings: {birthday_error}")
+                    import traceback
+                    traceback.print_exc()
+                
                 # Generate initial customer reviews for existing completed projects
                 print("Generating initial customer reviews for completed projects...")
                 try:
@@ -118,7 +135,7 @@ async def lifespan(app: FastAPI):
                     from sqlalchemy import select
                     
                     meeting_manager = MeetingManager(db)
-                    now = datetime.utcnow()
+                    now = local_now()
                     
                     # Generate meetings for last week (7 days ago to today)
                     last_week_start = now - timedelta(days=7)

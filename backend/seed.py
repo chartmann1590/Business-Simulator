@@ -4,6 +4,7 @@ from database.models import Employee, Project, Financial, Activity, BusinessSett
 from business.project_manager import ProjectManager
 from business.financial_manager import FinancialManager
 from datetime import datetime
+import random
 
 EMPLOYEES_DATA = [
     {
@@ -108,6 +109,17 @@ async def seed_database():
         
         # Create employees
         employees = []
+        hobbies_list = [
+            ["reading", "hiking", "photography"],
+            ["cooking", "traveling", "yoga"],
+            ["gaming", "music", "movies"],
+            ["sports", "fitness", "cycling"],
+            ["art", "writing", "gardening"],
+            ["coding", "tech", "electronics"],
+            ["dancing", "music", "socializing"],
+            ["reading", "chess", "puzzles"]
+        ]
+        
         for emp_data in EMPLOYEES_DATA:
             # Set default values for new fields if not present
             if 'avatar_path' not in emp_data:
@@ -116,6 +128,22 @@ async def seed_database():
                 emp_data['hired_at'] = datetime.utcnow()
             if 'fired_at' not in emp_data:
                 emp_data['fired_at'] = None
+            # Add birthday (random month and day)
+            if 'birthday_month' not in emp_data:
+                emp_data['birthday_month'] = random.randint(1, 12)
+            if 'birthday_day' not in emp_data:
+                # Handle different month lengths
+                month = emp_data['birthday_month']
+                if month in [1, 3, 5, 7, 8, 10, 12]:
+                    max_day = 31
+                elif month in [4, 6, 9, 11]:
+                    max_day = 30
+                else:  # February
+                    max_day = 28
+                emp_data['birthday_day'] = random.randint(1, max_day)
+            # Add hobbies
+            if 'hobbies' not in emp_data:
+                emp_data['hobbies'] = random.choice(hobbies_list)
             employee = Employee(**emp_data)
             db.add(employee)
             employees.append(employee)
@@ -195,6 +223,36 @@ async def seed_database():
             setting_value="TechFlow Solutions"
         )
         db.add(business_name)
+        
+        # Create product from business settings
+        from database.models import Product, ProductTeamMember
+        product = Product(
+            name="Business Platform",
+            description="A comprehensive business management platform",
+            category="SaaS",
+            status="active",
+            price=0.0,
+            launch_date=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(product)
+        await db.flush()
+        
+        # Add key employees as team members
+        for emp in employees:
+            if emp.role == "CEO" or emp.title == "Product Manager" or (emp.department and "Product" in emp.department):
+                tm = ProductTeamMember(
+                    product_id=product.id,
+                    employee_id=emp.id,
+                    role="Product Manager" if "Product" in emp.title else "Executive Sponsor",
+                    responsibility="Product strategy and oversight"
+                )
+                db.add(tm)
+        
+        # Link projects to product
+        for project in projects:
+            project.product_id = product.id
         
         await db.commit()
         print("Database seeded successfully!")

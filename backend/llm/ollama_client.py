@@ -2,6 +2,7 @@ import httpx
 import json
 from typing import Dict, List, Optional
 import os
+import random
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # Default to llama3.2 or gemma3, preferring llama3.2
@@ -370,6 +371,143 @@ Write only the response message, nothing else."""
             # Fallback response
             return f"Sure, I can help with that! Let me get back to you shortly."
     
+    async def generate_casual_conversation(
+        self,
+        employee1_name: str,
+        employee1_title: str,
+        employee1_role: str,
+        employee1_personality: List[str],
+        employee2_name: str,
+        employee2_title: str,
+        employee2_role: str,
+        employee2_personality: List[str],
+        business_context: Dict = None,
+        conversation_type: str = "mixed"  # "work", "personal", or "mixed"
+    ) -> Dict[str, str]:
+        """Generate a casual conversation between two employees."""
+        personality1_str = ", ".join(employee1_personality) if employee1_personality else "balanced"
+        personality2_str = ", ".join(employee2_personality) if employee2_personality else "balanced"
+        
+        # Build business context section
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get("revenue"):
+                business_parts.append(f"Company revenue: ${business_context['revenue']:,.2f}")
+            if business_context.get("profit"):
+                business_parts.append(f"Company profit: ${business_context['profit']:,.2f}")
+            if business_context.get("active_projects"):
+                business_parts.append(f"Active projects: {business_context['active_projects']}")
+            if business_parts:
+                business_context_section = f"\nCompany status: {', '.join(business_parts)}"
+        
+        # Determine conversation topic
+        topic_instruction = ""
+        if conversation_type == "work":
+            topic_instruction = "Focus the conversation on work-related topics like projects, tasks, deadlines, or work challenges."
+        elif conversation_type == "personal":
+            topic_instruction = "Focus the conversation on personal topics like weekend plans, hobbies, family, or casual life updates."
+        else:  # mixed
+            topic_instruction = "Mix work and personal topics naturally - they might discuss a project briefly, then chat about weekend plans or casual topics."
+        
+        prompt = f"""Generate a brief, natural conversation between two coworkers in an office setting.
+
+Employee 1: {employee1_name}, {employee1_title} ({employee1_role})
+Personality: {personality1_str}
+
+Employee 2: {employee2_name}, {employee2_title} ({employee2_role})
+Personality: {personality2_str}
+{business_context_section}
+
+{topic_instruction}
+
+The conversation should:
+1. Be brief (2-4 exchanges total)
+2. Sound natural and conversational
+3. Match each person's personality
+4. Be appropriate for an office setting
+5. Feel authentic and realistic
+
+Format the response as JSON with this structure:
+{{
+  "message1": {{
+    "speaker": "{employee1_name}",
+    "text": "first message from employee1"
+  }},
+  "message2": {{
+    "speaker": "{employee2_name}",
+    "text": "response from employee2"
+  }},
+  "message3": {{
+    "speaker": "{employee1_name}",
+    "text": "optional follow-up from employee1"
+  }},
+  "message4": {{
+    "speaker": "{employee2_name}",
+    "text": "optional final response from employee2"
+  }}
+}}
+
+Only include message1 and message2 as required. Add message3 and message4 only if the conversation naturally continues.
+Keep each message to 1-2 sentences maximum."""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Try to parse JSON
+            try:
+                conversation = json.loads(response_text)
+                # Validate structure
+                messages = []
+                for key in ["message1", "message2", "message3", "message4"]:
+                    if key in conversation and conversation[key]:
+                        msg = conversation[key]
+                        if "speaker" in msg and "text" in msg:
+                            messages.append({
+                                "speaker": msg["speaker"],
+                                "text": msg["text"]
+                            })
+                
+                if len(messages) >= 2:
+                    return {"messages": messages}
+                else:
+                    raise ValueError("Not enough valid messages")
+            except (json.JSONDecodeError, ValueError) as e:
+                # Fallback: create a simple conversation
+                print(f"Error parsing conversation JSON: {e}, response: {response_text[:200]}")
+                return {
+                    "messages": [
+                        {"speaker": employee1_name, "text": f"Hey {employee2_name.split()[0]}, how's it going?"},
+                        {"speaker": employee2_name, "text": "Pretty good! Just working on some tasks. How about you?"}
+                    ]
+                }
+        except Exception as e:
+            print(f"Error generating casual conversation: {e}")
+            # Fallback conversation
+            return {
+                "messages": [
+                    {"speaker": employee1_name, "text": f"Hey {employee2_name.split()[0]}, how's your day going?"},
+                    {"speaker": employee2_name, "text": "It's going well, thanks for asking!"}
+                ]
+            }
+    
     async def generate_email(
         self,
         sender_name: str,
@@ -683,6 +821,251 @@ Write only the thoughts, nothing else."""
             print(f"Error generating employee thoughts: {e}")
             # Fallback thoughts
             return f"I'm thinking about my current work and how I can best contribute to the team's success."
+    
+    def _is_valid_name(self, name: str) -> bool:
+        """Validate that a name is a proper employee name."""
+        if not name or len(name.strip()) < 3:
+            return False
+        
+        name_lower = name.lower().strip()
+        
+        # Invalid patterns - phrases, contractions, common words
+        # Note: We check for these as whole words/phrases, not substrings
+        invalid_patterns = [
+            "i can't", "i can ", "i will", "i won't", "i'm ", "i am ", "i have ",
+            " can't", " won't", " don't", " isn't", " aren't", " wasn't", " weren't",
+            "the ", "a ", "an ", "this ", "that ", "these ", "those ",
+            "yes ", "no ", "maybe ", "perhaps ", "sure ", "okay ", "ok ",
+            "hello ", "hi ", "hey ", "thanks ", "thank you",
+            "here is", "here's", "there is", "there's",
+            "my name", "name is", " called", " named",
+            " employee", " worker", " staff", " person", " human",
+            " example", " sample", " test", " demo", " placeholder"
+        ]
+        
+        # Check for invalid patterns (must match as whole phrase, not substring)
+        for pattern in invalid_patterns:
+            # Check if pattern appears at start or as a separate word
+            if name_lower.startswith(pattern) or f" {pattern}" in name_lower:
+                return False
+        
+        # Must be exactly two words (first and last name)
+        parts = name.split()
+        if len(parts) != 2:
+            return False
+        
+        first, last = parts
+        
+        # Each part must be at least 2 characters
+        if len(first) < 2 or len(last) < 2:
+            return False
+        
+        # Each part should start with a capital letter (or be all caps)
+        if not (first[0].isupper() or first.isupper()):
+            return False
+        if not (last[0].isupper() or last.isupper()):
+            return False
+        
+        # Should only contain letters, hyphens, and apostrophes (for names like O'Brien)
+        import re
+        name_pattern = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
+        if not name_pattern.match(first) or not name_pattern.match(last):
+            return False
+        
+        # Reject if it's a common phrase or sentence (but allow names that contain these as substrings)
+        # Only reject if the name starts with these words (indicating a phrase)
+        invalid_starters = ["the ", "a ", "an ", "and ", "or ", "but ", "is ", "are ", "was ", "were "]
+        if any(name_lower.startswith(starter) for starter in invalid_starters):
+            return False
+        
+        return True
+    
+    async def generate_unique_employee_name(
+        self,
+        existing_names: List[str],
+        department: Optional[str] = None,
+        role: Optional[str] = None
+    ) -> str:
+        """Generate a unique employee name using AI, avoiding duplicates with existing names."""
+        existing_names_str = ", ".join(existing_names) if existing_names else "none"
+        
+        prompt = f"""You are generating a REAL PERSON'S NAME for an employee in a business simulation.
+
+CRITICAL REQUIREMENTS:
+1. Generate ONLY a proper first name and last name (e.g., "Sarah Chen", "Marcus Rodriguez", "Emily Watson")
+2. The name must be TWO WORDS ONLY - a first name and a last name
+3. Each name part must be a REAL, PROPER NAME (not a phrase, not a sentence, not a contraction)
+4. DO NOT use phrases like "I can't", "I will", "Here is", "My name is", etc.
+5. DO NOT use contractions like "can't", "won't", "don't"
+6. DO NOT use common words like "the", "a", "employee", "person"
+7. The name should be DISTINCT from these existing names: {existing_names_str}
+8. Make it diverse, professional, and realistic
+9. Return ONLY the name in format "FirstName LastName" with no other text
+
+EXAMPLES OF GOOD NAMES:
+- "Alexandra Bennett"
+- "Benjamin Chen"
+- "Catherine Rodriguez"
+- "Daniel Kim"
+
+EXAMPLES OF BAD NAMES (DO NOT GENERATE THESE):
+- "I can't" (this is a phrase, not a name)
+- "Here is John" (this is a sentence)
+- "My name is Sarah" (this is a sentence)
+- "Employee Smith" (contains common word)
+
+{f"Department: {department}" if department else ""}
+{f"Role: {role}" if role else ""}
+
+Generate the name now (ONLY the name, nothing else):"""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response - extract just the name
+            import re
+            # Remove markdown code blocks if present
+            response_text = re.sub(r'```[^\n]*\n?', '', response_text)
+            response_text = re.sub(r'\n?```', '', response_text)
+            
+            # Try to extract name from JSON if present
+            json_match = re.search(r'"name"\s*:\s*"([^"]+)"', response_text)
+            if json_match:
+                response_text = json_match.group(1)
+            
+            # Extract first and last name (should be exactly two words)
+            name_parts = [part.strip() for part in response_text.split() if part.strip()]
+            
+            # Try to extract just the first two words (in case AI added extra text)
+            if len(name_parts) >= 2:
+                name = f"{name_parts[0]} {name_parts[1]}"
+            elif len(name_parts) == 1:
+                # If only one word, add a common last name
+                name = f"{name_parts[0]} {random.choice(['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'])}"
+            else:
+                # Fallback if no valid name found
+                name = None
+            
+            # CRITICAL: Validate the name before using it
+            if name and self._is_valid_name(name):
+                name_lower = name.lower()
+                # Verify it's not in existing names (case-insensitive)
+                if any(existing.lower() == name_lower for existing in existing_names):
+                    # If duplicate, try once more with emphasis
+                    return await self._generate_name_retry(existing_names, department, role)
+                # Name is valid and unique - return it
+                return name
+            else:
+                # Invalid name generated - log and use fallback
+                print(f"⚠️  AI generated invalid name: '{response_text}' - using fallback")
+                return await self._generate_name_fallback(existing_names)
+                
+        except Exception as e:
+            print(f"Error generating employee name with AI: {e}")
+            return await self._generate_name_fallback(existing_names)
+    
+    async def _generate_name_retry(
+        self,
+        existing_names: List[str],
+        department: Optional[str] = None,
+        role: Optional[str] = None
+    ) -> str:
+        """Retry name generation with stronger emphasis on uniqueness."""
+        existing_names_str = ", ".join(existing_names)
+        
+        prompt = f"""Generate a COMPLETELY DIFFERENT REAL PERSON'S NAME from these existing names: {existing_names_str}
+
+CRITICAL REQUIREMENTS:
+1. Generate ONLY a proper first name and last name (e.g., "Sarah Chen", "Marcus Rodriguez")
+2. The name must be TWO WORDS ONLY - a first name and a last name
+3. DO NOT use phrases, sentences, contractions, or common words
+4. The name must be VERY DIFFERENT - different first letter, different sound, completely unique
+5. Return ONLY the name in format "FirstName LastName" with no other text
+
+EXAMPLES OF GOOD NAMES: "Alexandra Bennett", "Benjamin Chen", "Catherine Rodriguez"
+BAD (DO NOT USE): "I can't", "Here is John", "My name is Sarah"
+
+Generate the name now (ONLY the name):"""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            import re
+            response_text = re.sub(r'```[^\n]*\n?', '', response_text)
+            response_text = re.sub(r'\n?```', '', response_text)
+            
+            name_parts = [part.strip() for part in response_text.split() if part.strip()]
+            
+            if len(name_parts) >= 2:
+                name = f"{name_parts[0]} {name_parts[1]}"
+                # Validate the name
+                if self._is_valid_name(name):
+                    name_lower = name.lower()
+                    if not any(existing.lower() == name_lower for existing in existing_names):
+                        return name
+            
+            # Invalid or duplicate - use fallback
+            print(f"⚠️  Retry generated invalid/duplicate name: '{response_text}' - using fallback")
+            return await self._generate_name_fallback(existing_names)
+        except:
+            return await self._generate_name_fallback(existing_names)
+    
+    async def _generate_name_fallback(self, existing_names: List[str]) -> str:
+        """Fallback name generation using diverse name pools."""
+        
+        # Diverse first names
+        first_names = [
+            "Alexandra", "Benjamin", "Catherine", "Daniel", "Elena", "Felix", "Gabriela", "Hector",
+            "Isabella", "Julian", "Katherine", "Lucas", "Maya", "Nathan", "Olivia", "Parker",
+            "Quinn", "Rachel", "Samuel", "Tessa", "Victor", "Wendy", "Xavier", "Yara", "Zoe",
+            "Adrian", "Brianna", "Caleb", "Diana", "Ethan", "Fiona", "George", "Hannah",
+            "Ian", "Jasmine", "Kevin", "Lily", "Marcus", "Nora", "Oscar", "Penelope"
+        ]
+        
+        # Diverse last names
+        last_names = [
+            "Anderson", "Bennett", "Chen", "Davis", "Evans", "Foster", "Garcia", "Hughes",
+            "Ivanov", "Jackson", "Kim", "Lopez", "Martinez", "Nguyen", "O'Brien", "Patel",
+            "Quinn", "Rodriguez", "Singh", "Thompson", "Ueda", "Vargas", "Wang", "Xu",
+            "Yamamoto", "Zhang", "Adams", "Brown", "Clark", "Diaz", "Edwards", "Fisher",
+            "Green", "Hall", "Irwin", "Johnson", "Kumar", "Lee", "Moore", "Nelson"
+        ]
+        
+        # Try up to 20 times to find a unique name
+        for _ in range(20):
+            name = f"{random.choice(first_names)} {random.choice(last_names)}"
+            name_lower = name.lower()
+            if not any(existing.lower() == name_lower for existing in existing_names):
+                return name
+        
+        # If still duplicate, add a number
+        base_name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        counter = 1
+        while f"{base_name} {counter}" in existing_names:
+            counter += 1
+        return f"{base_name} {counter}"
     
     async def close(self):
         if self._client is not None:

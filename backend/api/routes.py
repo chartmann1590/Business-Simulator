@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
 from typing import List
 from datetime import datetime, timedelta
 from pydantic import BaseModel
+from config import now as local_now
 
 router = APIRouter()
 
@@ -187,6 +188,17 @@ async def _calculate_next_review_info(employee: Employee, db: AsyncSession) -> d
     """Calculate when the next review is scheduled and which manager will conduct it."""
     from datetime import datetime, timedelta
     
+    # Check if employee is terminated - terminated employees are not eligible for reviews
+    if employee.status == "fired" or employee.fired_at:
+        return {
+            "scheduled_at": None,
+            "manager_id": None,
+            "manager_name": None,
+            "manager_title": None,
+            "eligible": False,
+            "reason": "Terminated employees are not eligible for performance reviews."
+        }
+    
     # Check if employee is eligible for reviews (not executives)
     if employee.role in ["CEO", "Manager", "CTO", "COO", "CFO"] or employee.hierarchy_level < 3:
         return {
@@ -218,7 +230,7 @@ async def _calculate_next_review_info(employee: Employee, db: AsyncSession) -> d
         next_review_time = hired_at + timedelta(hours=6)
     else:
         # Fallback: 6 hours from now
-        next_review_time = datetime.utcnow() + timedelta(hours=6)
+        next_review_time = local_now() + timedelta(hours=6)
     
     # Find manager who will conduct the review (prefer same department)
     result = await db.execute(
@@ -292,6 +304,24 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
     )
     decisions = result.scalars().all()
     
+    # Get termination reason if employee is terminated
+    termination_reason = None
+    if emp.status == "fired" or emp.fired_at:
+        # Find the firing activity for this employee
+        firing_result = await db.execute(
+            select(Activity)
+            .where(Activity.activity_type == "firing")
+            .order_by(desc(Activity.timestamp))
+        )
+        firing_activities = firing_result.scalars().all()
+        # Find the activity for this specific employee
+        for activity in firing_activities:
+            if activity.activity_metadata and isinstance(activity.activity_metadata, dict):
+                emp_id = activity.activity_metadata.get("employee_id")
+                if emp_id == employee_id:
+                    termination_reason = activity.activity_metadata.get("termination_reason")
+                    break
+    
     # Calculate next review information
     next_review_info = await _calculate_next_review_info(emp, db)
     
@@ -312,6 +342,7 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "activity_state": emp.activity_state if hasattr(emp, 'activity_state') else "idle",
         "hired_at": emp.hired_at.isoformat() if hasattr(emp, 'hired_at') and emp.hired_at else None,
         "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
+        "termination_reason": termination_reason,
         "has_performance_award": bool(emp.has_performance_award) if hasattr(emp, 'has_performance_award') else False,
         "performance_award_wins": int(emp.performance_award_wins) if hasattr(emp, 'performance_award_wins') else 0,
         "award_history": [
@@ -342,7 +373,9 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
             }
             for dec in decisions
         ],
-        "next_review": next_review_info
+        "next_review": next_review_info,
+        "birthday_month": emp.birthday_month if hasattr(emp, 'birthday_month') else None,
+        "birthday_day": emp.birthday_day if hasattr(emp, 'birthday_day') else None
     }
 
 @router.get("/employees/{employee_id}/reviews")
@@ -398,6 +431,10 @@ async def get_employee_thoughts(employee_id: int, db: AsyncSession = Depends(get
     
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Terminated employees should not have thoughts generated
+    if emp.status == "fired" or emp.fired_at:
+        raise HTTPException(status_code=403, detail="Terminated employees are not eligible for thoughts generation")
     
     # Get recent activities
     result = await db.execute(
@@ -584,6 +621,10 @@ async def create_employee_review(employee_id: int, review_data: CreateReviewRequ
     
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Terminated employees are not eligible for reviews
+    if employee.status == "fired" or employee.fired_at:
+        raise HTTPException(status_code=403, detail="Terminated employees are not eligible for performance reviews")
     
     # Get manager_id from review_data or find a manager
     manager_id = review_data.manager_id
@@ -782,6 +823,43 @@ async def initialize_performance_award(db: AsyncSession = Depends(get_db), force
             "award_holder": None
         }
 
+@router.post("/reviews/update-award-now")
+async def update_performance_award_now(db: AsyncSession = Depends(get_db)):
+    """FORCE update the performance award RIGHT NOW. Use this to immediately assign the award."""
+    from business.review_manager import ReviewManager
+    
+    print("🏆 [AWARD] FORCING immediate performance award update via API...")
+    review_manager = ReviewManager(db)
+    await review_manager._update_performance_award()
+    await db.commit()
+    
+    # Get the current award holder
+    result = await db.execute(
+        select(Employee).where(
+            Employee.has_performance_award == True,
+            Employee.status == "active"
+        )
+    )
+    award_holder = result.scalar_one_or_none()
+    
+    if award_holder:
+        return {
+            "success": True,
+            "message": f"Performance award updated! Current holder: {award_holder.name}",
+            "award_holder": {
+                "id": award_holder.id,
+                "name": award_holder.name,
+                "title": award_holder.title,
+                "rating": None  # We'd need to query the review to get this
+            }
+        }
+    else:
+        return {
+            "success": True,
+            "message": "Performance award updated. No award holder assigned (no reviews found or no eligible employees).",
+            "award_holder": None
+        }
+
 @router.get("/employees/{employee_id}/award-message")
 async def get_award_congratulatory_message(employee_id: int, db: AsyncSession = Depends(get_db)):
     """Generate an AI congratulatory message from the manager for the employee's performance award."""
@@ -872,7 +950,7 @@ Write the message in a natural, conversational tone that matches your personalit
             "rating": latest_rating,
             "award_wins": award_wins,
             "message": message,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": local_now().isoformat()
         }
     except Exception as e:
         import traceback
@@ -889,7 +967,7 @@ Write the message in a natural, conversational tone that matches your personalit
             "rating": latest_rating,
             "award_wins": award_wins,
             "message": fallback_message,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": local_now().isoformat()
         }
 
 @router.get("/projects")
@@ -1194,6 +1272,291 @@ async def get_task_activities(task_id: int, limit: int = 50, db: AsyncSession = 
         for act in filtered_activities
     ]
 
+async def sync_products_from_reviews(db: AsyncSession):
+    """
+    Automatically create/update products from reviews.
+    Finds all projects with reviews and ensures they have corresponding products.
+    """
+    try:
+        # Find all unique projects that have reviews
+        result = await db.execute(
+            select(Project)
+            .join(CustomerReview, CustomerReview.project_id == Project.id)
+            .where(CustomerReview.project_id.isnot(None))
+            .distinct()
+        )
+        projects_with_reviews = result.scalars().all()
+        
+        if not projects_with_reviews:
+            return 0
+        
+        products_created = 0
+        products_updated = 0
+        
+        for project in projects_with_reviews:
+            if not project:
+                continue
+            
+            # Check if product already exists for this project
+            existing_product = None
+            if project.product_id:
+                result = await db.execute(select(Product).where(Product.id == project.product_id))
+                existing_product = result.scalar_one_or_none()
+            
+            # If no product linked, check if a product with the same name exists
+            if not existing_product:
+                result = await db.execute(select(Product).where(Product.name == project.name))
+                existing_product = result.scalar_one_or_none()
+            
+            if existing_product:
+                # Product exists, ensure project and reviews are linked
+                if project.product_id != existing_product.id:
+                    project.product_id = existing_product.id
+                    products_updated += 1
+                
+                # Update reviews to link to this product
+                result = await db.execute(
+                    select(CustomerReview).where(
+                        CustomerReview.project_id == project.id,
+                        CustomerReview.product_id.is_(None)
+                    )
+                )
+                unlinked_reviews = result.scalars().all()
+                for review in unlinked_reviews:
+                    review.product_id = existing_product.id
+                    products_updated += 1
+            else:
+                # Create new product from project
+                new_product = Product(
+                    name=project.name,
+                    description=project.description or f"Product based on {project.name} project",
+                    category="Service",
+                    status="active" if project.status == "completed" else "development",
+                    price=0.0,
+                    launch_date=project.completed_at if project.completed_at else project.created_at,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(new_product)
+                await db.flush()  # Get the ID
+                
+                # Link project to product
+                project.product_id = new_product.id
+                
+                # Link all reviews for this project to the product
+                result = await db.execute(
+                    select(CustomerReview).where(CustomerReview.project_id == project.id)
+                )
+                reviews = result.scalars().all()
+                for review in reviews:
+                    review.product_id = new_product.id
+                
+                products_created += 1
+        
+        if products_created > 0 or products_updated > 0:
+            await db.commit()
+            print(f"✅ Synced products from reviews: {products_created} created, {products_updated} updated")
+        
+        return products_created + products_updated
+    except Exception as e:
+        print(f"Error syncing products from reviews: {e}")
+        import traceback
+        traceback.print_exc()
+        await db.rollback()
+        return 0
+
+@router.get("/products")
+async def get_products(db: AsyncSession = Depends(get_db)):
+    """Get all products. Automatically syncs products from reviews."""
+    try:
+        # Sync products from reviews before fetching
+        await sync_products_from_reviews(db)
+        
+        result = await db.execute(select(Product).order_by(desc(Product.created_at)))
+        products = result.scalars().all()
+        
+        product_list = []
+        for product in products:
+            # Get customer reviews count and average rating
+            reviews_result = await db.execute(
+                select(CustomerReview).where(CustomerReview.product_id == product.id)
+            )
+            reviews = reviews_result.scalars().all()
+            review_count = len(reviews)
+            avg_rating = sum(r.rating for r in reviews) / review_count if review_count > 0 else 0.0
+            
+            # Get total sales (revenue from projects related to this product)
+            sales_result = await db.execute(
+                select(func.sum(Project.revenue)).where(Project.product_id == product.id)
+            )
+            total_sales = sales_result.scalar() or 0.0
+            
+            # Get team member count
+            team_result = await db.execute(
+                select(func.count(ProductTeamMember.id)).where(ProductTeamMember.product_id == product.id)
+            )
+            team_count = team_result.scalar() or 0
+            
+            product_list.append({
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "category": product.category,
+                "status": product.status,
+                "price": product.price,
+                "launch_date": product.launch_date.isoformat() if product.launch_date else None,
+                "created_at": product.created_at.isoformat() if product.created_at else None,
+                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+                "review_count": review_count,
+                "average_rating": round(avg_rating, 1),
+                "total_sales": total_sales,
+                "team_count": team_count
+            })
+        
+        return product_list
+    except Exception as e:
+        print(f"Error fetching products: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+@router.post("/products/sync-from-reviews")
+async def sync_products_from_reviews_endpoint(db: AsyncSession = Depends(get_db)):
+    """Manually trigger sync of products from reviews."""
+    try:
+        count = await sync_products_from_reviews(db)
+        return {
+            "success": True,
+            "message": f"Synced products from reviews: {count} products created/updated",
+            "count": count
+        }
+    except Exception as e:
+        print(f"Error in sync endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error syncing products: {str(e)}")
+
+@router.get("/products/{product_id}")
+async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
+    """Get product details with team members, sales, and feedback."""
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Get team members
+    team_result = await db.execute(
+        select(ProductTeamMember, Employee)
+        .join(Employee, ProductTeamMember.employee_id == Employee.id)
+        .where(ProductTeamMember.product_id == product_id)
+        .order_by(ProductTeamMember.added_at)
+    )
+    team_members_data = team_result.all()
+    
+    team_members = []
+    for team_member, employee in team_members_data:
+        team_members.append({
+            "id": team_member.id,
+            "employee_id": employee.id,
+            "employee_name": employee.name,
+            "employee_title": employee.title,
+            "employee_department": employee.department,
+            "role": team_member.role,
+            "responsibility": team_member.responsibility,
+            "added_at": team_member.added_at.isoformat() if team_member.added_at else None,
+            "avatar_path": employee.avatar_path if hasattr(employee, 'avatar_path') else None
+        })
+    
+    # Get customer reviews
+    reviews_result = await db.execute(
+        select(CustomerReview)
+        .where(CustomerReview.product_id == product_id)
+        .order_by(desc(CustomerReview.created_at))
+    )
+    reviews = reviews_result.scalars().all()
+    
+    customer_reviews = []
+    total_rating = 0.0
+    for review in reviews:
+        total_rating += review.rating
+        customer_reviews.append({
+            "id": review.id,
+            "customer_name": review.customer_name,
+            "customer_title": review.customer_title,
+            "company_name": review.company_name,
+            "rating": review.rating,
+            "review_text": review.review_text,
+            "verified_purchase": review.verified_purchase,
+            "helpful_count": review.helpful_count,
+            "created_at": review.created_at.isoformat() if review.created_at else None
+        })
+    
+    avg_rating = total_rating / len(reviews) if reviews else 0.0
+    
+    # Get sales data (from projects related to this product)
+    projects_result = await db.execute(
+        select(Project).where(Project.product_id == product_id)
+    )
+    projects = projects_result.scalars().all()
+    
+    sales_data = {
+        "total_revenue": sum(p.revenue for p in projects),
+        "total_budget": sum(p.budget for p in projects),
+        "project_count": len(projects),
+        "projects": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "revenue": p.revenue,
+                "budget": p.budget,
+                "status": p.status,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            }
+            for p in projects
+        ]
+    }
+    
+    # Get financial transactions related to this product (through projects)
+    financials_result = await db.execute(
+        select(Financial)
+        .join(Project, Financial.project_id == Project.id)
+        .where(Project.product_id == product_id)
+        .order_by(desc(Financial.timestamp))
+        .limit(50)
+    )
+    financials = financials_result.scalars().all()
+    
+    recent_transactions = [
+        {
+            "id": f.id,
+            "type": f.type,
+            "amount": f.amount,
+            "description": f.description,
+            "timestamp": f.timestamp.isoformat() if f.timestamp else None,
+            "project_id": f.project_id
+        }
+        for f in financials
+    ]
+    
+    return {
+        "id": product.id,
+        "name": product.name,
+        "description": product.description,
+        "category": product.category,
+        "status": product.status,
+        "price": product.price,
+        "launch_date": product.launch_date.isoformat() if product.launch_date else None,
+        "created_at": product.created_at.isoformat() if product.created_at else None,
+        "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+        "team_members": team_members,
+        "customer_reviews": customer_reviews,
+        "average_rating": round(avg_rating, 1),
+        "review_count": len(reviews),
+        "sales": sales_data,
+        "recent_transactions": recent_transactions
+    }
+
 @router.get("/projects/{project_id}/activities")
 async def get_project_activities(project_id: int, limit: int = 50, db: AsyncSession = Depends(get_db)):
     """Get activities related to a project."""
@@ -1274,7 +1637,7 @@ async def get_project_activities(project_id: int, limit: int = 50, db: AsyncSess
             "activity_type": act.activity_type,
             "description": act.description,
             "metadata": act.activity_metadata,
-            "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+            "timestamp": (act.timestamp or local_now()).isoformat()
         }
         for act in activities
     ]
@@ -1296,7 +1659,7 @@ async def get_activities(limit: int = 50, db: AsyncSession = Depends(get_db)):
             "activity_type": act.activity_type,
             "description": act.description,
             "metadata": act.activity_metadata,
-            "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+            "timestamp": (act.timestamp or local_now()).isoformat()
         }
         for act in activities
     ]
@@ -1422,7 +1785,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "decision_type": d.decision_type,
                     "description": d.description,
                     "reasoning": d.reasoning,
-                    "timestamp": (d.timestamp or datetime.utcnow()).isoformat()
+                    "timestamp": (d.timestamp or local_now()).isoformat()
                 }
                 for d in decisions
             ]
@@ -1454,7 +1817,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "decision_type": decision_type,
                     "description": act.description,
                     "reasoning": act.activity_metadata.get("reasoning", "") if act.activity_metadata and isinstance(act.activity_metadata, dict) else "",
-                    "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+                    "timestamp": (act.timestamp or local_now()).isoformat()
                 })
             
             # Sort by timestamp descending and limit to 10
@@ -1479,7 +1842,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "employee_role": next((emp.role for emp in leadership_employees if emp.id == act.employee_id), "Unknown"),
                     "activity_type": act.activity_type,
                     "description": act.description,
-                    "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+                    "timestamp": (act.timestamp or local_now()).isoformat()
                 }
                 for act in activities
             ]
@@ -1572,6 +1935,89 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "reviews_in_progress": in_progress_reviews_count
         }
         
+        # Get break tracking data
+        now = local_now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Get employees currently on break
+        employees_on_break = [
+            {
+                "id": emp.id,
+                "name": emp.name,
+                "title": emp.title,
+                "department": emp.department,
+                "current_room": emp.current_room or "Unknown",
+                "floor": emp.floor,
+                "activity_state": emp.activity_state,
+                "last_coffee_break": emp.last_coffee_break.isoformat() if emp.last_coffee_break else None
+            }
+            for emp in active_employees
+            if emp.activity_state == "break" or (emp.current_room and "breakroom" in emp.current_room.lower())
+        ]
+        
+        # Get break activities for today (including break returns)
+        result = await db.execute(
+            select(Activity)
+            .where(
+                Activity.activity_type.in_(["coffee_break", "break", "break_returned"]),
+                Activity.timestamp >= today_start
+            )
+            .order_by(desc(Activity.timestamp))
+        )
+        today_breaks = result.scalars().all()
+        
+        # Separate break returns for display
+        break_returns = [
+            {
+                "id": act.id,
+                "employee_id": act.employee_id,
+                "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
+                "manager_name": act.activity_metadata.get("manager_name", "Manager") if act.activity_metadata and isinstance(act.activity_metadata, dict) else "Manager",
+                "manager_id": act.activity_metadata.get("manager_id") if act.activity_metadata and isinstance(act.activity_metadata, dict) else None,
+                "description": act.description,
+                "break_duration_minutes": act.activity_metadata.get("break_duration_minutes") if act.activity_metadata and isinstance(act.activity_metadata, dict) else None,
+                "timestamp": act.timestamp.isoformat() if act.timestamp else None
+            }
+            for act in today_breaks
+            if act.activity_type == "break_returned"
+        ]
+        
+        # Group breaks by employee for daily time visibility
+        employee_break_history = {}
+        for break_activity in today_breaks:
+            emp_id = break_activity.employee_id
+            if not emp_id:
+                continue
+            
+            if emp_id not in employee_break_history:
+                employee_break_history[emp_id] = {
+                    "employee_id": emp_id,
+                    "employee_name": next((emp.name for emp in active_employees if emp.id == emp_id), "Unknown"),
+                    "breaks": [],
+                    "total_break_count": 0,
+                    "total_break_time_minutes": 0
+                }
+            
+            break_room = "Unknown"
+            if break_activity.activity_metadata and isinstance(break_activity.activity_metadata, dict):
+                break_room = break_activity.activity_metadata.get("target_room", "Unknown")
+            
+            employee_break_history[emp_id]["breaks"].append({
+                "id": break_activity.id,
+                "timestamp": break_activity.timestamp.isoformat() if break_activity.timestamp else None,
+                "description": break_activity.description,
+                "room": break_room,
+                "break_type": break_activity.activity_metadata.get("break_type", "coffee") if break_activity.activity_metadata and isinstance(break_activity.activity_metadata, dict) else "coffee"
+            })
+            employee_break_history[emp_id]["total_break_count"] += 1
+        
+        # Sort breaks by timestamp (most recent first) for each employee
+        for emp_id in employee_break_history:
+            employee_break_history[emp_id]["breaks"].sort(key=lambda x: x["timestamp"] or "", reverse=True)
+        
+        # Convert to list for frontend
+        break_history_list = list(employee_break_history.values())
+        
         return {
             "business_name": business_name,
             "revenue": revenue or 0.0,
@@ -1585,7 +2031,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "employee_id": act.employee_id,
                     "activity_type": act.activity_type,
                     "description": act.description,
-                    "timestamp": (act.timestamp or datetime.utcnow()).isoformat()
+                    "timestamp": (act.timestamp or local_now()).isoformat()
                 }
                 for act in recent_activities
             ],
@@ -1638,6 +2084,15 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "recent_decisions": leadership_decisions,
                 "recent_activities": leadership_activities,
                 "metrics": leadership_metrics
+            },
+            # Break tracking data
+            "break_tracking": {
+                "employees_on_break": employees_on_break,
+                "break_history": break_history_list,
+                "break_returns": break_returns,
+                "total_on_break": len(employees_on_break),
+                "total_breaks_today": len([b for b in today_breaks if b.activity_type in ["coffee_break", "break"]]),
+                "total_returns_today": len(break_returns)
             }
         }
     except Exception as e:
@@ -1683,13 +2138,21 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "strategic_decisions_count": 0,
                     "projects_led_by_leadership": 0
                 }
+            },
+            "break_tracking": {
+                "employees_on_break": [],
+                "break_history": [],
+                "break_returns": [],
+                "total_on_break": 0,
+                "total_breaks_today": 0,
+                "total_returns_today": 0
             }
         }
 
 @router.get("/financials")
 async def get_financials(days: int = 30, db: AsyncSession = Depends(get_db)):
     """Get financial data."""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = local_now() - timedelta(days=days)
     
     result = await db.execute(
         select(Financial)
@@ -1713,7 +2176,7 @@ async def get_financials(days: int = 30, db: AsyncSession = Depends(get_db)):
 @router.get("/financials/analytics")
 async def get_financial_analytics(days: int = 90, db: AsyncSession = Depends(get_db)):
     """Get detailed financial analytics including payroll, trends, and breakdowns."""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = local_now() - timedelta(days=days)
     
     # Get all financial transactions
     result = await db.execute(
@@ -1819,7 +2282,7 @@ async def get_financial_analytics(days: int = 90, db: AsyncSession = Depends(get
     # Calculate daily trends
     daily_data = {}
     for fin in financials:
-        date_key = fin.timestamp.date().isoformat() if fin.timestamp else datetime.utcnow().date().isoformat()
+        date_key = fin.timestamp.date().isoformat() if fin.timestamp else local_now().date().isoformat()
         if date_key not in daily_data:
             daily_data[date_key] = {"income": 0.0, "expenses": 0.0}
         
@@ -1950,6 +2413,85 @@ async def get_employee_chats(employee_id: int, db: AsyncSession = Depends(get_db
     except Exception as e:
         # If ChatMessage table doesn't exist yet, return empty list
         print(f"Error fetching chats: {e}")
+        return []
+
+@router.get("/employees/{employee_id}/meetings")
+async def get_employee_meetings(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all meetings for a specific employee (as organizer or attendee)."""
+    try:
+        from database.models import Meeting
+        from sqlalchemy import or_
+        
+        # Get all meetings where employee is organizer or attendee
+        # For JSONB arrays in PostgreSQL, we need to check if the array contains the employee_id
+        # First get all meetings, then filter in Python since JSONB array contains is complex
+        result = await db.execute(
+            select(Meeting)
+            .order_by(Meeting.start_time)
+        )
+        all_meetings = result.scalars().all()
+        
+        # Filter meetings where employee is organizer or in attendee_ids
+        meetings = []
+        for meeting in all_meetings:
+            # Check if employee is organizer
+            if meeting.organizer_id == employee_id:
+                meetings.append(meeting)
+            # Check if employee is in attendee_ids (handle both int and string IDs)
+            elif meeting.attendee_ids:
+                # Convert attendee_ids to a set of integers for comparison
+                attendee_ids_set = set()
+                for aid in meeting.attendee_ids:
+                    if isinstance(aid, int):
+                        attendee_ids_set.add(aid)
+                    elif isinstance(aid, str) and aid.isdigit():
+                        attendee_ids_set.add(int(aid))
+                    elif isinstance(aid, (int, float)):
+                        attendee_ids_set.add(int(aid))
+                
+                if employee_id in attendee_ids_set:
+                    meetings.append(meeting)
+        
+        # Debug logging
+        if len(meetings) > 0:
+            print(f"Found {len(meetings)} meetings for employee {employee_id}")
+        else:
+            print(f"No meetings found for employee {employee_id} (checked {len(all_meetings)} total meetings)")
+        
+        # Get employee names
+        result = await db.execute(select(Employee))
+        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        
+        meeting_list = []
+        for meeting in meetings:
+            # Get attendee names
+            attendee_names = [all_employees.get(aid, "Unknown") for aid in (meeting.attendee_ids or [])]
+            
+            meeting_list.append({
+                "id": meeting.id,
+                "title": meeting.title,
+                "description": meeting.description,
+                "organizer_id": meeting.organizer_id,
+                "organizer_name": all_employees.get(meeting.organizer_id, "Unknown"),
+                "attendee_ids": meeting.attendee_ids or [],
+                "attendee_names": attendee_names,
+                "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
+                "end_time": meeting.end_time.isoformat() if meeting.end_time else None,
+                "status": meeting.status,
+                "agenda": meeting.agenda,
+                "outline": meeting.outline,
+                "transcript": meeting.transcript,
+                "live_transcript": meeting.live_transcript,
+                "meeting_metadata": meeting.meeting_metadata or {},
+                "created_at": meeting.created_at.isoformat() if meeting.created_at else None,
+                "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else None
+            })
+        
+        return meeting_list
+    except Exception as e:
+        print(f"Error fetching employee meetings for employee {employee_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 @router.get("/emails")
@@ -2215,7 +2757,7 @@ async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
                                 hired_at_naive = hired_at
                         else:
                             hired_at_naive = hired_at
-                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        time_since_hire = local_now() - hired_at_naive
                         if time_since_hire > timedelta(hours=1):
                             employee.activity_state = "idle"
                             if employee.home_room:
@@ -2262,7 +2804,7 @@ async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
                         else:
                             hired_at_naive = hired_at
                         
-                        time_since_hire = datetime.utcnow() - hired_at_naive
+                        time_since_hire = local_now() - hired_at_naive
                         if time_since_hire <= timedelta(hours=1):
                             is_new_hire = True
                     except Exception:
@@ -2671,7 +3213,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
         from datetime import datetime, timedelta
         
         # Get activities from the last 2 hours for employees (broader time window)
-        recent_cutoff = datetime.utcnow() - timedelta(hours=2)
+        recent_cutoff = local_now() - timedelta(hours=2)
         result = await db.execute(
             select(Activity).where(
                 Activity.timestamp >= recent_cutoff
@@ -3037,6 +3579,85 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             "total_employees": 0
         }
 
+class RoomConversationRequest(BaseModel):
+    room_id: str
+    employee_ids: List[int]
+
+@router.post("/room/conversations")
+async def generate_room_conversations(
+    request: RoomConversationRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate casual conversations between employees in a room."""
+    try:
+        # Get employees
+        result = await db.execute(
+            select(Employee).where(Employee.id.in_(request.employee_ids))
+        )
+        employees = result.scalars().all()
+        
+        if len(employees) < 2:
+            return {"conversations": []}
+        
+        # Get business context
+        from engine.office_simulator import get_business_context
+        business_context = await get_business_context(db)
+        
+        # Select 1-2 pairs randomly (not everyone talking at once)
+        import random
+        num_pairs = min(2, len(employees) // 2)
+        selected_pairs = []
+        available_employees = employees.copy()
+        
+        for _ in range(num_pairs):
+            if len(available_employees) < 2:
+                break
+            pair = random.sample(available_employees, 2)
+            selected_pairs.append(pair)
+            # Remove selected employees from available pool
+            for emp in pair:
+                available_employees.remove(emp)
+        
+        # Generate conversations for each pair
+        from llm.ollama_client import OllamaClient
+        llm_client = OllamaClient()
+        conversations = []
+        
+        for pair in selected_pairs:
+            emp1, emp2 = pair
+            
+            # Randomly choose conversation type
+            conversation_type = random.choice(["work", "personal", "mixed"])
+            
+            # Generate conversation
+            conversation_data = await llm_client.generate_casual_conversation(
+                employee1_name=emp1.name,
+                employee1_title=emp1.title,
+                employee1_role=emp1.role,
+                employee1_personality=emp1.personality_traits or [],
+                employee2_name=emp2.name,
+                employee2_title=emp2.title,
+                employee2_role=emp2.role,
+                employee2_personality=emp2.personality_traits or [],
+                business_context=business_context,
+                conversation_type=conversation_type
+            )
+            
+            conversations.append({
+                "employee1_id": emp1.id,
+                "employee1_name": emp1.name,
+                "employee2_id": emp2.id,
+                "employee2_name": emp2.name,
+                "messages": conversation_data.get("messages", [])
+            })
+        
+        return {"conversations": conversations}
+    except Exception as e:
+        print(f"Error generating room conversations: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"conversations": []}
+
 class BoardroomDiscussionRequest(BaseModel):
     executive_ids: List[int] = None
 
@@ -3299,36 +3920,60 @@ Write only the message, nothing else. Make it feel like you're talking directly 
         }
 
 @router.get("/notifications")
-async def get_notifications(limit: int = 50, unread_only: bool = False, db: AsyncSession = Depends(get_db)):
-    """Get all notifications, optionally filtered to unread only."""
+async def get_notifications(
+    limit: int = 50, 
+    offset: int = 0,
+    unread_only: bool = False, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all notifications, optionally filtered to unread only. Supports pagination."""
+    # Cap limit at 250 total (5 pages of 50)
+    max_limit = 250
+    if limit > max_limit:
+        limit = max_limit
+    
     query = select(Notification).order_by(desc(Notification.created_at))
     
     if unread_only:
         query = query.where(Notification.read == False)
     
-    query = query.limit(limit)
+    # Apply pagination
+    query = query.offset(offset).limit(limit)
     
     result = await db.execute(query)
     notifications = result.scalars().all()
+    
+    # Get total count for pagination info
+    count_query = select(func.count(Notification.id))
+    if unread_only:
+        count_query = count_query.where(Notification.read == False)
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
     
     # Get employee names
     result = await db.execute(select(Employee))
     all_employees = {emp.id: emp.name for emp in result.scalars().all()}
     
-    return [
-        {
-            "id": notif.id,
-            "notification_type": notif.notification_type,
-            "title": notif.title,
-            "message": notif.message,
-            "employee_id": notif.employee_id,
-            "employee_name": all_employees.get(notif.employee_id, "Unknown") if notif.employee_id else None,
-            "review_id": notif.review_id,
-            "read": notif.read,
-            "created_at": notif.created_at.isoformat() if notif.created_at else None
-        }
-        for notif in notifications
-    ]
+    return {
+        "notifications": [
+            {
+                "id": notif.id,
+                "notification_type": notif.notification_type,
+                "title": notif.title,
+                "message": notif.message,
+                "employee_id": notif.employee_id,
+                "employee_name": all_employees.get(notif.employee_id, "Unknown") if notif.employee_id else None,
+                "review_id": notif.review_id,
+                "read": notif.read,
+                "created_at": notif.created_at.isoformat() if notif.created_at else None
+            }
+            for notif in notifications
+        ],
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "has_more": (offset + limit) < min(total_count, max_limit)
+    }
 
 @router.get("/notifications/unread-count")
 async def get_unread_notification_count(db: AsyncSession = Depends(get_db)):
@@ -3450,14 +4095,21 @@ async def get_customer_review_stats(db: AsyncSession = Depends(get_db)):
         rating_key = f"{int(review.rating)} stars"
         rating_distribution[rating_key] = rating_distribution.get(rating_key, 0) + 1
     
-    # Reviews by project
+    # Reviews by project (for backwards compatibility with frontend)
     result = await db.execute(select(Project))
     projects = {p.id: p.name for p in result.scalars().all()}
     
     reviews_by_project = {}
+    verified_purchases = 0
+    
     for review in all_reviews:
-        if review.project_id:
-            project_name = projects.get(review.project_id, "Unknown")
+        # Count verified purchases
+        if review.verified_purchase:
+            verified_purchases += 1
+        
+        # Group by project (for backwards compatibility)
+        if review.project_id and review.project_id in projects:
+            project_name = projects[review.project_id]
             if project_name not in reviews_by_project:
                 reviews_by_project[project_name] = {
                     "count": 0,
@@ -3467,15 +4119,43 @@ async def get_customer_review_stats(db: AsyncSession = Depends(get_db)):
             reviews_by_project[project_name]["count"] += 1
             reviews_by_project[project_name]["total_rating"] += review.rating
     
-    # Calculate averages
+    # Calculate averages for projects
     for project_name in reviews_by_project:
         data = reviews_by_project[project_name]
+        data["average_rating"] = round(data["total_rating"] / data["count"], 1)
+        del data["total_rating"]
+    
+    # Reviews by product (only real products)
+    result = await db.execute(select(Product))
+    products = {p.id: p.name for p in result.scalars().all()}
+    
+    reviews_by_product = {}
+    
+    for review in all_reviews:
+        # Group by product (only if review is linked to a real product)
+        if review.product_id and review.product_id in products:
+            product_name = products[review.product_id]
+            if product_name not in reviews_by_product:
+                reviews_by_product[product_name] = {
+                    "count": 0,
+                    "average_rating": 0.0,
+                    "total_rating": 0.0
+                }
+            reviews_by_product[product_name]["count"] += 1
+            reviews_by_product[product_name]["total_rating"] += review.rating
+    
+    # Calculate averages for products
+    for product_name in reviews_by_product:
+        data = reviews_by_product[product_name]
         data["average_rating"] = round(data["total_rating"] / data["count"], 1)
         del data["total_rating"]
     
     return {
         "total_reviews": len(all_reviews),
         "average_rating": average_rating,
+        "verified_purchases": verified_purchases,
+        "products_reviewed": len(reviews_by_product),
+        "reviews_by_product": reviews_by_product,
         "rating_distribution": rating_distribution,
         "reviews_by_project": reviews_by_project
     }
@@ -3540,11 +4220,23 @@ async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
         result = await db.execute(select(Employee))
         all_employees = {emp.id: emp.name for emp in result.scalars().all()}
         
-        # Get attendee details
+        # Get attendee details - ensure we get ALL attendees
         attendee_details = []
-        for aid in (meeting.attendee_ids or []):
-            result = await db.execute(select(Employee).where(Employee.id == aid))
-            emp = result.scalar_one_or_none()
+        attendee_ids_list = meeting.attendee_ids or []
+        
+        # Create a set for faster lookup
+        employee_cache = {}
+        
+        for aid in attendee_ids_list:
+            # Try cache first
+            if aid in employee_cache:
+                emp = employee_cache[aid]
+            else:
+                result = await db.execute(select(Employee).where(Employee.id == aid))
+                emp = result.scalar_one_or_none()
+                if emp:
+                    employee_cache[aid] = emp
+            
             if emp:
                 attendee_details.append({
                     "id": emp.id,
@@ -3554,6 +4246,11 @@ async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
                     "department": emp.department,
                     "avatar_path": emp.avatar_path
                 })
+        
+        # Ensure we have all attendees - if any are missing, log it
+        if len(attendee_details) < len(attendee_ids_list):
+            missing_ids = set(attendee_ids_list) - set([a["id"] for a in attendee_details])
+            print(f"⚠️ Warning: Missing {len(missing_ids)} attendees for meeting {meeting.id}: {missing_ids}")
         
         return {
             "id": meeting.id,
@@ -3612,7 +4309,7 @@ async def generate_meetings_now(db: AsyncSession = Depends(get_db)):
         from datetime import datetime, timedelta
         
         meeting_manager = MeetingManager(db)
-        now = datetime.utcnow()
+        now = local_now()
         
         # Generate meetings for last week (7 days ago to today)
         last_week_start = now - timedelta(days=7)
@@ -3669,6 +4366,60 @@ async def generate_meetings_now(db: AsyncSession = Depends(get_db)):
             "in_progress_created": 0
         }
 
+@router.post("/meetings/generate-yesterday")
+async def generate_meetings_yesterday(db: AsyncSession = Depends(get_db)):
+    """Generate meetings specifically for yesterday if they don't exist."""
+    try:
+        from business.meeting_manager import MeetingManager
+        from database.models import Meeting
+        from sqlalchemy import select
+        from datetime import datetime, timedelta
+        
+        meeting_manager = MeetingManager(db)
+        now = local_now()
+        
+        # Calculate yesterday's date range
+        yesterday_start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_end = yesterday_start + timedelta(days=1)
+        
+        # Check if meetings already exist for yesterday
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.start_time >= yesterday_start,
+                Meeting.start_time < yesterday_end
+            )
+        )
+        existing_meetings = result.scalars().all()
+        
+        if len(existing_meetings) > 0:
+            return {
+                "success": True,
+                "message": f"Yesterday already has {len(existing_meetings)} meetings",
+                "meetings_created": 0,
+                "existing_count": len(existing_meetings)
+            }
+        
+        # Generate meetings for yesterday
+        meetings_created = await meeting_manager.generate_meetings_for_date_range(
+            yesterday_start, yesterday_end
+        )
+        
+        return {
+            "success": True,
+            "message": f"Generated {meetings_created} meetings for yesterday",
+            "meetings_created": meetings_created,
+            "date": yesterday_start.strftime("%Y-%m-%d")
+        }
+    except Exception as e:
+        print(f"Error generating meetings for yesterday: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+            "meetings_created": 0
+        }
+
 @router.post("/meetings/schedule-in-15min")
 async def schedule_meeting_in_15min(db: AsyncSession = Depends(get_db)):
     """Schedule a meeting to start in 15 minutes."""
@@ -3681,7 +4432,7 @@ async def schedule_meeting_in_15min(db: AsyncSession = Depends(get_db)):
         import json
         
         meeting_manager = MeetingManager(db)
-        now = datetime.utcnow()
+        now = local_now()
         
         # Meeting starts in 15 minutes
         start_time = now + timedelta(minutes=15)
@@ -3790,7 +4541,7 @@ async def schedule_meeting_in_1min(db: AsyncSession = Depends(get_db)):
         import json
         
         meeting_manager = MeetingManager(db)
-        now = datetime.utcnow()
+        now = local_now()
         
         # Meeting starts in 10 seconds (to ensure it starts before the 5-minute window)
         start_time = now + timedelta(seconds=10)
@@ -3916,6 +4667,28 @@ async def delete_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/meetings/update-status")
+async def update_meeting_status_endpoint(db: AsyncSession = Depends(get_db)):
+    """Manually trigger meeting status update (scheduled -> in_progress -> completed)."""
+    try:
+        from business.meeting_manager import MeetingManager
+        
+        meeting_manager = MeetingManager(db)
+        await meeting_manager.update_meeting_status()
+        
+        return {
+            "success": True,
+            "message": "Meeting statuses updated successfully"
+        }
+    except Exception as e:
+        print(f"Error updating meeting status: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }
+
 @router.post("/meetings/cleanup-missed")
 async def cleanup_missed_meetings(db: AsyncSession = Depends(get_db)):
     """Delete meetings that are scheduled but have passed their end time."""
@@ -3924,7 +4697,7 @@ async def cleanup_missed_meetings(db: AsyncSession = Depends(get_db)):
         from sqlalchemy import select
         from datetime import datetime
         
-        now = datetime.utcnow()
+        now = local_now()
         
         # Find meetings that are scheduled but have passed their end time
         result = await db.execute(
@@ -4045,4 +4818,698 @@ async def force_meeting_update(db: AsyncSession = Depends(get_db)):
             "message": f"Error: {str(e)}",
             "meetings_updated": 0
         }
+
+# Quick Wins API Routes
+
+@router.get("/birthdays/upcoming")
+async def get_upcoming_birthdays(days: int = 7, db: AsyncSession = Depends(get_db)):
+    """Get upcoming birthdays."""
+    from business.birthday_manager import BirthdayManager
+    manager = BirthdayManager(db)
+    upcoming = await manager.get_upcoming_birthdays(days)
+    return [
+        {
+            "employee_id": item["employee"].id,
+            "employee_name": item["employee"].name,
+            "days_until": item["days_until"],
+            "date": item["date"].isoformat()
+        }
+        for item in upcoming
+    ]
+
+@router.get("/birthdays/today")
+async def get_birthdays_today(db: AsyncSession = Depends(get_db)):
+    """Get employees with birthdays today."""
+    from business.birthday_manager import BirthdayManager
+    manager = BirthdayManager(db)
+    birthdays = await manager.check_birthdays_today()
+    return [
+        {
+            "id": emp.id,
+            "name": emp.name,
+            "title": emp.title,
+            "birthday_month": emp.birthday_month,
+            "birthday_day": emp.birthday_day
+        }
+        for emp in birthdays
+    ]
+
+@router.get("/birthdays/parties")
+async def get_birthday_parties(db: AsyncSession = Depends(get_db)):
+    """Get scheduled birthday parties with room information."""
+    from business.birthday_manager import BirthdayManager
+    manager = BirthdayManager(db)
+    parties = await manager.get_scheduled_parties()
+    # Ensure dates are properly formatted
+    return [
+        {
+            **party,
+            "celebration_date": party["celebration_date"],
+            "party_time": party["party_time"]
+        }
+        for party in parties
+    ]
+
+@router.post("/birthdays/generate-meetings")
+async def generate_birthday_meetings(days_ahead: int = 90, db: AsyncSession = Depends(get_db)):
+    """Generate birthday party meetings for upcoming birthdays (appears on calendar).
+    
+    This creates Meeting records for birthday parties so they appear on the calendar.
+    Only creates meetings for active employees (excludes terminated employees).
+    Birthdays are static - once set, they never change.
+    """
+    from business.birthday_manager import BirthdayManager
+    from database.models import Employee
+    from sqlalchemy import select
+    import random
+    
+    # First, ensure all active employees have birthdays assigned
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.status == "active")
+        .where(Employee.status != "fired")
+        .where(Employee.fired_at.is_(None))
+        .where(
+            (Employee.birthday_month.is_(None)) | 
+            (Employee.birthday_day.is_(None))
+        )
+    )
+    employees_without_birthdays = result.scalars().all()
+    
+    if employees_without_birthdays:
+        print(f"🎂 Assigning birthdays to {len(employees_without_birthdays)} employees...")
+        for emp in employees_without_birthdays:
+            if not emp.birthday_month or not emp.birthday_day:
+                birthday_month = random.randint(1, 12)
+                if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
+                    max_day = 31
+                elif birthday_month in [4, 6, 9, 11]:
+                    max_day = 30
+                else:  # February
+                    max_day = 28
+                birthday_day = random.randint(1, max_day)
+                emp.birthday_month = birthday_month
+                emp.birthday_day = birthday_day
+        await db.commit()
+        print(f"✅ Assigned birthdays to {len(employees_without_birthdays)} employees")
+    
+    # Delete existing birthday meetings with wrong attendee counts (less than 15)
+    from database.models import Meeting
+    existing_result = await db.execute(select(Meeting))
+    all_meetings = existing_result.scalars().all()
+    deleted = 0
+    for m in all_meetings:
+        meta = m.meeting_metadata or {}
+        if isinstance(meta, dict) and meta.get('is_birthday_party'):
+            attendee_count = len(m.attendee_ids or [])
+            if attendee_count != 15:
+                await db.delete(m)
+                deleted += 1
+    if deleted > 0:
+        await db.commit()
+        print(f"🗑️ Deleted {deleted} birthday meetings with incorrect attendee counts")
+    
+    # Now generate the meetings properly
+    from database.models import Meeting
+    from employees.room_assigner import ROOM_BREAKROOM
+    from datetime import datetime, timedelta
+    from config import now as local_now
+    import random
+    
+    today = local_now()
+    today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = today_start + timedelta(days=min(days_ahead, 365))
+    
+    # Get employees with birthdays
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.status == "active")
+        .where(Employee.fired_at.is_(None))
+        .where(Employee.birthday_month.isnot(None))
+        .where(Employee.birthday_day.isnot(None))
+    )
+    employees = result.scalars().all()
+    
+    force_created = 0
+    for emp in employees:
+        try:
+            bday = datetime(today.year, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+            if bday < today_start:
+                bday = datetime(today.year + 1, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+            
+            if bday.date() > end_date.date():
+                continue
+            
+            # Check if exists - simple check
+            start = bday.replace(hour=14, minute=0, second=0, microsecond=0)
+            check_start = start - timedelta(hours=12)
+            check_end = start + timedelta(hours=12)
+            existing_result = await db.execute(
+                select(Meeting)
+                .where(Meeting.start_time >= check_start)
+                .where(Meeting.start_time <= check_end)
+            )
+            existing_meetings = existing_result.scalars().all()
+            exists = False
+            for m in existing_meetings:
+                meta = m.meeting_metadata or {}
+                if isinstance(meta, dict) and meta.get('is_birthday_party') and meta.get('birthday_employee_id') == emp.id:
+                    exists = True
+                    break
+            if exists:
+                continue
+            
+            # Create meeting  
+            end = start + timedelta(hours=1)
+            
+            all_emps_result = await db.execute(
+                select(Employee).where(Employee.status == "active").where(Employee.id != emp.id)
+            )
+            all_emps = all_emps_result.scalars().all()
+            # Get exactly 14 other employees (or as many as available)
+            num_attendees = min(14, len(all_emps))
+            if num_attendees > 0:
+                attendees = random.sample(all_emps, num_attendees)
+            else:
+                attendees = []
+            # Create attendee_ids: 14 colleagues + birthday person = 15 total
+            attendee_ids = [e.id for e in attendees] + [emp.id]
+            
+            # Ensure we have exactly 15 (or as many as possible)
+            if len(attendee_ids) < 15 and len(all_emps) < 14:
+                attendee_ids = [e.id for e in all_emps] + [emp.id]
+            
+            room, floor = random.choice([(f"{ROOM_BREAKROOM}_floor2", 2), (ROOM_BREAKROOM, 1)])
+            room_name = room.replace("_floor2", "").replace("_", " ").title()
+            
+            meeting = Meeting(
+                title=f"🎂 {emp.name}'s Birthday Party",
+                description=f"Birthday party for {emp.name}",
+                organizer_id=emp.id,
+                attendee_ids=attendee_ids,
+                start_time=start,
+                end_time=end,
+                status="scheduled",
+                agenda=f"Birthday celebration for {emp.name}",
+                outline="1. Welcome\n2. Cake\n3. Song\n4. Gifts",
+                meeting_metadata={
+                    "is_birthday_party": True,
+                    "birthday_employee_id": emp.id,
+                    "room_name": room_name,
+                    "party_floor": floor
+                }
+            )
+            db.add(meeting)
+            force_created += 1
+        except Exception as e:
+            print(f"Error creating for {emp.name}: {e}")
+            continue
+    
+    await db.commit()
+    
+    # Also run the manager function
+    manager = BirthdayManager(db)
+    manager_created = await manager.generate_birthday_party_meetings(days_ahead=days_ahead)
+    
+    meetings_created = force_created + manager_created
+    
+    # Verify meetings were created
+    from database.models import Meeting
+    verify_result = await db.execute(select(Meeting))
+    all_meetings = verify_result.scalars().all()
+    verified_count = 0
+    for meeting in all_meetings:
+        metadata = meeting.meeting_metadata or {}
+        if isinstance(metadata, dict) and metadata.get('is_birthday_party'):
+            verified_count += 1
+    
+    return {
+        "message": f"Generated {meetings_created} birthday party meetings",
+        "meetings_created": meetings_created,
+        "birthdays_assigned": len(employees_without_birthdays) if employees_without_birthdays else 0,
+        "verified_meetings_in_db": verified_count
+    }
+
+@router.post("/birthdays/force-create-test")
+async def force_create_birthday_test(db: AsyncSession = Depends(get_db)):
+    """Force create a birthday party meeting for testing."""
+    from database.models import Employee, Meeting
+    from sqlalchemy import select
+    from config import now as local_now
+    from datetime import datetime, timedelta
+    from employees.room_assigner import ROOM_BREAKROOM
+    import random
+    
+    # Find Lily Nguyen or first employee with birthday in next 7 days
+    today = local_now()
+    today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = today_start + timedelta(days=7)
+    
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.status == "active")
+        .where(Employee.birthday_month.isnot(None))
+        .where(Employee.birthday_day.isnot(None))
+        .where(Employee.name.like("Lily%"))
+    )
+    emp = result.scalar_one_or_none()
+    
+    if not emp:
+        # Get any employee with birthday in next 7 days
+        result = await db.execute(
+            select(Employee)
+            .where(Employee.status == "active")
+            .where(Employee.birthday_month.isnot(None))
+            .where(Employee.birthday_day.isnot(None))
+        )
+        all_emps = result.scalars().all()
+        for e in all_emps:
+            try:
+                bday = datetime(today.year, e.birthday_month, e.birthday_day, tzinfo=today.tzinfo)
+                if bday < today_start:
+                    bday = datetime(today.year + 1, e.birthday_month, e.birthday_day, tzinfo=today.tzinfo)
+                if bday.date() <= end_date.date():
+                    emp = e
+                    break
+            except:
+                continue
+    
+    if not emp:
+        return {"error": "No suitable employee found"}
+    
+    # Calculate birthday
+    birthday_this_year = datetime(today.year, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+    if birthday_this_year < today_start:
+        birthday_this_year = datetime(today.year + 1, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+    
+    birthday_start = birthday_this_year.replace(hour=14, minute=0, second=0, microsecond=0)
+    birthday_end = birthday_start + timedelta(hours=1)
+    
+    # Get attendees
+    all_emps_result = await db.execute(
+        select(Employee)
+        .where(Employee.status == "active")
+        .where(Employee.id != emp.id)
+    )
+    all_emps = all_emps_result.scalars().all()
+    attendees = random.sample(all_emps, min(14, len(all_emps))) if all_emps else []
+    attendee_ids = [e.id for e in attendees] + [emp.id]
+    
+    # Create meeting
+    meeting = Meeting(
+        title=f"🎂 {emp.name}'s Birthday Party",
+        description=f"Birthday party for {emp.name}",
+        organizer_id=emp.id,
+        attendee_ids=attendee_ids,
+        start_time=birthday_start,
+        end_time=birthday_end,
+        status="scheduled",
+        meeting_metadata={
+            "is_birthday_party": True,
+            "birthday_employee_id": emp.id,
+            "room_name": "Breakroom",
+            "party_floor": 1
+        }
+    )
+    db.add(meeting)
+    await db.commit()
+    await db.refresh(meeting)
+    
+    return {
+        "success": True,
+        "meeting_id": meeting.id,
+        "employee_name": emp.name,
+        "start_time": meeting.start_time.isoformat(),
+        "attendees_count": len(attendee_ids)
+    }
+
+@router.post("/birthdays/debug-generation")
+async def debug_birthday_generation(db: AsyncSession = Depends(get_db)):
+    """Debug endpoint to see why birthday parties aren't being generated."""
+    from business.birthday_manager import BirthdayManager
+    from database.models import Employee, Meeting
+    from sqlalchemy import select
+    from config import now as local_now
+    from datetime import timedelta
+    
+    today = local_now()
+    today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Check employees
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.status == "active")
+        .where(Employee.status != "fired")
+        .where(Employee.fired_at.is_(None))
+        .where(Employee.birthday_month.isnot(None))
+        .where(Employee.birthday_day.isnot(None))
+    )
+    employees_with_birthdays = result.scalars().all()
+    
+    # Check first few employees
+    sample_employees = []
+    for emp in employees_with_birthdays[:5]:
+        try:
+            from datetime import datetime
+            birthday_this_year = datetime(today.year, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+            if birthday_this_year < today_start:
+                birthday_this_year = datetime(today.year + 1, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+            days_until = (birthday_this_year.date() - today_start.date()).days
+            sample_employees.append({
+                "name": emp.name,
+                "id": emp.id,
+                "birthday_month": emp.birthday_month,
+                "birthday_day": emp.birthday_day,
+                "birthday_date": birthday_this_year.isoformat(),
+                "days_until": days_until
+            })
+        except:
+            pass
+    
+    # Check existing meetings
+    result = await db.execute(select(Meeting))
+    all_meetings = result.scalars().all()
+    birthday_meetings = []
+    for meeting in all_meetings:
+        metadata = meeting.meeting_metadata or {}
+        if isinstance(metadata, dict) and metadata.get('is_birthday_party'):
+            birthday_meetings.append({
+                "id": meeting.id,
+                "title": meeting.title,
+                "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
+                "employee_id": metadata.get('birthday_employee_id')
+            })
+    
+    return {
+        "total_employees_with_birthdays": len(employees_with_birthdays),
+        "sample_employees": sample_employees,
+        "existing_birthday_meetings": len(birthday_meetings),
+        "birthday_meetings": birthday_meetings,
+        "today": today_start.isoformat()
+    }
+
+@router.get("/pets")
+async def get_pets(db: AsyncSession = Depends(get_db)):
+    """Get all office pets."""
+    from business.pet_manager import PetManager
+    from database.models import OfficePet
+    manager = PetManager(db)
+    pets = await manager.get_all_pets()
+    if not pets:
+        pets = await manager.initialize_pets()
+    return [
+        {
+            "id": pet.id,
+            "name": pet.name,
+            "pet_type": pet.pet_type,
+            "avatar_path": pet.avatar_path,
+            "current_room": pet.current_room,
+            "floor": pet.floor,
+            "personality": pet.personality,
+            "favorite_employee_id": pet.favorite_employee_id
+        }
+        for pet in pets
+    ]
+
+@router.get("/pets/care-log")
+async def get_pet_care_log(limit: int = 50, db: AsyncSession = Depends(get_db)):
+    """Get pet care log showing which employees have cared for pets."""
+    from database.models import PetCareLog, OfficePet, Employee
+    from sqlalchemy import desc
+    
+    result = await db.execute(
+        select(PetCareLog)
+        .join(OfficePet, PetCareLog.pet_id == OfficePet.id)
+        .join(Employee, PetCareLog.employee_id == Employee.id)
+        .order_by(desc(PetCareLog.created_at))
+        .limit(limit)
+    )
+    care_logs = result.scalars().all()
+    
+    return [
+        {
+            "id": log.id,
+            "pet_id": log.pet_id,
+            "pet_name": log.pet.name if log.pet else "Unknown",
+            "pet_type": log.pet.pet_type if log.pet else "Unknown",
+            "employee_id": log.employee_id,
+            "employee_name": log.employee.name if log.employee else "Unknown",
+            "employee_title": log.employee.title if log.employee else "Unknown",
+            "care_action": log.care_action,
+            "pet_happiness_before": log.pet_happiness_before,
+            "pet_hunger_before": log.pet_hunger_before,
+            "pet_energy_before": log.pet_energy_before,
+            "pet_happiness_after": log.pet_happiness_after,
+            "pet_hunger_after": log.pet_hunger_after,
+            "pet_energy_after": log.pet_energy_after,
+            "ai_reasoning": log.ai_reasoning,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        }
+        for log in care_logs
+    ]
+
+@router.get("/pets/{pet_id}/care-log")
+async def get_pet_care_log_by_pet(pet_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
+    """Get care log for a specific pet."""
+    from database.models import PetCareLog, OfficePet, Employee
+    from sqlalchemy import desc
+    
+    result = await db.execute(
+        select(PetCareLog)
+        .where(PetCareLog.pet_id == pet_id)
+        .join(Employee, PetCareLog.employee_id == Employee.id)
+        .order_by(desc(PetCareLog.created_at))
+        .limit(limit)
+    )
+    care_logs = result.scalars().all()
+    
+    return [
+        {
+            "id": log.id,
+            "employee_id": log.employee_id,
+            "employee_name": log.employee.name if log.employee else "Unknown",
+            "employee_title": log.employee.title if log.employee else "Unknown",
+            "care_action": log.care_action,
+            "pet_happiness_before": log.pet_happiness_before,
+            "pet_hunger_before": log.pet_hunger_before,
+            "pet_energy_before": log.pet_energy_before,
+            "pet_happiness_after": log.pet_happiness_after,
+            "pet_hunger_after": log.pet_hunger_after,
+            "pet_energy_after": log.pet_energy_after,
+            "ai_reasoning": log.ai_reasoning,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        }
+        for log in care_logs
+    ]
+
+@router.get("/employees/{employee_id}/pet-care")
+async def get_employee_pet_care(employee_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
+    """Get pet care activities for a specific employee."""
+    from database.models import PetCareLog, OfficePet
+    from sqlalchemy import desc
+    
+    result = await db.execute(
+        select(PetCareLog)
+        .where(PetCareLog.employee_id == employee_id)
+        .join(OfficePet, PetCareLog.pet_id == OfficePet.id)
+        .order_by(desc(PetCareLog.created_at))
+        .limit(limit)
+    )
+    care_logs = result.scalars().all()
+    
+    return [
+        {
+            "id": log.id,
+            "pet_id": log.pet_id,
+            "pet_name": log.pet.name if log.pet else "Unknown",
+            "pet_type": log.pet.pet_type if log.pet else "Unknown",
+            "care_action": log.care_action,
+            "pet_happiness_before": log.pet_happiness_before,
+            "pet_hunger_before": log.pet_hunger_before,
+            "pet_energy_before": log.pet_energy_before,
+            "pet_happiness_after": log.pet_happiness_after,
+            "pet_hunger_after": log.pet_hunger_after,
+            "pet_energy_after": log.pet_energy_after,
+            "ai_reasoning": log.ai_reasoning,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        }
+        for log in care_logs
+    ]
+
+@router.get("/gossip")
+async def get_gossip(limit: int = 20, db: AsyncSession = Depends(get_db)):
+    """Get recent gossip."""
+    from business.gossip_manager import GossipManager
+    from database.models import Gossip
+    manager = GossipManager(db)
+    gossip_list = await manager.get_recent_gossip(limit)
+    return [
+        {
+            "id": g.id,
+            "originator_id": g.originator_id,
+            "spreader_id": g.spreader_id,
+            "recipient_id": g.recipient_id,
+            "topic": g.topic,
+            "content": g.content,
+            "credibility": g.credibility,
+            "spread_count": g.spread_count,
+            "created_at": g.created_at.isoformat()
+        }
+        for g in gossip_list
+    ]
+
+@router.get("/weather")
+async def get_weather(db: AsyncSession = Depends(get_db)):
+    """Get today's weather."""
+    from business.weather_manager import WeatherManager
+    manager = WeatherManager(db)
+    weather = await manager.get_today_weather()
+    if not weather:
+        return None
+    return {
+        "id": weather.id,
+        "condition": weather.condition,
+        "temperature": weather.temperature,
+        "productivity_modifier": weather.productivity_modifier,
+        "description": weather.description,
+        "date": weather.date.isoformat()
+    }
+
+@router.get("/random-events")
+async def get_random_events(active_only: bool = False, db: AsyncSession = Depends(get_db)):
+    """Get random events."""
+    from business.random_event_manager import RandomEventManager
+    from database.models import RandomEvent
+    from sqlalchemy import select, desc
+    manager = RandomEventManager(db)
+    
+    if active_only:
+        events = await manager.get_active_events()
+    else:
+        result = await db.execute(
+            select(RandomEvent)
+            .order_by(desc(RandomEvent.start_time))
+            .limit(20)
+        )
+        events = result.scalars().all()
+    
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "title": e.title,
+            "description": e.description,
+            "impact": e.impact,
+            "affected_employees": e.affected_employees,
+            "productivity_modifier": e.productivity_modifier,
+            "start_time": e.start_time.isoformat(),
+            "end_time": e.end_time.isoformat() if e.end_time else None,
+            "resolved": e.resolved
+        }
+        for e in events
+    ]
+
+@router.get("/newsletters")
+async def get_newsletters(limit: int = 10, db: AsyncSession = Depends(get_db)):
+    """Get latest newsletters."""
+    from business.newsletter_manager import NewsletterManager
+    from database.models import Newsletter
+    from sqlalchemy import select, desc
+    manager = NewsletterManager(db)
+    newsletters = await manager.get_latest_newsletters(limit)
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "content": n.content,
+            "author_id": n.author_id,
+            "issue_number": n.issue_number,
+            "published_date": n.published_date.isoformat(),
+            "read_count": n.read_count
+        }
+        for n in newsletters
+    ]
+
+@router.post("/newsletters/{newsletter_id}/read")
+async def mark_newsletter_read(newsletter_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark a newsletter as read."""
+    from business.newsletter_manager import NewsletterManager
+    manager = NewsletterManager(db)
+    await manager.mark_as_read(newsletter_id)
+    return {"success": True, "message": "Newsletter marked as read"}
+
+@router.get("/suggestions")
+async def get_suggestions(status: str = None, db: AsyncSession = Depends(get_db)):
+    """Get suggestions."""
+    from business.suggestion_manager import SuggestionManager
+    from database.models import Suggestion, Employee, SuggestionVote
+    from sqlalchemy import select, desc
+    manager = SuggestionManager(db)
+    
+    if status:
+        result = await db.execute(
+            select(Suggestion)
+            .where(Suggestion.status == status)
+            .order_by(desc(Suggestion.upvotes), desc(Suggestion.created_at))
+        )
+    else:
+        result = await db.execute(
+            select(Suggestion)
+            .order_by(desc(Suggestion.upvotes), desc(Suggestion.created_at))
+            .limit(50)
+        )
+    suggestions = result.scalars().all()
+    
+    # Get employee names
+    result = await db.execute(select(Employee))
+    all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    
+    # Get votes for all suggestions
+    suggestion_ids = [s.id for s in suggestions]
+    votes_result = await db.execute(
+        select(SuggestionVote)
+        .where(SuggestionVote.suggestion_id.in_(suggestion_ids))
+    )
+    all_votes = votes_result.scalars().all()
+    
+    # Group votes by suggestion_id
+    votes_by_suggestion = {}
+    for vote in all_votes:
+        if vote.suggestion_id not in votes_by_suggestion:
+            votes_by_suggestion[vote.suggestion_id] = []
+        votes_by_suggestion[vote.suggestion_id].append({
+            "id": vote.id,
+            "employee_id": vote.employee_id,
+            "employee_name": all_employees.get(vote.employee_id, "Unknown"),
+            "created_at": vote.created_at.isoformat() if vote.created_at else None
+        })
+    
+    return [
+        {
+            "id": s.id,
+            "employee_id": s.employee_id,
+            "employee_name": all_employees.get(s.employee_id, "Unknown"),
+            "category": s.category,
+            "title": s.title,
+            "content": s.content,
+            "status": s.status,
+            "upvotes": s.upvotes,
+            "reviewed_by_id": s.reviewed_by_id,
+            "reviewer_name": all_employees.get(s.reviewed_by_id, None) if s.reviewed_by_id else None,
+            "review_notes": s.review_notes,
+            "manager_comments": s.manager_comments,
+            "votes": votes_by_suggestion.get(s.id, []),
+            "created_at": s.created_at.isoformat(),
+            "reviewed_at": s.reviewed_at.isoformat() if s.reviewed_at else None
+        }
+        for s in suggestions
+    ]
+
+@router.post("/suggestions/{suggestion_id}/upvote")
+async def upvote_suggestion(suggestion_id: int, db: AsyncSession = Depends(get_db)):
+    """Upvote a suggestion."""
+    from business.suggestion_manager import SuggestionManager
+    manager = SuggestionManager(db)
+    await manager.upvote_suggestion(suggestion_id)
+    return {"success": True, "message": "Suggestion upvoted"}
 
