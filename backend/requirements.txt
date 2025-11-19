@@ -8,5 +8,6 @@ httpx==0.25.2
 python-dotenv==1.0.0
 aiofiles==23.2.1
 pytz==2024.1
+holidays==0.36
 
 

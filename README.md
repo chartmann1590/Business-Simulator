@@ -216,10 +216,14 @@ The web interface provides several views:
   - Interactive pet care game with happiness, hunger, and energy stats
   - Pet care logs tracking employee interactions
   - Multiple pet types (cats and dogs) with unique personalities
-- **Birthday Celebrations**: Automatic birthday party system
+  - **Birthday Celebrations**: Automatic birthday party system
   - Birthday parties scheduled in breakrooms
   - Calendar integration for birthday events
   - Upcoming birthdays tracking
+  - **Holiday Celebrations**: Automatic US federal holiday party system
+  - Holiday parties scheduled in breakrooms with up to 20 attendees
+  - Calendar integration for holiday events with special styling
+  - Automatic holiday meeting generation for next 3 years
 - **Coffee Breaks**: Natural break system for employees
   - Automatic coffee break scheduling
   - Breakroom movement and social interactions

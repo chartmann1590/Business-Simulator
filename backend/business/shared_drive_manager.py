@@ -351,6 +351,7 @@ Generate the complete HTML document now. Return ONLY the HTML with inline styles
 
         try:
             client = await self.llm_client._get_client()
+            # Increased timeout for complex document generation (120 seconds total, 10 seconds connect)
             response = await client.post(
                 f"{self.llm_client.base_url}/api/generate",
                 json={
@@ -358,7 +359,7 @@ Generate the complete HTML document now. Return ONLY the HTML with inline styles
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=httpx.Timeout(20.0, connect=5.0)
+                timeout=httpx.Timeout(120.0, connect=10.0)
             )
             
             if response.status_code == 200:
@@ -377,6 +378,11 @@ Generate the complete HTML document now. Return ONLY the HTML with inline styles
                     html_content = f'<div style="font-family: \'Times New Roman\', serif; margin: 1in; line-height: 1.5; color: #000000;">{html_content}</div>'
                 
                 return html_content
+        except httpx.ReadTimeout as e:
+            print(f"⚠️  Timeout generating Word document (AI took too long). Using fallback content.")
+            # Don't print full traceback for timeouts - it's expected for long operations
+        except httpx.TimeoutException as e:
+            print(f"⚠️  Connection timeout generating Word document. Using fallback content.")
         except Exception as e:
             print(f"Error generating Word document: {e}")
             import traceback
@@ -512,6 +518,7 @@ Generate the complete HTML spreadsheet now. Return ONLY the HTML table with inli
 
         try:
             client = await self.llm_client._get_client()
+            # Increased timeout for complex document generation (120 seconds total, 10 seconds connect)
             response = await client.post(
                 f"{self.llm_client.base_url}/api/generate",
                 json={
@@ -519,7 +526,7 @@ Generate the complete HTML spreadsheet now. Return ONLY the HTML table with inli
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=httpx.Timeout(20.0, connect=5.0)
+                timeout=httpx.Timeout(120.0, connect=10.0)
             )
             
             if response.status_code == 200:
@@ -536,6 +543,10 @@ Generate the complete HTML spreadsheet now. Return ONLY the HTML table with inli
                     html_content = f'<table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt;">{html_content}</table>'
                 
                 return html_content
+        except httpx.ReadTimeout as e:
+            print(f"⚠️  Timeout generating spreadsheet (AI took too long). Using fallback content.")
+        except httpx.TimeoutException as e:
+            print(f"⚠️  Connection timeout generating spreadsheet. Using fallback content.")
         except Exception as e:
             print(f"Error generating spreadsheet: {e}")
             import traceback
@@ -714,6 +725,7 @@ Generate the complete HTML presentation now. Return ONLY the HTML with inline st
 
         try:
             client = await self.llm_client._get_client()
+            # Increased timeout for complex document generation (120 seconds total, 10 seconds connect)
             response = await client.post(
                 f"{self.llm_client.base_url}/api/generate",
                 json={
@@ -721,7 +733,7 @@ Generate the complete HTML presentation now. Return ONLY the HTML with inline st
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=httpx.Timeout(20.0, connect=5.0)
+                timeout=httpx.Timeout(120.0, connect=10.0)
             )
             
             if response.status_code == 200:
@@ -734,6 +746,10 @@ Generate the complete HTML presentation now. Return ONLY the HTML with inline st
                     html_content = html_content.strip()
                 
                 return html_content
+        except httpx.ReadTimeout as e:
+            print(f"⚠️  Timeout generating PowerPoint (AI took too long). Using fallback content.")
+        except httpx.TimeoutException as e:
+            print(f"⚠️  Connection timeout generating PowerPoint. Using fallback content.")
         except Exception as e:
             print(f"Error generating PowerPoint: {e}")
             import traceback

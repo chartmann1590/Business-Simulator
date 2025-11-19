@@ -381,6 +381,27 @@ async def _run_migrations():
                     await conn.execute(text("ALTER TABLE birthday_celebrations ADD COLUMN party_floor INTEGER"))
                     await conn.execute(text("ALTER TABLE birthday_celebrations ADD COLUMN party_time TIMESTAMP"))
                     print("Migration completed: Party fields added to birthday_celebrations table.")
+            
+            # Migration: Create holiday_celebrations table
+            if 'holiday_celebrations' not in tables:
+                print("Running migration: Creating holiday_celebrations table...")
+                await conn.execute(text("""
+                    CREATE TABLE holiday_celebrations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        holiday_name TEXT NOT NULL,
+                        celebration_date TIMESTAMP NOT NULL,
+                        attendees TEXT DEFAULT '[]',
+                        celebration_message TEXT,
+                        party_room TEXT,
+                        party_floor INTEGER,
+                        party_time TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_holiday_celebrations_date ON holiday_celebrations(celebration_date)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_holiday_celebrations_holiday_name ON holiday_celebrations(holiday_name)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_holiday_celebrations_created_at ON holiday_celebrations(created_at)"))
+                print("Migration completed: holiday_celebrations table created.")
     except Exception as e:
         print(f"Warning: Migration failed: {e}")
         import traceback

@@ -634,11 +634,15 @@ Respond in JSON format:
                     else:
                         last_update_time = last_update
                     
-                    # Handle timezone-aware datetime
+                    # Normalize both datetimes to the same timezone awareness
+                    # Convert both to naive datetimes for comparison
                     if last_update_time.tzinfo:
                         last_update_time = last_update_time.replace(tzinfo=None)
                     
-                    time_since_update = (now - last_update_time).total_seconds()
+                    # Ensure now is also naive for comparison
+                    now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+                    
+                    time_since_update = (now_naive - last_update_time).total_seconds()
                     # Generate new content every 10-15 seconds for active meetings (slower pace, one at a time)
                     if time_since_update >= 10:
                         should_update = True

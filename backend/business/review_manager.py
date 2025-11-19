@@ -643,7 +643,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
             .where(EmployeeReview.employee_id == employee_id)
         )
         avg_rating = result.scalar_one_or_none()
-        return avg_rating[0] if avg_rating and avg_rating[0] else None
+        return avg_rating if avg_rating is not None else None
     
     async def get_recent_reviews(self, employee_id: int, limit: int = 3) -> List[EmployeeReview]:
         """

@@ -52,6 +52,7 @@ class OfficeSimulator:
         self.last_weather_date = None  # Track last weather update date
         self.last_birthday_meeting_generation = None  # Track last birthday meeting generation date
         self.last_birthday_check_date = None  # Track last birthday check date
+        self.last_holiday_check_date = None  # Track last holiday check date
         self.shared_drive_update_counter = 0  # Counter for shared drive updates
         self.last_shared_drive_update = None  # Track last shared drive update time
     
@@ -469,6 +470,21 @@ class OfficeSimulator:
                             print(f"🎂 Birthday celebration for {emp.name}!")
             except Exception as e:
                 print(f"❌ Error checking birthdays: {e}")
+        
+        # Check holidays daily
+        if self.last_holiday_check_date != current_date:
+            self.last_holiday_check_date = current_date
+            try:
+                async with async_session_maker() as holiday_db:
+                    from business.holiday_manager import HolidayManager
+                    holiday_manager = HolidayManager(holiday_db)
+                    holiday_name = await holiday_manager.check_holiday_today()
+                    if holiday_name:
+                        celebration = await holiday_manager.celebrate_holiday(holiday_name)
+                        if celebration:
+                            print(f"🎉 Holiday celebration: {holiday_name}!")
+            except Exception as e:
+                print(f"❌ Error checking holidays: {e}")
         
         # Update weather daily
         if self.last_weather_date != current_date:

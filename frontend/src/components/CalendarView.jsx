@@ -6,6 +6,7 @@ import BirthdayDetail from './BirthdayDetail'
 function CalendarView({ employees = [] }) {
   const [meetings, setMeetings] = useState([])
   const [birthdays, setBirthdays] = useState([])
+  const [holidays, setHolidays] = useState([])
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState('day') // 'day', 'week', 'month'
@@ -14,9 +15,11 @@ function CalendarView({ employees = [] }) {
   useEffect(() => {
     fetchMeetings()
     fetchBirthdays()
+    fetchHolidays()
     const interval = setInterval(() => {
       fetchMeetings()
       fetchBirthdays()
+      fetchHolidays()
     }, 5000) // Refresh every 5 seconds
     return () => clearInterval(interval)
   }, [])
@@ -47,6 +50,20 @@ function CalendarView({ employees = [] }) {
     } catch (error) {
       console.error('Error fetching birthdays:', error)
       setBirthdays([])
+    }
+  }
+
+  const fetchHolidays = async () => {
+    try {
+      // Fetch holidays for the next 365 days to cover a full year
+      const response = await fetch('/api/holidays/upcoming?days=365')
+      if (response.ok) {
+        const data = await response.json()
+        setHolidays(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching holidays:', error)
+      setHolidays([])
     }
   }
 
@@ -121,16 +138,57 @@ function CalendarView({ employees = [] }) {
     })
   }
 
-  // Get all events (meetings + birthdays)
-  // Filter out birthday party meetings to avoid duplicates - we'll use birthday events instead
+  // Convert holidays to calendar events
+  const getHolidayEvents = () => {
+    if (!holidays || holidays.length === 0) {
+      return []
+    }
+    return holidays.map(holiday => {
+      // Parse the holiday date - CRITICAL: Use date components directly to avoid timezone shifts
+      // When parsing "2025-11-27", we want Nov 27 at 2 PM in local timezone (NY)
+      // DO NOT use new Date("2025-11-27") as it interprets as UTC midnight
+      let year, month, day
+      if (typeof holiday.date === 'string') {
+        // Parse date string (format: "2025-11-27")
+        [year, month, day] = holiday.date.split('-').map(Number)
+      } else {
+        const holidayDate = new Date(holiday.date)
+        year = holidayDate.getFullYear()
+        month = holidayDate.getMonth() + 1
+        day = holidayDate.getDate()
+      }
+      
+      // Create event date at 2 PM using date components directly
+      // This creates the date in the browser's local timezone (which should be NY)
+      // Using Date(year, month-1, day, hour) constructor creates date in local timezone
+      const eventDate = new Date(year, month - 1, day, 14, 0, 0, 0)
+      const endDate = new Date(year, month - 1, day, 15, 0, 0, 0)
+      
+      return {
+        id: `holiday-${holiday.holiday_name}-${holiday.date}`,
+        title: `🎉 ${holiday.holiday_name}`,
+        description: `Office holiday celebration for ${holiday.holiday_name}`,
+        start_time: eventDate.toISOString(),
+        end_time: endDate.toISOString(),
+        is_holiday: true,
+        holiday_name: holiday.holiday_name,
+        days_until: holiday.days_until,
+        status: 'scheduled'
+      }
+    })
+  }
+
+  // Get all events (meetings + birthdays + holidays)
+  // Filter out birthday and holiday party meetings to avoid duplicates - we'll use birthday/holiday events instead
   const getAllEvents = () => {
     const birthdayEvents = getBirthdayEvents()
-    // Filter out meetings that are birthday parties (we show them as birthday events instead)
+    const holidayEvents = getHolidayEvents()
+    // Filter out meetings that are birthday or holiday parties (we show them as events instead)
     const regularMeetings = meetings.filter(m => {
       const metadata = m.meeting_metadata || {}
-      return !metadata.is_birthday_party
+      return !metadata.is_birthday_party && !metadata.is_holiday_party
     })
-    return [...regularMeetings, ...birthdayEvents]
+    return [...regularMeetings, ...birthdayEvents, ...holidayEvents]
   }
 
   const getMeetingsForRange = () => {
@@ -205,6 +263,14 @@ function CalendarView({ employees = [] }) {
         : 'bg-pink-100 text-pink-800 border-pink-200'
     }
     
+    // Special styling for holidays
+    if (meeting && meeting.is_holiday) {
+      const isToday = meeting.days_until === 0
+      return isToday 
+        ? 'bg-purple-200 text-purple-900 border-purple-300' 
+        : 'bg-purple-100 text-purple-800 border-purple-200'
+    }
+    
     // If meeting is currently happening based on time, show as in_progress
     if (meeting && isMeetingInProgress(meeting)) {
       return 'bg-green-100 text-green-800 border-green-200'
@@ -225,6 +291,47 @@ function CalendarView({ employees = [] }) {
   }
 
   const handleMeetingClick = (meeting) => {
+    // If it's a holiday event, find the corresponding holiday party meeting
+    if (meeting.is_holiday) {
+      const holidayDate = new Date(meeting.start_time)
+      const holidayName = meeting.holiday_name
+      
+      // Find the holiday party meeting for this date and holiday
+      const holidayMeeting = meetings.find(m => {
+        // Check if it's a holiday party meeting
+        const metadata = m.meeting_metadata || {}
+        if (!metadata.is_holiday_party) return false
+        
+        // Check if it matches the holiday name
+        if (holidayName && metadata.holiday_name === holidayName) {
+          return true
+        }
+        
+        // Also check by date and title
+        const meetingDate = new Date(m.start_time)
+        const sameDate = meetingDate.getFullYear() === holidayDate.getFullYear() &&
+                         meetingDate.getMonth() === holidayDate.getMonth() &&
+                         meetingDate.getDate() === holidayDate.getDate()
+        
+        if (sameDate && m.title && m.title.includes('Office Party')) {
+          // Check if the title contains the holiday name
+          if (holidayName && m.title.includes(holidayName)) {
+            return true
+          }
+        }
+        
+        return false
+      })
+      
+      if (holidayMeeting) {
+        setSelectedMeeting({ ...holidayMeeting, is_holiday: true, holiday_data: meeting })
+      } else {
+        // If no meeting found, still show holiday info
+        setSelectedMeeting({ ...meeting, is_holiday: true })
+      }
+      return
+    }
+    
     // If it's a birthday event, find the corresponding birthday party meeting
     if (meeting.is_birthday) {
       const birthdayDate = new Date(meeting.start_time)
@@ -319,7 +426,18 @@ function CalendarView({ employees = [] }) {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">{meeting.title}</h4>
                   <p className="text-sm text-gray-600 mb-2">{meeting.description}</p>
-                  {meeting.is_birthday ? (
+                  {meeting.is_holiday ? (
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span>🎉</span>
+                        {meeting.days_until === 0 ? 'Today!' : `${meeting.days_until} day${meeting.days_until !== 1 ? 's' : ''} away`}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>🕐</span>
+                        {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
+                      </span>
+                    </div>
+                  ) : meeting.is_birthday ? (
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <span>🎂</span>
@@ -345,14 +463,16 @@ function CalendarView({ employees = [] }) {
                 </div>
                 <div className="ml-4">
                   <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(meeting.status, meeting)}`}>
-                    {meeting.is_birthday 
+                    {meeting.is_holiday
+                      ? (meeting.days_until === 0 ? '🎉 Today!' : 'Holiday')
+                      : meeting.is_birthday 
                       ? (meeting.days_until === 0 ? '🎉 Today!' : 'Birthday')
                       : (isMeetingInProgress(meeting) ? '🔴 Live' : meeting.status)
                     }
                   </span>
                 </div>
               </div>
-              {isMeetingInProgress(meeting) && !meeting.is_birthday && (
+              {isMeetingInProgress(meeting) && !meeting.is_birthday && !meeting.is_holiday && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -493,12 +613,12 @@ function CalendarView({ employees = [] }) {
                         key={meeting.id}
                         onClick={() => handleMeetingClick(meeting)}
                         className={`text-xs p-1 rounded transition-shadow truncate ${getStatusColor(meeting.status, meeting)} ${
-                          meeting.is_birthday ? 'cursor-default' : 'cursor-pointer hover:shadow-sm'
+                          (meeting.is_birthday || meeting.is_holiday) ? 'cursor-default' : 'cursor-pointer hover:shadow-sm'
                         }`}
                         title={meeting.title}
                       >
                         <div className="truncate">
-                          {meeting.is_birthday ? '🎂' : formatTime(meeting.start_time)}
+                          {meeting.is_holiday ? '🎉' : meeting.is_birthday ? '🎂' : formatTime(meeting.start_time)}
                         </div>
                       </div>
                     ))}

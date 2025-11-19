@@ -5301,6 +5301,106 @@ async def debug_birthday_generation(db: AsyncSession = Depends(get_db)):
         "today": today_start.isoformat()
     }
 
+# Holiday API Routes
+
+@router.get("/holidays/today")
+async def get_holiday_today(db: AsyncSession = Depends(get_db)):
+    """Check if today is a US holiday."""
+    from business.holiday_manager import HolidayManager
+    manager = HolidayManager(db)
+    holiday_name = manager.is_holiday_today()
+    if holiday_name:
+        # Check if we've already celebrated
+        celebration = await manager.check_holiday_today()
+        return {
+            "is_holiday": True,
+            "holiday_name": holiday_name,
+            "celebrated": celebration is None  # If celebration is None, we already celebrated
+        }
+    return {
+        "is_holiday": False,
+        "holiday_name": None,
+        "celebrated": False
+    }
+
+@router.get("/holidays/upcoming")
+async def get_upcoming_holidays(days: int = 30, db: AsyncSession = Depends(get_db)):
+    """Get upcoming US holidays."""
+    try:
+        from business.holiday_manager import HolidayManager
+        manager = HolidayManager(db)
+        upcoming = await manager.get_upcoming_holidays(days)
+        return [
+            {
+                "holiday_name": item["holiday_name"],
+                "date": item["date"].isoformat() if hasattr(item["date"], "isoformat") else str(item["date"]),
+                "days_until": item["days_until"]
+            }
+            for item in upcoming
+        ]
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Holidays library not available: {str(e)}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error fetching holidays: {str(e)}")
+
+@router.get("/holidays/parties")
+async def get_holiday_parties(db: AsyncSession = Depends(get_db)):
+    """Get scheduled holiday parties with room information."""
+    from business.holiday_manager import HolidayManager
+    manager = HolidayManager(db)
+    parties = await manager.get_scheduled_holiday_parties()
+    return [
+        {
+            **party,
+            "celebration_date": party["celebration_date"],
+            "party_time": party["party_time"]
+        }
+        for party in parties
+    ]
+
+@router.post("/holidays/celebrate")
+async def celebrate_holiday_today(db: AsyncSession = Depends(get_db)):
+    """Manually trigger holiday celebration for today if it's a holiday."""
+    from business.holiday_manager import HolidayManager
+    manager = HolidayManager(db)
+    holiday_name = await manager.check_holiday_today()
+    if holiday_name:
+        celebration = await manager.celebrate_holiday(holiday_name)
+        if celebration:
+            return {
+                "success": True,
+                "message": f"Celebrated {holiday_name}!",
+                "celebration_id": celebration.id,
+                "attendees_count": len(celebration.attendees) if celebration.attendees else 0
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Already celebrated {holiday_name} today"
+            }
+    return {
+        "success": False,
+        "message": "Today is not a US holiday"
+    }
+
+@router.post("/holidays/generate-meetings")
+async def generate_holiday_meetings(days_ahead: int = 365, db: AsyncSession = Depends(get_db)):
+    """Generate holiday party meetings for upcoming US holidays (appears on calendar).
+    
+    This creates Meeting records for holiday parties so they appear on the calendar.
+    Only creates meetings for active employees (excludes terminated employees).
+    """
+    from business.holiday_manager import HolidayManager
+    manager = HolidayManager(db)
+    meetings_created = await manager.generate_holiday_meetings(days_ahead=days_ahead)
+    
+    return {
+        "message": f"Generated {meetings_created} holiday party meetings",
+        "meetings_created": meetings_created
+    }
+
 @router.get("/pets")
 async def get_pets(db: AsyncSession = Depends(get_db)):
     """Get all office pets."""

@@ -436,6 +436,19 @@ class BirthdayCelebration(Base):
     
     employee = relationship("Employee", foreign_keys=[employee_id])
 
+class HolidayCelebration(Base):
+    __tablename__ = "holiday_celebrations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    holiday_name = Column(String, nullable=False)  # Name of the holiday
+    celebration_date = Column(DateTime(timezone=True), nullable=False)  # Date of celebration
+    attendees = Column(JSON, default=list)  # List of employee IDs who attended
+    celebration_message = Column(Text, nullable=True)  # AI-generated celebration message
+    party_room = Column(String, nullable=True)  # Room where party is held
+    party_floor = Column(Integer, nullable=True)  # Floor where party is held
+    party_time = Column(DateTime(timezone=True), nullable=True)  # Scheduled party time
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class SharedDriveFile(Base):
     __tablename__ = "shared_drive_files"
     

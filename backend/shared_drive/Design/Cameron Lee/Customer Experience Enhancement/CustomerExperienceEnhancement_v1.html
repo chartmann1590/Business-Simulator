@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        /* Header row */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Data rows */
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+            text-align: left;
+        }
+        
+        /* Alternating data rows */
+        td:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        /* Totals row */
+        th:last-child {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid white;
+        }
+
+        /* Number formatting and currency */
+        .currency {
+            color: green;
+            float: right;
+        }
+
+        /* Percentage formatting */
+        .percentage {
+            text-decoration: underline;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+
+    <table border="0" cellpadding="8" cellspacing="0" style="width: 100%;">
+
+        <!-- Title row -->
+        <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td></tr>
+
+        <!-- Header row -->
+        <tr>
+            <th>Employee Information</th>
+            <th>Current Project</th>
+            <th>Business Metrics</th>
+            <th>Active Projects Data</th>
+            <th>Department Data</th>
+            <th>KPI Dashboard</th>
+            <th>Total Expenses</th>
+            <th>Profit Margin</th>
+        </tr>
+
+        <!-- Data rows -->
+        <tr>
+            <td style="text-align: left;">Cameron Lee, Sales Manager, Design</td>
+            <td>Customer Experience Enhancement, $0.00</td>
+            <td>$9,981,959.26, $7,770,503.85, 77.85%</td>
+            <td>59 projects, 787 employees</td>
+            <td>Executive: 1, Product: 43, Engineering: 42...</td>
+        </tr>
+
+        <!-- Current Project row -->
+        <tr>
+            <td colspan="2" style="background-color: #f2f2f2;">Customer Experience Enhancement</td>
+            <td style="text-align: right;">$0.00, $163,225.31, 100%</td>
+            <td>
+                <span class="currency">$81,976.89</span>, 
+                <span class="percentage">77.85%</span>
+            </td>
+            <td>Design: 51 employees, IT: 39 employees...</td>
+        </tr>
+
+        <!-- Strategic Partnership Development row -->
+        <tr>
+            <td colspan="2" style="background-color: #f2f2f2;">Strategic Partnership Development</td>
+            <td style="text-align: right;">$94,377.94, $81,976.89, 86.67%</td>
+            <td>
+                <span class="currency">$94,377.94</span>, 
+                <span class="percentage">77.85%</span>
+            </td>
+            <td>Design: 51 employees, IT: 39 employees...</td>
+        </tr>
+
+        <!-- Product Innovation Program row -->
+        <tr>
+            <td colspan="2" style="background-color: #f2f2f2;">Product Innovation Program</td>
+            <td style="text-align: right;">$144,263.26, $72,038.83, 50%</td>
+            <td>
+                <span class="currency">$144,263.26</span>, 
+                <span class="percentage">50%</span>
+            </td>
+            <td>Engineering: 42 employees, Sales: 49 employees...</td>
+        </tr>
+
+        <!-- Department Data rows -->
+        <tr>
+            <td style="text-align: left;">Executive: 1</td>
+            <td style="text-align: right;">Product: 43 employees</td>
+            <td>Engineering: 42 employees, Sales: 49 employees...</td>
+            <td>Operations: 50 employees, Marketing: 43...</td>
+        </tr>
+
+        <!-- Summary Section -->
+        <tr>
+            <th colspan="2">Summary:</th>
+            <th>Total Revenue: $9,981,959.26</th>
+            <th>Total Profit: $7,770,503.85</th>
+            <th>Profit Margin: 77.85%</th>
+            <th>Active Projects: 59</th>
+        </tr>
+
+        <!-- Totals row -->
+        <tr>
+            <td colspan="8" style="background-color: #e7f3ff; border-top: 2px solid white;">Totals</td>
+        </tr>
+
+        <!-- Footer section -->
+        <tfoot>
+            <tr>
+                <th>Data Source:</th>
+                <th>Last Updated:</th>
+                <th>Notes:</th>
+            </tr>
+        </tfoot>
+    </table>
+
+</body>
+</html>

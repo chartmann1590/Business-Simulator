@@ -103,6 +103,31 @@ async def lifespan(app: FastAPI):
                     import traceback
                     traceback.print_exc()
                 
+                # Generate holiday party meetings for upcoming US holidays (next 3 years = ~1095 days)
+                # This ensures we never miss a holiday and covers multiple years ahead
+                print("=" * 60)
+                print("🎉 Generating holiday party meetings for calendar...")
+                print("   Checking and scheduling US holidays for the next 3 years...")
+                try:
+                    from business.holiday_manager import HolidayManager
+                    holiday_manager = HolidayManager(db)
+                    # Generate for 3 years (1095 days) to ensure all holidays are scheduled
+                    # This runs on every server startup to ensure no holidays are missed
+                    days_ahead = 1095  # 3 years
+                    meetings_created = await holiday_manager.generate_holiday_meetings(days_ahead=days_ahead)
+                    if meetings_created > 0:
+                        print(f"✅ Successfully generated {meetings_created} holiday party meetings for the next 3 years.")
+                        print(f"   All US holidays are now scheduled in the calendar with proper NY timezone.")
+                    else:
+                        print("✅ Holiday party meetings check complete - all holidays already scheduled.")
+                        print("   All US holidays for the next 3 years are properly scheduled.")
+                except Exception as holiday_error:
+                    print(f"❌ ERROR: Could not generate holiday meetings: {holiday_error}")
+                    print("   This is a critical error - holidays may not appear in the calendar!")
+                    import traceback
+                    traceback.print_exc()
+                print("=" * 60)
+                
                 # Generate initial customer reviews for existing completed projects
                 print("Generating initial customer reviews for completed projects...")
                 try:

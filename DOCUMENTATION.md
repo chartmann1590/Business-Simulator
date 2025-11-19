@@ -239,6 +239,13 @@ Business logic managers:
 - Tracks upcoming birthdays
 - Organizes breakroom parties for birthdays
 
+**`holiday_manager.py`**:
+- Tracks US federal holidays using the `holidays` library
+- Creates holiday celebrations and office parties
+- Generates holiday party meetings for calendar (3 years ahead)
+- Manages holiday party scheduling with proper timezone handling
+- Tracks holiday celebrations and attendee lists
+
 **`coffee_break_manager.py`**:
 - Determines when employees should take coffee breaks
 - Manages break scheduling (every 2-4 hours)
@@ -766,6 +773,17 @@ WebSocket hook for real-time updates:
 - `celebration_date`: Celebration date
 - `age`: Employee age at celebration
 - `party_room`: Room where party was held
+- `created_at`: Timestamp
+
+#### `holiday_celebrations`
+- `id`: Primary key
+- `holiday_name`: Name of the holiday
+- `celebration_date`: Celebration date
+- `attendees`: JSON array of employee IDs attending the party
+- `celebration_message`: Holiday celebration message
+- `party_room`: Room where party is held
+- `party_floor`: Floor number where party is held
+- `party_time`: Scheduled party time
 - `created_at`: Timestamp
 
 #### `gossip`
@@ -1367,6 +1385,43 @@ Returns scheduled birthday parties with room information.
 
 **POST `/api/birthdays/generate-meetings?days_ahead=90`**
 Generates birthday party meetings for upcoming birthdays (appears on calendar).
+
+#### Holidays
+
+**GET `/api/holidays/today`**
+Check if today is a US holiday.
+
+**Response:**
+```json
+{
+  "is_holiday": true,
+  "holiday_name": "Independence Day",
+  "already_celebrated": false
+}
+```
+
+**GET `/api/holidays/upcoming?days=30`**
+Get upcoming US holidays within specified days.
+
+**Response:**
+```json
+[
+  {
+    "holiday_name": "Independence Day",
+    "date": "2024-07-04",
+    "days_until": 5
+  }
+]
+```
+
+**GET `/api/holidays/parties`**
+Get scheduled holiday parties with room information.
+
+**POST `/api/holidays/celebrate`**
+Manually trigger holiday celebration for today if it's a holiday.
+
+**POST `/api/holidays/generate-meetings?days_ahead=365`**
+Generate holiday party meetings for upcoming US holidays (appears on calendar). Automatically runs on server startup for next 3 years.
 
 #### Gossip
 
@@ -2339,6 +2394,72 @@ The birthday system automatically tracks employee birthdays and creates birthday
 - `GET /api/birthdays/upcoming?days=7` - Get upcoming birthdays
 - `GET /api/birthdays/parties` - Get scheduled birthday parties
 - `POST /api/birthdays/generate-meetings?days_ahead=90` - Generate birthday party meetings
+
+## Holiday System
+
+The holiday system automatically tracks US federal holidays and creates holiday celebrations with office parties.
+
+### Features
+
+- **US Federal Holidays**: Automatically tracks all US federal holidays (New Year's Day, Independence Day, Thanksgiving, Christmas, etc.)
+- **Automatic Celebrations**: Holiday parties are automatically created on holiday dates
+- **Calendar Integration**: Holiday parties appear as meetings on the calendar with special styling
+- **Breakroom Parties**: Holiday parties are held in breakrooms with up to 20 attendees
+- **Meeting Generation**: Holiday meetings are automatically generated for the next 3 years on server startup
+- **Holiday Notifications**: All employees receive notifications about holiday parties
+- **Timezone Support**: All holiday meetings are scheduled with proper timezone handling (NY timezone)
+
+### How It Works
+
+1. **Holiday Detection**: System uses the `holidays` library to detect US federal holidays
+2. **Daily Check**: System checks for holidays each day during simulation
+3. **Party Creation**: Holiday parties are created in breakrooms with up to 20 attendees
+4. **Meeting Generation**: Holiday parties are created as Meeting records for calendar visibility
+5. **Automatic Scheduling**: On server startup, holiday meetings are generated for the next 3 years (1095 days)
+6. **Celebration Logging**: Holiday celebrations are tracked in the database with attendee lists and party details
+
+### Database Structure
+
+**HolidayCelebration Table:**
+- Stores holiday celebration information (holiday name, date, attendees, party room, party floor, party time)
+- Links to employees through attendee IDs
+- Tracks celebration messages and party details
+
+### API Endpoints
+
+- `GET /api/holidays/today` - Check if today is a US holiday
+- `GET /api/holidays/upcoming?days=30` - Get upcoming US holidays
+- `GET /api/holidays/parties` - Get scheduled holiday parties
+- `POST /api/holidays/celebrate` - Manually trigger holiday celebration for today
+- `POST /api/holidays/generate-meetings?days_ahead=365` - Generate holiday party meetings
+
+### Frontend Integration
+
+- **Calendar View**: Holidays appear in the calendar with purple styling and 🎉 icons
+- **Meeting Display**: Holiday parties appear as scheduled meetings with special metadata
+- **Holiday List**: Upcoming holidays can be viewed through the API
+
+### Configuration
+
+- **Holiday Library**: Uses `holidays==0.36` Python library for US federal holiday detection
+- **Meeting Generation**: Automatically runs on server startup to generate meetings for next 3 years
+- **Party Time**: Holiday parties are scheduled at 2 PM in the configured timezone
+- **Attendee Count**: Up to 20 employees attend holiday parties (more than regular birthday parties)
+
+### Supported Holidays
+
+The system recognizes all US federal holidays including:
+- New Year's Day
+- Martin Luther King Jr. Day
+- Presidents' Day
+- Memorial Day
+- Juneteenth National Independence Day
+- Independence Day
+- Labor Day
+- Columbus Day
+- Veterans Day
+- Thanksgiving
+- Christmas
 
 ## Coffee Break System
 
