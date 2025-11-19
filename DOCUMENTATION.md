@@ -1338,10 +1338,21 @@ Returns all office pets. Automatically initializes pets if none exist.
 ```
 
 **GET `/api/pets/care-log`**
-Returns pet care log showing which employees have cared for pets.
+Returns pet care log showing which employees have cared for pets. Automatically backfills care logs from historical activities if they don't exist.
 
 **GET `/api/pets/{pet_id}/care-log`**
 Returns care log for a specific pet.
+
+**POST `/api/pets/generate-test-care`**
+Generates test pet care logs for testing purposes. Creates 5-10 random care logs with realistic stats.
+
+**Response:**
+```json
+{
+  "message": "Generated 8 test care logs",
+  "count": 8
+}
+```
 
 #### Birthdays
 
@@ -2265,28 +2276,42 @@ The pet care system adds office pets that employees can interact with and care f
 
 - **Office Pets**: 3-5 randomly selected pets (cats and dogs) with unique names and personalities
 - **Pet Care Game**: Interactive game where users can feed, play with, and pet office pets
-- **Pet Stats**: Each pet has happiness (50-100), hunger (0-100), and energy (0-100) stats
-- **Care Logs**: Tracks all employee interactions with pets
+- **Pet Stats**: Each pet has happiness (0-100), hunger (0-100), and energy (0-100) stats
+- **Care Logs**: Tracks all employee interactions with pets with detailed stat tracking
 - **Pet Avatars**: Visual representation of pets using avatar images
+- **Automatic Care**: AI-powered automatic pet care system that ensures pets are well-maintained
+- **High-Frequency Interactions**: Increased interaction frequency (30% chance per employee) for more active pet care
+- **Data Backfilling**: Automatic backfilling of care logs from historical activity data
 
 ### How It Works
 
 1. **Pet Initialization**: On first run, 3-5 pets are randomly selected from available pet avatars
 2. **Pet Assignment**: Each pet is assigned a favorite employee
-3. **Care Interactions**: Employees can interact with pets through the pet care game interface
-4. **Stats Management**: Pet stats change based on care actions (feeding reduces hunger, playing increases happiness)
-5. **Care Logging**: All interactions are logged for tracking and statistics
+3. **Care Interactions**: 
+   - Employees interact with pets automatically (30% chance per employee per check)
+   - Pet interactions checked every ~40 seconds (5 simulation ticks)
+   - Pet care provided every ~1.3 minutes (10 simulation ticks)
+   - Up to 5 pets can be cared for per tick
+4. **Stats Management**: 
+   - Pet stats degrade over time (faster degradation: 0.5 per minute)
+   - Pets need care when: happiness < 80, hunger > 50, or energy < 50
+   - Care actions improve stats: feeding reduces hunger, playing increases happiness, petting increases both
+5. **Care Logging**: 
+   - All interactions are logged with before/after stats
+   - Historical activities are automatically backfilled into care logs
+   - Care logs linked to activities via metadata
 
 ### Frontend Components
 
 - **PetCareGame**: Interactive pet care interface with pet selection and care actions
-- **PetCareLog**: Detailed log of all pet care interactions
+- **PetCareLog**: Detailed log of all pet care interactions with improved error handling
 
 ### API Endpoints
 
 - `GET /api/pets` - Get all office pets
-- `GET /api/pets/care-log` - Get pet care log
+- `GET /api/pets/care-log` - Get pet care log (automatically backfills from activities)
 - `GET /api/pets/{pet_id}/care-log` - Get care log for specific pet
+- `POST /api/pets/generate-test-care` - Generate test pet care logs for testing purposes
 
 ## Birthday System
 
@@ -2445,6 +2470,8 @@ The shared drive system provides AI-powered document management with version con
 - **Recent Files**: Track recently accessed files per employee
 - **File Metadata**: Stores file size, creation date, update date, and custom metadata
 - **Employee Tracking**: Tracks original creator and last updater for each file
+- **Duplicate Detection**: Automatic detection and prevention of duplicate document content
+- **Smart File Type Balancing**: System balances document types (Word, Spreadsheet, PowerPoint) to ensure variety
 
 ### How It Works
 
@@ -2452,6 +2479,9 @@ The shared drive system provides AI-powered document management with version con
    - Documents are generated using LLM with business context
    - Content is created based on current business state, projects, and employee information
    - Documents are stored as HTML for easy viewing and editing
+   - Duplicate content detection prevents creating similar documents
+   - System prioritizes creating Word documents if employee has fewer Word docs than other types
+   - Document type selection balances variety across Word, Spreadsheet, and PowerPoint types
 
 2. **File Organization**:
    - Files are organized in a hierarchical structure: `department/employee/project/filename`
@@ -2508,7 +2538,7 @@ The shared drive system provides AI-powered document management with version con
 - `GET /api/shared-drive/files/{file_id}/view` - View file content (HTML)
 - `GET /api/shared-drive/files/{file_id}/versions` - Get all versions of a file
 - `GET /api/shared-drive/files/{file_id}/versions/{version_number}` - Get specific version
-- `POST /api/shared-drive/generate` - Generate new documents
+- `POST /api/shared-drive/generate` - Generate new documents (with duplicate detection)
 
 ### File Organization
 
@@ -2537,6 +2567,22 @@ Documents are generated using LLM with the following context:
 - Project-specific information when generating project documents
 
 All document content is dynamically generated - no templates or hardcoded content.
+
+### Duplicate Detection
+
+The system includes intelligent duplicate detection to prevent creating similar documents:
+- Content similarity checking using normalized text comparison
+- Checks against existing files of the same type for the same employee
+- Similarity threshold: 85% (configurable)
+- Automatically skips duplicate document creation with warning messages
+
+### File Type Balancing
+
+The system intelligently balances document types:
+- Tracks existing file counts per type (Word, Spreadsheet, PowerPoint)
+- Prioritizes creating Word documents if employee has fewer Word docs
+- Ensures variety by selecting underrepresented document types
+- Prevents over-creation of any single document type (max 3 of same type before switching)
 
 ## Products System
 

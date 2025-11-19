@@ -158,9 +158,9 @@ class PetManager:
         )
         employees = employees_result.scalars().all()
         
-        # 5% chance per employee to interact with a pet
+        # 30% chance per employee to interact with a pet - MUCH HIGHER CHANCE
         for employee in employees:
-            if random.random() > 0.05:
+            if random.random() > 0.30:
                 continue
             
             # Find a pet in the same floor or nearby
@@ -238,8 +238,20 @@ class PetManager:
         
         if activities:
             await self.db.commit()
+            # Refresh care logs to ensure they're saved
             for activity in activities:
                 await self.db.refresh(activity)
+                # Also refresh the care log if it exists in metadata
+                if hasattr(activity, 'activity_metadata') and activity.activity_metadata:
+                    care_log_id = activity.activity_metadata.get('care_log_id')
+                    if care_log_id:
+                        from database.models import PetCareLog
+                        result = await self.db.execute(
+                            select(PetCareLog).where(PetCareLog.id == care_log_id)
+                        )
+                        care_log = result.scalar_one_or_none()
+                        if care_log:
+                            await self.db.refresh(care_log)
         
         return activities
     
@@ -286,17 +298,17 @@ class PetManager:
         
         if last_care:
             # Use stats from last care, but degrade them over time
-            time_since_care = (local_now() - last_care.created_at).total_seconds() / 3600  # hours
-            degradation = min(time_since_care * 2, 50)  # Max 50% degradation
+            time_since_care = (local_now() - last_care.created_at).total_seconds() / 60  # minutes (faster degradation)
+            degradation = min(time_since_care * 0.5, 50)  # Degrade faster - 0.5 per minute
             
             happiness = max(0, (last_care.pet_happiness_after or 75) - degradation)
             hunger = min(100, (last_care.pet_hunger_after or 30) + degradation * 1.5)
             energy = max(0, (last_care.pet_energy_after or 70) - degradation * 0.8)
         else:
-            # No previous care - use default values
-            happiness = 60
-            hunger = 60
-            energy = 50
+            # No previous care - use default values that will trigger care
+            happiness = 40  # Low enough to trigger care
+            hunger = 80  # High enough to trigger care
+            energy = 30  # Low enough to trigger care
         
         return {
             "happiness": max(0, min(100, happiness)),
@@ -314,10 +326,11 @@ class PetManager:
             stats = await self.get_pet_stats(pet)
             
             # Pet needs care if:
-            # - Happiness is below 50
-            # - Hunger is above 70
-            # - Energy is below 30
-            if stats["happiness"] < 50 or stats["hunger"] > 70 or stats["energy"] < 30:
+            # - Happiness is below 80 (LOWERED from 50)
+            # - Hunger is above 50 (LOWERED from 70)
+            # - Energy is below 50 (LOWERED from 30)
+            # This makes pets need care much more often
+            if stats["happiness"] < 80 or stats["hunger"] > 50 or stats["energy"] < 50:
                 pets_needing_care.append(pet)
         
         return pets_needing_care
@@ -620,8 +633,8 @@ Respond in JSON format:
         
         care_logs = []
         
-        # Process up to 2 pets per tick to avoid overwhelming the system
-        pets_to_care = pets_needing_care[:2]
+        # Process up to 5 pets per tick to get more activity
+        pets_to_care = pets_needing_care[:5]
         
         for pet in pets_to_care:
             try:

@@ -521,8 +521,8 @@ class OfficeSimulator:
             except Exception as e:
                 print(f"❌ Error moving pets: {e}")
         
-        # Check for pet interactions (every 30 ticks = ~4 minutes)
-        if self.quick_wins_counter % 30 == 0:
+        # Check for pet interactions (every 5 ticks = ~40 seconds) - MUCH MORE FREQUENT
+        if self.quick_wins_counter % 5 == 0:
             try:
                 async with async_session_maker() as pet_interaction_db:
                     from business.pet_manager import PetManager
@@ -532,9 +532,11 @@ class OfficeSimulator:
                         print(f"🐾 {len(interactions)} pet interaction(s) occurred")
             except Exception as e:
                 print(f"❌ Error checking pet interactions: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Check for pets needing care and provide AI-powered care (every 60 ticks = ~8 minutes)
-        if self.quick_wins_counter % 60 == 0:
+        # Check for pets needing care and provide AI-powered care (every 10 ticks = ~1.3 minutes) - MUCH MORE FREQUENT
+        if self.quick_wins_counter % 10 == 0:
             try:
                 async with async_session_maker() as pet_care_db:
                     from business.pet_manager import PetManager

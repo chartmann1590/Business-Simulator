@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        .header-row {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+        }
+
+        .totals-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+        }
+
+        .data-row {
+            background-color: #f2f2f2;
+        }
+
+        /* Conditional Formatting */
+        th:nth-child(4) {
+            text-align: right;
+        }
+
+        td:nth-child(4) {
+            text-align: left;
+        }
+
+        td:nth-child(6) {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <tr class="header-row">
+            <th>**Market Expansion Initiative**</th>
+            <th>Department Performance</th>
+            <th>Revenue Growth Rate (%)</th>
+            <th>Total Revenue ($)</th>
+            <th>Average Daily Budget ($) </th>
+            <th>Variance from Budget ($) </th>
+        </tr>
+
+        <!-- Data Rows -->
+        <tr class="data-row">
+            <td style="background: #366092;">**Hector Adams**</td>
+            <td>41 employees, Marketing Department</td>
+            <td>N/A</td>
+            <td>$9,978,581.82</td>
+            <td>N/A</td>
+            <td>N/A</td>
+        </tr>
+
+        <!-- More Data Rows... -->
+
+        <tr class="totals-row">
+            <th colspan="5">Total Metrics:</th>
+            <th>(%)</th>
+            <th>($)</th>
+            <th>(%)</th>
+            <th>($)</th>
+        </tr>
+
+        <tr>
+            <td style="background: #f2f2f2;">**Profit Margin (%)**</td>
+            <td style="background: #f2f2f2;">77.84%</td>
+            <td style="background: #f2f2f2; text-align: center">N/A</td>
+            <td style="background: #f2f2f2;">$7,767,126.41</td>
+            <td style="background: #f2f2f2;">$77.84%</td>
+        </tr>
+
+        <!-- More Totals... -->
+
+    </table>
+</body>
+</html>

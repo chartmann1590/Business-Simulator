@@ -21,7 +21,10 @@ function PetCareLog() {
       const response = await fetch('/api/pets/care-log?limit=100')
       if (response.ok) {
         const data = await response.json()
-        setCareLogs(data)
+        setCareLogs(data || [])
+        setLoading(false)
+      } else {
+        console.error('Failed to fetch care logs:', response.status, response.statusText)
         setLoading(false)
       }
     } catch (error) {
@@ -29,6 +32,7 @@ function PetCareLog() {
       setLoading(false)
     }
   }
+
 
   const getActionIcon = (action) => {
     switch (action) {

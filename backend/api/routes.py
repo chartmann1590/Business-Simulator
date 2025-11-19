@@ -5327,27 +5327,102 @@ async def get_pets(db: AsyncSession = Depends(get_db)):
 @router.get("/pets/care-log")
 async def get_pet_care_log(limit: int = 50, db: AsyncSession = Depends(get_db)):
     """Get pet care log showing which employees have cared for pets."""
-    from database.models import PetCareLog, OfficePet, Employee
+    from database.models import PetCareLog, OfficePet, Employee, Activity
     from sqlalchemy import desc
     
+    # First, try to backfill PetCareLog entries from Activities that don't have them
+    # This handles old activities that were created before PetCareLog entries were added
+    try:
+        result = await db.execute(
+            select(Activity)
+            .where(Activity.activity_type.in_(["pet_care", "pet_interaction"]))
+            .order_by(desc(Activity.timestamp))
+            .limit(100)
+        )
+        activities = result.scalars().all()
+        
+        for activity in activities:
+            # Check if this activity already has a care log
+            if activity.activity_metadata and isinstance(activity.activity_metadata, dict):
+                care_log_id = activity.activity_metadata.get("care_log_id")
+                if care_log_id:
+                    # Check if care log exists
+                    log_result = await db.execute(
+                        select(PetCareLog).where(PetCareLog.id == care_log_id)
+                    )
+                    if log_result.scalar_one_or_none():
+                        continue  # Care log exists, skip
+            
+            # Try to create a care log from this activity
+            pet_id = activity.activity_metadata.get("pet_id") if activity.activity_metadata else None
+            employee_id = activity.employee_id
+            
+            if pet_id and employee_id:
+                # Check if care log already exists for this activity
+                existing_result = await db.execute(
+                    select(PetCareLog)
+                    .where(PetCareLog.pet_id == pet_id)
+                    .where(PetCareLog.employee_id == employee_id)
+                    .where(PetCareLog.created_at >= activity.timestamp if activity.timestamp else True)
+                    .limit(1)
+                )
+                if not existing_result.scalar_one_or_none():
+                    # Determine action from description or metadata
+                    desc_lower = activity.description.lower() if activity.description else ""
+                    if "fed" in desc_lower or "🍖" in desc_lower:
+                        action = "feed"
+                    elif "played" in desc_lower or "🎾" in desc_lower:
+                        action = "play"
+                    else:
+                        action = "pet"
+                    
+                    # Create care log with default stats
+                    care_log = PetCareLog(
+                        pet_id=pet_id,
+                        employee_id=employee_id,
+                        care_action=action,
+                        pet_happiness_before=60.0,
+                        pet_hunger_before=50.0,
+                        pet_energy_before=50.0,
+                        pet_happiness_after=75.0,
+                        pet_hunger_after=40.0,
+                        pet_energy_after=60.0,
+                        ai_reasoning=f"Backfilled from activity: {activity.description}"
+                    )
+                    db.add(care_log)
+                    await db.flush()  # Flush to get the ID
+                    
+                    # Update activity metadata
+                    if activity.activity_metadata:
+                        activity.activity_metadata["care_log_id"] = care_log.id
+                    else:
+                        activity.activity_metadata = {"care_log_id": care_log.id}
+                    db.add(activity)
+        
+        await db.commit()
+    except Exception as e:
+        print(f"Error backfilling care logs: {e}")
+        await db.rollback()
+    
+    # Now get all care logs with relationships loaded
     result = await db.execute(
-        select(PetCareLog)
-        .join(OfficePet, PetCareLog.pet_id == OfficePet.id)
-        .join(Employee, PetCareLog.employee_id == Employee.id)
+        select(PetCareLog, OfficePet, Employee)
+        .outerjoin(OfficePet, PetCareLog.pet_id == OfficePet.id)
+        .outerjoin(Employee, PetCareLog.employee_id == Employee.id)
         .order_by(desc(PetCareLog.created_at))
         .limit(limit)
     )
-    care_logs = result.scalars().all()
+    rows = result.all()
     
     return [
         {
             "id": log.id,
             "pet_id": log.pet_id,
-            "pet_name": log.pet.name if log.pet else "Unknown",
-            "pet_type": log.pet.pet_type if log.pet else "Unknown",
+            "pet_name": pet.name if pet else "Unknown",
+            "pet_type": pet.pet_type if pet else "Unknown",
             "employee_id": log.employee_id,
-            "employee_name": log.employee.name if log.employee else "Unknown",
-            "employee_title": log.employee.title if log.employee else "Unknown",
+            "employee_name": employee.name if employee else "Unknown",
+            "employee_title": employee.title if employee else "Unknown",
             "care_action": log.care_action,
             "pet_happiness_before": log.pet_happiness_before,
             "pet_hunger_before": log.pet_hunger_before,
@@ -5358,7 +5433,7 @@ async def get_pet_care_log(limit: int = 50, db: AsyncSession = Depends(get_db)):
             "ai_reasoning": log.ai_reasoning,
             "created_at": log.created_at.isoformat() if log.created_at else None
         }
-        for log in care_logs
+        for log, pet, employee in rows
     ]
 
 @router.get("/pets/{pet_id}/care-log")
@@ -5508,6 +5583,98 @@ async def log_pet_care(
         "pet_energy_after": care_log.pet_energy_after,
         "ai_reasoning": care_log.ai_reasoning,
         "created_at": care_log.created_at.isoformat() if care_log.created_at else None
+    }
+
+@router.post("/pets/generate-test-care")
+async def generate_test_care_logs(db: AsyncSession = Depends(get_db)):
+    """Generate some test pet care logs immediately for testing."""
+    from database.models import PetCareLog, OfficePet, Employee, Activity
+    from sqlalchemy import select
+    import random
+    
+    # Get all pets
+    result = await db.execute(select(OfficePet))
+    pets = result.scalars().all()
+    
+    if not pets:
+        raise HTTPException(status_code=404, detail="No pets found. Please initialize pets first.")
+    
+    # Get active employees
+    result = await db.execute(select(Employee).where(Employee.status == "active"))
+    employees = result.scalars().all()
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No active employees found.")
+    
+    care_logs = []
+    actions = ["feed", "play", "pet"]
+    
+    # Generate 5-10 care logs
+    num_logs = random.randint(5, 10)
+    for _ in range(num_logs):
+        pet = random.choice(pets)
+        employee = random.choice(employees)
+        action = random.choice(actions)
+        
+        # Generate realistic stats
+        happiness_before = random.randint(40, 80)
+        hunger_before = random.randint(30, 80)
+        energy_before = random.randint(30, 80)
+        
+        # Calculate stats after based on action
+        if action == "feed":
+            happiness_after = min(100, happiness_before + random.randint(5, 20))
+            hunger_after = max(0, hunger_before - random.randint(20, 40))
+            energy_after = energy_before
+        elif action == "play":
+            happiness_after = min(100, happiness_before + random.randint(10, 25))
+            hunger_after = hunger_before
+            energy_after = max(0, energy_before - random.randint(10, 25))
+        else:  # pet
+            happiness_after = min(100, happiness_before + random.randint(5, 15))
+            hunger_after = hunger_before
+            energy_after = min(100, energy_before + random.randint(2, 8))
+        
+        care_log = PetCareLog(
+            pet_id=pet.id,
+            employee_id=employee.id,
+            care_action=action,
+            pet_happiness_before=happiness_before,
+            pet_hunger_before=hunger_before,
+            pet_energy_before=energy_before,
+            pet_happiness_after=happiness_after,
+            pet_hunger_after=hunger_after,
+            pet_energy_after=energy_after,
+            ai_reasoning=f"Test data: {employee.name} {action}ed {pet.name}"
+        )
+        db.add(care_log)
+        care_logs.append(care_log)
+        
+        # Create activity
+        action_descriptions = {
+            "feed": f"🍖 {employee.name} fed {pet.name}",
+            "play": f"🎾 {employee.name} played with {pet.name}",
+            "pet": f"❤️ {employee.name} petted and comforted {pet.name}"
+        }
+        
+        activity = Activity(
+            employee_id=employee.id,
+            activity_type="pet_care",
+            description=action_descriptions.get(action, f"🐾 {employee.name} cared for {pet.name}"),
+            activity_metadata={
+                "pet_id": pet.id,
+                "pet_name": pet.name,
+                "care_action": action,
+                "care_log_id": care_log.id
+            }
+        )
+        db.add(activity)
+    
+    await db.commit()
+    
+    return {
+        "message": f"Generated {len(care_logs)} test care logs",
+        "count": len(care_logs)
     }
 
 @router.get("/employees/{employee_id}/pet-care")

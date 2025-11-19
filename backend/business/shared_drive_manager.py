@@ -50,6 +50,59 @@ class SharedDriveManager:
         os.makedirs(dir_path, exist_ok=True)
         return os.path.join(dir_path, safe_file)
     
+    def _check_content_similarity(self, content1: str, content2: str, threshold: float = 0.85) -> bool:
+        """Check if two document contents are similar (to prevent duplicates)."""
+        # Remove HTML tags and normalize whitespace for comparison
+        import re
+        def normalize(text):
+            # Remove HTML tags
+            text = re.sub(r'<[^>]+>', '', text)
+            # Normalize whitespace
+            text = re.sub(r'\s+', ' ', text).strip().lower()
+            # Remove common variable parts (dates, names that might differ)
+            text = re.sub(r'\d+', '', text)  # Remove numbers
+            return text[:1000]  # Compare first 1000 chars
+        
+        norm1 = normalize(content1)
+        norm2 = normalize(content2)
+        
+        if not norm1 or not norm2:
+            return False
+        
+        # Simple similarity check: if normalized content is very similar
+        if norm1 == norm2:
+            return True
+        
+        # Check if one is a substring of the other (with some tolerance)
+        if len(norm1) > 100 and len(norm2) > 100:
+            # Calculate simple character overlap
+            shorter = min(len(norm1), len(norm2))
+            longer = max(len(norm1), len(norm2))
+            matches = sum(1 for a, b in zip(norm1[:shorter], norm2[:shorter]) if a == b)
+            similarity = matches / longer if longer > 0 else 0
+            return similarity >= threshold
+        
+        return False
+    
+    async def _check_duplicate_content(self, new_content: str, employee_id: int, file_type: str) -> bool:
+        """Check if similar content already exists for this employee."""
+        # Get all files of the same type for this employee
+        result = await self.db.execute(
+            select(SharedDriveFile).where(
+                SharedDriveFile.employee_id == employee_id,
+                SharedDriveFile.file_type == file_type
+            )
+        )
+        existing_files = result.scalars().all()
+        
+        # Check content similarity
+        for existing_file in existing_files:
+            if self._check_content_similarity(new_content, existing_file.content_html):
+                print(f"  ⚠️  Skipping duplicate: similar content already exists in '{existing_file.file_name}'")
+                return True
+        
+        return False
+    
     async def _get_enhanced_business_context(self, business_context: Dict) -> Dict:
         """Get enhanced business context with more detailed data."""
         enhanced = business_context.copy()
@@ -896,6 +949,9 @@ Return ONLY the summary text, nothing else."""
         if current_task:
             context_parts.append(f"Current Task: {current_task.description}")
         context_parts.append(f"Existing files: {len(existing_files)}")
+        existing_types = [f.file_type for f in existing_files]
+        type_counts = {t: existing_types.count(t) for t in ["word", "spreadsheet", "powerpoint"]}
+        context_parts.append(f"Existing file types - Word: {type_counts.get('word', 0)}, Spreadsheet: {type_counts.get('spreadsheet', 0)}, PowerPoint: {type_counts.get('powerpoint', 0)}")
         context_parts.append(f"Business Revenue: ${business_context.get('revenue', 0):,.2f}")
         
         context_str = "\n".join(context_parts)
@@ -914,6 +970,7 @@ Consider:
 - Current projects and tasks
 - What documents would be useful for their work
 - Business needs
+- EXISTING FILE COUNTS: Prioritize creating WORD documents if the employee has fewer word docs than other types
 
 Respond in JSON format:
 {{
@@ -923,12 +980,14 @@ Respond in JSON format:
     ]
 }}
 
-IMPORTANT: Vary the document types! Don't always choose "word". Consider:
+IMPORTANT: 
+- If employee has fewer WORD documents than spreadsheets/powerpoints, prioritize creating a WORD document
+- Vary the document types based on what's missing
 - Spreadsheets for: financial data, budgets, analysis, metrics, tracking, calculations
 - PowerPoints for: presentations, proposals, reports, meetings, pitches, summaries
 - Word documents for: reports, memos, documentation, summaries, letters
 
-Generate 1 document suggestion. Choose the MOST appropriate type based on the employee's work. Be realistic and relevant."""
+Generate 1 document suggestion. Choose the MOST appropriate type based on the employee's work and existing files. Be realistic and relevant."""
 
         try:
             client = await self.llm_client._get_client()
@@ -989,8 +1048,20 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     # For other roles, vary the type
                     preferred_type = random.choice(["word", "spreadsheet", "powerpoint"])
                 
+                # Check what types are missing or underrepresented
+                word_count = existing_types.count("word")
+                spreadsheet_count = existing_types.count("spreadsheet")
+                powerpoint_count = existing_types.count("powerpoint")
+                
+                # Prioritize creating word documents if they're underrepresented
+                if word_count < spreadsheet_count and word_count < powerpoint_count:
+                    preferred_type = "word"
+                elif spreadsheet_count < word_count and spreadsheet_count < powerpoint_count:
+                    preferred_type = "spreadsheet"
+                elif powerpoint_count < word_count and powerpoint_count < spreadsheet_count:
+                    preferred_type = "powerpoint"
                 # If employee already has many of preferred type, try a different one
-                if existing_types.count(preferred_type) >= 3:
+                elif existing_types.count(preferred_type) >= 3:
                     other_types = ["word", "spreadsheet", "powerpoint"]
                     other_types.remove(preferred_type)
                     preferred_type = random.choice(other_types)
@@ -1003,17 +1074,10 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                 else:
                     documents_to_create = [{"type": "word", "purpose": "report or summary"}]
             
-            # If employee has no files yet, create one with variety (not always word)
+            # If employee has no files yet, prioritize word documents first
             if not existing_files and not documents_to_create:
-                import random
-                # Randomly choose type for new employees to ensure variety
-                doc_type = random.choice(["word", "spreadsheet", "powerpoint"])
-                if doc_type == "spreadsheet":
-                    documents_to_create = [{"type": "spreadsheet", "purpose": "initial data or analysis"}]
-                elif doc_type == "powerpoint":
-                    documents_to_create = [{"type": "powerpoint", "purpose": "initial presentation"}]
-                else:
-                    documents_to_create = [{"type": "word", "purpose": "initial work document"}]
+                # Start with word document for new employees
+                documents_to_create = [{"type": "word", "purpose": "initial work document"}]
             
             created_files = []
             # Limit documents to prevent overwhelming the system
@@ -1049,6 +1113,11 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     
                     if not content or not content.strip():
                         print(f"  ⚠️  Warning: Empty content generated for {employee.name}, skipping...")
+                        continue
+                    
+                    # Check for duplicate content before creating
+                    if await self._check_duplicate_content(content, employee.id, file_type):
+                        print(f"  ⚠️  Skipping duplicate document for {employee.name}")
                         continue
                     
                     # Determine file path
