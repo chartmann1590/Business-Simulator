@@ -741,7 +741,7 @@ def should_move_to_home_room(employee, activity_type: str) -> bool:
     department = (employee.department or "").lower()
     home_room = getattr(employee, 'home_room', None)
     current_room = getattr(employee, 'current_room', None)
-    activity_state = getattr(employee, 'activity_state', 'idle')
+    activity_state = getattr(employee, 'activity_state', 'working')
     
     # Check if employee is in training room but not actually in training
     from employees.room_assigner import ROOM_TRAINING_ROOM
@@ -811,7 +811,7 @@ async def update_employee_location(employee, target_room: Optional[str], activit
     """
     Update employee's location and activity state.
     Also updates floor if moving to a room on a different floor.
-    RESPECTS ROOM CAPACITY - if room is full, employee will wait.
+    RESPECTS ROOM CAPACITY - if room is full, tries alternatives before setting to waiting.
     
     Args:
         employee: Employee model instance
@@ -824,17 +824,49 @@ async def update_employee_location(employee, target_room: Optional[str], activit
         has_space = await check_room_has_space(target_room, db_session, exclude_employee_id=employee.id)
         
         if not has_space:
-            # Room is full - employee must wait
-            # Set activity state to "waiting" to indicate they're waiting for room to open
-            employee.activity_state = "waiting"
-            # Keep them in current room (or set to None if they don't have one)
-            if not employee.current_room:
-                # If they don't have a current room, put them in a hallway/waiting area
-                # For now, we'll keep current_room as None and they'll appear as "waiting"
-                pass
-            # Don't update current_room - they stay where they are
-            await db_session.flush()
-            return  # Exit early - employee is waiting
+            # Room is full - try alternatives BEFORE setting to waiting
+            # Only set to waiting as last resort
+            if activity_state in ["working"]:
+                # Try home room first
+                home_room = getattr(employee, 'home_room', None)
+                if home_room and home_room != target_room:
+                    has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
+                    if has_space:
+                        target_room = home_room
+                        has_space = True
+                
+                # Try cubicles as fallback
+                if not has_space:
+                    from employees.room_assigner import ROOM_CUBICLES
+                    employee_floor = getattr(employee, 'floor', 1)
+                    cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                    if cubicles_room != target_room:
+                        has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+                        if has_space:
+                            target_room = cubicles_room
+                            has_space = True
+                
+                # Try open office as fallback
+                if not has_space:
+                    from employees.room_assigner import ROOM_OPEN_OFFICE
+                    open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                    if open_office_room != target_room:
+                        has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+                        if has_space:
+                            target_room = open_office_room
+                            has_space = True
+            
+            if not has_space:
+                # All alternatives tried - set to waiting as last resort
+                employee.activity_state = "waiting"
+                # Keep them in current room (or set to None if they don't have one)
+                if not employee.current_room:
+                    # If they don't have a current room, put them in a hallway/waiting area
+                    # For now, we'll keep current_room as None and they'll appear as "waiting"
+                    pass
+                # Don't update current_room - they stay where they are
+                await db_session.flush()
+                return  # Exit early - employee is waiting
         
         # Room has space - employee can move
         employee.activity_state = "walking"
@@ -921,9 +953,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                 time_since_hire = datetime.utcnow() - hired_at_naive
                 # If hired more than 1 hour ago and still in training room, move them out
                 if time_since_hire > timedelta(hours=1):
-                    # Training complete - move to home room and update activity state
-                    employee.activity_state = "idle"  # No longer in training
-                    await update_employee_location(employee, employee.home_room, "idle", db_session)
+                    # Training complete - move to home room and start working
+                    employee.activity_state = "working"
+                    await update_employee_location(employee, employee.home_room, "working", db_session)
                     # Create activity to log training completion
                     from database.models import Activity
                     activity = Activity(
@@ -966,9 +998,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                 
                 time_since_hire = datetime.utcnow() - hired_at_naive
                 if time_since_hire > timedelta(hours=1):
-                    # Training complete - move to home room
-                    employee.activity_state = "idle"
-                    await update_employee_location(employee, employee.home_room, "idle", db_session)
+                    # Training complete - move to home room and start working
+                    employee.activity_state = "working"
+                    await update_employee_location(employee, employee.home_room, "working", db_session)
                     from database.models import Activity
                     activity = Activity(
                         employee_id=employee.id,
@@ -988,7 +1020,7 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
     
     # Check if should return to home room
     if should_move_to_home_room(employee, activity_type):
-        await update_employee_location(employee, employee.home_room, "idle", db_session)
+        await update_employee_location(employee, employee.home_room, "working", db_session)
         return
     
     # Determine target room based on activity
@@ -1013,9 +1045,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
         "break": "break",
         "training": "training",  # Keep as training, not working
         "working": "working",
-        "idle": "idle",
-        "completed": "idle",
-        "finished": "idle",
+        "idle": "working",  # Employees should be working, not idle
+        "completed": "working",  # After completing something, they should be working
+        "finished": "working",  # After finishing something, they should be working
     }
     
     activity_state = activity_state_map.get(activity_type.lower(), "working")
@@ -1026,8 +1058,8 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
         if activity_type.lower() == "training" or "training" in activity_type.lower():
             activity_state = "training"
         elif activity_type.lower() in ["working", "idle", "completed", "finished"]:
-            # They're done training, should return to home room
-            await update_employee_location(employee, employee.home_room, "idle", db_session)
+            # They're done training, should return to home room and start working
+            await update_employee_location(employee, employee.home_room, "working", db_session)
             return
     
     # Special handling for IT, Reception, and Storage employees - keep them in their work areas
@@ -1044,12 +1076,12 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                            current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
                            current_room == f"{ROOM_TRAINING_ROOM}_floor4")
     
-    # If in training room but not actually training, move to home room
+    # If in training room but not actually training, move to home room and start working
     if is_in_training_room and activity_state != "training" and activity_type.lower() != "training":
-        await update_employee_location(employee, employee.home_room, "idle", db_session)
+        await update_employee_location(employee, employee.home_room, "working", db_session)
         return
     
-    # If employee is waiting, they should retry entering their target room
+    # If employee is waiting, IMMEDIATELY try to fix it - don't wait
     # (capacity check will happen in update_employee_location)
     if employee.activity_state == "waiting":
         # FIRST: Check if they're already in a training room - if so, just fix the status
@@ -1099,9 +1131,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                         
                         time_since_hire = datetime.utcnow() - hired_at_naive
                         if time_since_hire > timedelta(hours=1):
-                            # Training complete - move to home room even if waiting
-                            employee.activity_state = "idle"
-                            await update_employee_location(employee, employee.home_room, "idle", db_session)
+                            # Training complete - move to home room and start working
+                            employee.activity_state = "working"
+                            await update_employee_location(employee, employee.home_room, "working", db_session)
                             from database.models import Activity
                             activity = Activity(
                                 employee_id=employee.id,
@@ -1121,13 +1153,79 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                 # Still waiting for training room - keep waiting but try again next tick
                 return
         
-        # Not training - retry the original target room
+        # Not training - AGGRESSIVELY find an alternative room
+        # Don't just retry - try multiple fallback options
+        moved = False
+        
         if target_room:
-            # Try to enter the target room again (capacity will be checked)
-            await update_employee_location(employee, target_room, activity_state, db_session)
+            # Try target room first
+            has_space = await check_room_has_space(target_room, db_session, exclude_employee_id=employee.id)
+            if has_space:
+                await update_employee_location(employee, target_room, activity_state, db_session)
+                moved = True
+            else:
+                # Target room full - try alternatives based on activity
+                if activity_state in ["working"]:
+                    # For working, try home room, then cubicles, then open office
+                    home_room = getattr(employee, 'home_room', None)
+                    if home_room:
+                        has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
+                        if has_space:
+                            await update_employee_location(employee, home_room, activity_state, db_session)
+                            moved = True
+                    
+                    if not moved:
+                        from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                        employee_floor = getattr(employee, 'floor', 1)
+                        # Try cubicles
+                        cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                        has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+                        if has_space:
+                            await update_employee_location(employee, cubicles_room, activity_state, db_session)
+                            moved = True
+                        
+                        # Try open office
+                        if not moved:
+                            open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                            has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+                            if has_space:
+                                await update_employee_location(employee, open_office_room, activity_state, db_session)
+                                moved = True
+                else:
+                    # For other activities, just retry target room (it will set to waiting if still full)
+                    await update_employee_location(employee, target_room, activity_state, db_session)
+                    moved = True
         else:
-            # No target room determined - go to home room instead
-            await update_employee_location(employee, employee.home_room, activity_state, db_session)
+            # No target room - try home room, then cubicles, then open office
+            home_room = getattr(employee, 'home_room', None)
+            if home_room:
+                has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
+                if has_space:
+                    await update_employee_location(employee, home_room, activity_state, db_session)
+                    moved = True
+            
+            if not moved:
+                from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                employee_floor = getattr(employee, 'floor', 1)
+                cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+                if has_space:
+                    await update_employee_location(employee, cubicles_room, activity_state, db_session)
+                    moved = True
+                
+                if not moved:
+                    open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                    has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+                    if has_space:
+                        await update_employee_location(employee, open_office_room, activity_state, db_session)
+                        moved = True
+        
+        # If still not moved and they're waiting, change state to working if they have a current room
+        # This prevents infinite waiting - they should be working, not idle
+        if not moved and employee.activity_state == "waiting" and employee.current_room:
+            employee.activity_state = "working"
+            await db_session.flush()
+        
         return
     
     # If no target room determined, stay in current room or go to home room
@@ -1172,20 +1270,23 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                 if home_room:
                     has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
                     if has_space:
-                        await update_employee_location(employee, home_room, "idle", db_session)
+                        await update_employee_location(employee, home_room, "working", db_session)
                     else:
                         # Home room full - use cubicles as overflow
                         from employees.room_assigner import ROOM_CUBICLES
                         cubicles_room = f"{ROOM_CUBICLES}_floor{employee.floor}" if employee.floor > 1 else ROOM_CUBICLES
-                        await update_employee_location(employee, cubicles_room, "idle", db_session)
+                        await update_employee_location(employee, cubicles_room, "working", db_session)
                 else:
-                    await update_employee_location(employee, employee.home_room, "idle", db_session)
+                    await update_employee_location(employee, employee.home_room, "working", db_session)
             else:
                 await update_employee_location(employee, None, activity_state, db_session)
         else:
             # No current room, go to home room (or cubicles if home room is full)
             home_room = getattr(employee, 'home_room', None)
-            if home_room and activity_state in ["working", "idle"]:
+            # Convert "idle" to "working" - employees should be working, not idle
+            if activity_state == "idle":
+                activity_state = "working"
+            if home_room and activity_state in ["working"]:
                 has_space = await check_room_has_space(home_room, db_session, exclude_employee_id=employee.id)
                 if has_space:
                     await update_employee_location(employee, home_room, activity_state, db_session)
@@ -1195,7 +1296,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                     cubicles_room = f"{ROOM_CUBICLES}_floor{employee.floor}" if employee.floor > 1 else ROOM_CUBICLES
                     await update_employee_location(employee, cubicles_room, activity_state, db_session)
             else:
-                await update_employee_location(employee, employee.home_room, activity_state, db_session)
+                # Ensure we use "working" not "idle"
+                final_state = "working" if activity_state == "idle" else activity_state
+                await update_employee_location(employee, employee.home_room, final_state, db_session)
     else:
         # For IT, Reception, and Storage, they MUST stay in their work areas
         home_room = getattr(employee, 'home_room', None)
@@ -1244,7 +1347,7 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                 await update_employee_location(employee, target_room, activity_state, db_session)
         else:
             # For other employees working/idle, check if target room is home room and if it's full
-            if target_room == home_room and activity_state in ["working", "idle"] and home_room:
+            if target_room == home_room and activity_state in ["working"] and home_room:
                 has_space = await check_room_has_space(target_room, db_session, exclude_employee_id=employee.id)
                 if not has_space:
                     # Home room full - use cubicles as overflow

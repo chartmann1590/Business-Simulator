@@ -236,6 +236,12 @@ The web interface provides several views:
   - Voting and manager feedback system
 - **Weather System**: Office weather tracking
   - Weather conditions affecting office mood
+- **Shared Drive System**: AI-powered document management
+  - AI-generated documents (Word, Spreadsheet, PowerPoint)
+  - Version control for all documents
+  - Organized by department/employee/project
+  - Document viewing and editing interface
+  - Recent files tracking
 
 All views update in real-time as the simulation runs via WebSocket.
 

@@ -52,8 +52,10 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
 
   // Scroll transcript to bottom when new messages arrive (only if user is already at bottom)
   useEffect(() => {
-    if (transcriptEndRef.current && isAtBottom) {
-      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    if (transcriptContainerRef.current && isAtBottom) {
+      // Use scrollTop instead of scrollIntoView to avoid scrolling the whole page
+      const container = transcriptContainerRef.current
+      container.scrollTop = container.scrollHeight
     }
   }, [liveMessages, meetingData.live_transcript, isAtBottom])
 

@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_
+from sqlalchemy.orm import selectinload
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from config import now as local_now
@@ -1966,21 +1967,54 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
         today_breaks = result.scalars().all()
         
-        # Separate break returns for display
-        break_returns = [
-            {
-                "id": act.id,
-                "employee_id": act.employee_id,
-                "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
-                "manager_name": act.activity_metadata.get("manager_name", "Manager") if act.activity_metadata and isinstance(act.activity_metadata, dict) else "Manager",
-                "manager_id": act.activity_metadata.get("manager_id") if act.activity_metadata and isinstance(act.activity_metadata, dict) else None,
-                "description": act.description,
-                "break_duration_minutes": act.activity_metadata.get("break_duration_minutes") if act.activity_metadata and isinstance(act.activity_metadata, dict) else None,
-                "timestamp": act.timestamp.isoformat() if act.timestamp else None
-            }
-            for act in today_breaks
-            if act.activity_type == "break_returned"
-        ]
+        # Get break returns and break denials (including manager abuse tracking)
+        break_returns = []
+        manager_abuse_incidents = []
+        break_denials = []
+        
+        # Also query for break_denied activities
+        denied_result = await db.execute(
+            select(Activity)
+            .where(
+                Activity.activity_type == "break_denied",
+                Activity.timestamp >= today_start
+            )
+            .order_by(desc(Activity.timestamp))
+        )
+        denied_breaks = denied_result.scalars().all()
+        
+        for act in today_breaks:
+            if act.activity_type == "break_returned":
+                metadata = act.activity_metadata if act.activity_metadata and isinstance(act.activity_metadata, dict) else {}
+                is_manager_abuse = metadata.get("is_manager", False) or metadata.get("enforcement_type") == "manager_break_enforcement"
+                
+                return_data = {
+                    "id": act.id,
+                    "employee_id": act.employee_id,
+                    "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
+                    "manager_name": metadata.get("manager_name", "System") if not is_manager_abuse else "System (Manager Abuse)",
+                    "manager_id": metadata.get("manager_id") if not is_manager_abuse else None,
+                    "description": act.description,
+                    "break_duration_minutes": metadata.get("break_duration_minutes", 0),
+                    "timestamp": act.timestamp.isoformat() if act.timestamp else None,
+                    "is_manager_abuse": is_manager_abuse,
+                    "enforcement_type": metadata.get("enforcement_type", "manager_return")
+                }
+                break_returns.append(return_data)
+                
+                if is_manager_abuse:
+                    manager_abuse_incidents.append(return_data)
+        
+        for act in denied_breaks:
+            metadata = act.activity_metadata if act.activity_metadata and isinstance(act.activity_metadata, dict) else {}
+            if metadata.get("is_manager", False):
+                break_denials.append({
+                    "id": act.id,
+                    "employee_id": act.employee_id,
+                    "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
+                    "reason": metadata.get("reason", "Break abuse detected"),
+                    "timestamp": act.timestamp.isoformat() if act.timestamp else None
+                })
         
         # Group breaks by employee for daily time visibility
         employee_break_history = {}
@@ -2090,9 +2124,13 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "employees_on_break": employees_on_break,
                 "break_history": break_history_list,
                 "break_returns": break_returns,
+                "manager_abuse_incidents": manager_abuse_incidents,
+                "break_denials": break_denials,
                 "total_on_break": len(employees_on_break),
                 "total_breaks_today": len([b for b in today_breaks if b.activity_type in ["coffee_break", "break"]]),
-                "total_returns_today": len(break_returns)
+                "total_returns_today": len(break_returns),
+                "total_manager_abuse_today": len(manager_abuse_incidents),
+                "total_break_denials_today": len(break_denials)
             }
         }
     except Exception as e:
@@ -2143,9 +2181,13 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "employees_on_break": [],
                 "break_history": [],
                 "break_returns": [],
+                "manager_abuse_incidents": [],
+                "break_denials": [],
                 "total_on_break": 0,
                 "total_breaks_today": 0,
-                "total_returns_today": 0
+                "total_returns_today": 0,
+                "total_manager_abuse_today": 0,
+                "total_break_denials_today": 0
             }
         }
 
@@ -2759,9 +2801,9 @@ async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
                             hired_at_naive = hired_at
                         time_since_hire = local_now() - hired_at_naive
                         if time_since_hire > timedelta(hours=1):
-                            employee.activity_state = "idle"
+                            employee.activity_state = "working"
                             if employee.home_room:
-                                await update_employee_location(employee, employee.home_room, "idle", db)
+                                await update_employee_location(employee, employee.home_room, "working", db)
                             from database.models import Activity
                             activity = Activity(
                                 employee_id=employee.id,
@@ -2864,6 +2906,57 @@ async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
         print(f"Error in fix_waiting_employees: {e}")
         print(error_msg)
         raise HTTPException(status_code=500, detail=f"Error fixing waiting employees: {str(e)}")
+
+@router.post("/employees/fix-idle")
+async def fix_idle_employees(db: AsyncSession = Depends(get_db)):
+    """IMMEDIATELY fix ALL employees stuck in idle state - they should be working!"""
+    try:
+        # Get ALL idle employees
+        result = await db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.activity_state == "idle"
+            )
+        )
+        idle_employees = result.scalars().all()
+        
+        if not idle_employees:
+            return {
+                "message": "No idle employees found",
+                "details": {
+                    "total_fixed": 0,
+                    "total_idle": 0
+                }
+            }
+        
+        fixed_count = 0
+        
+        # Fix ALL idle employees immediately
+        for employee in idle_employees:
+            try:
+                # Set them to working - they should NEVER be idle
+                employee.activity_state = "working"
+                fixed_count += 1
+            except Exception as e:
+                print(f"Error fixing idle employee {getattr(employee, 'name', 'unknown')}: {e}")
+                continue
+        
+        await db.commit()
+        
+        return {
+            "message": f"Fixed {fixed_count} idle employees - they are now working!",
+            "details": {
+                "total_fixed": fixed_count,
+                "total_idle": 0
+            }
+        }
+    except Exception as e:
+        await db.rollback()
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"Error in fix_idle_employees: {e}")
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=f"Error fixing idle employees: {str(e)}")
 
 @router.get("/office-layout")
 async def get_office_layout(db: AsyncSession = Depends(get_db)):
@@ -3249,7 +3342,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             # Safely get room fields (they might not exist in old database)
             current_room = getattr(employee, 'current_room', None)
             home_room = getattr(employee, 'home_room', None)
-            activity_state = getattr(employee, 'activity_state', 'idle')
+            activity_state = getattr(employee, 'activity_state', 'working')
             floor = getattr(employee, 'floor', 1)  # Default to floor 1 if not set
             
             room = current_room or home_room
@@ -5302,6 +5395,121 @@ async def get_pet_care_log_by_pet(pet_id: int, limit: int = 20, db: AsyncSession
         for log in care_logs
     ]
 
+@router.post("/pets/{pet_id}/care")
+async def log_pet_care(
+    pet_id: int,
+    care_data: dict = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Log a pet care action (feed, play, or pet) from the frontend."""
+    from database.models import PetCareLog, OfficePet, Employee
+    from sqlalchemy import select
+    
+    # Get the pet
+    result = await db.execute(select(OfficePet).where(OfficePet.id == pet_id))
+    pet = result.scalar_one_or_none()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    
+    # Get employee (if provided, otherwise use a random active employee or pet's favorite)
+    employee = None
+    employee_id = care_data.get("employee_id")
+    if employee_id:
+        result = await db.execute(select(Employee).where(Employee.id == employee_id))
+        employee = result.scalar_one_or_none()
+    
+    if not employee:
+        # Use pet's favorite employee or a random active employee
+        if pet.favorite_employee_id:
+            result = await db.execute(select(Employee).where(Employee.id == pet.favorite_employee_id))
+            employee = result.scalar_one_or_none()
+        if not employee:
+            result = await db.execute(
+                select(Employee).where(Employee.status == "active").limit(1)
+            )
+            employee = result.scalar_one_or_none()
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee available")
+    
+    # Get care action and stats
+    action = care_data.get("action", "pet")  # feed, play, or pet
+    if action not in ["feed", "play", "pet"]:
+        action = "pet"
+    
+    stats_before = {
+        "happiness": care_data.get("happiness_before", 75.0),
+        "hunger": care_data.get("hunger_before", 50.0),
+        "energy": care_data.get("energy_before", 70.0)
+    }
+    
+    stats_after = {
+        "happiness": care_data.get("happiness_after", stats_before["happiness"]),
+        "hunger": care_data.get("hunger_after", stats_before["hunger"]),
+        "energy": care_data.get("energy_after", stats_before["energy"])
+    }
+    
+    # Create care log
+    care_log = PetCareLog(
+        pet_id=pet.id,
+        employee_id=employee.id,
+        care_action=action,
+        pet_happiness_before=stats_before["happiness"],
+        pet_hunger_before=stats_before["hunger"],
+        pet_energy_before=stats_before["energy"],
+        pet_happiness_after=stats_after["happiness"],
+        pet_hunger_after=stats_after["hunger"],
+        pet_energy_after=stats_after["energy"],
+        ai_reasoning=care_data.get("reasoning", "User-initiated care action")
+    )
+    db.add(care_log)
+    
+    # Create activity
+    from database.models import Activity
+    action_descriptions = {
+        "feed": f"🍖 {employee.name} fed {pet.name}",
+        "play": f"🎾 {employee.name} played with {pet.name}",
+        "pet": f"❤️ {employee.name} petted and comforted {pet.name}"
+    }
+    
+    activity = Activity(
+        employee_id=employee.id,
+        activity_type="pet_care",
+        description=action_descriptions.get(action, f"🐾 {employee.name} cared for {pet.name}"),
+        activity_metadata={
+            "pet_id": pet.id,
+            "pet_name": pet.name,
+            "care_action": action,
+            "care_log_id": care_log.id,
+            "happiness_change": stats_after["happiness"] - stats_before["happiness"],
+            "hunger_change": stats_after["hunger"] - stats_before["hunger"],
+            "energy_change": stats_after["energy"] - stats_before["energy"]
+        }
+    )
+    db.add(activity)
+    
+    await db.commit()
+    await db.refresh(care_log)
+    
+    return {
+        "id": care_log.id,
+        "pet_id": care_log.pet_id,
+        "pet_name": pet.name,
+        "pet_type": pet.pet_type,
+        "employee_id": care_log.employee_id,
+        "employee_name": employee.name,
+        "employee_title": employee.title,
+        "care_action": care_log.care_action,
+        "pet_happiness_before": care_log.pet_happiness_before,
+        "pet_hunger_before": care_log.pet_hunger_before,
+        "pet_energy_before": care_log.pet_energy_before,
+        "pet_happiness_after": care_log.pet_happiness_after,
+        "pet_hunger_after": care_log.pet_hunger_after,
+        "pet_energy_after": care_log.pet_energy_after,
+        "ai_reasoning": care_log.ai_reasoning,
+        "created_at": care_log.created_at.isoformat() if care_log.created_at else None
+    }
+
 @router.get("/employees/{employee_id}/pet-care")
 async def get_employee_pet_care(employee_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
     """Get pet care activities for a specific employee."""
@@ -5512,4 +5720,259 @@ async def upvote_suggestion(suggestion_id: int, db: AsyncSession = Depends(get_d
     manager = SuggestionManager(db)
     await manager.upvote_suggestion(suggestion_id)
     return {"success": True, "message": "Suggestion upvoted"}
+
+# Shared Drive API Endpoints
+@router.get("/shared-drive/structure")
+async def get_shared_drive_structure(db: AsyncSession = Depends(get_db)):
+    """Get hierarchical file structure."""
+    from business.shared_drive_manager import SharedDriveManager
+    manager = SharedDriveManager(db)
+    structure = await manager.get_file_structure()
+    return structure
+
+@router.get("/shared-drive/files")
+async def get_shared_drive_files(
+    department: str = None,
+    employee_id: int = None,
+    project_id: int = None,
+    file_type: str = None,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all files with optional filters."""
+    query = select(SharedDriveFile).options(
+        selectinload(SharedDriveFile.employee),
+        selectinload(SharedDriveFile.project),
+        selectinload(SharedDriveFile.last_updated_by)
+    )
+    
+    if department:
+        query = query.where(SharedDriveFile.department == department)
+    if employee_id:
+        query = query.where(SharedDriveFile.employee_id == employee_id)
+    if project_id:
+        query = query.where(SharedDriveFile.project_id == project_id)
+    if file_type:
+        query = query.where(SharedDriveFile.file_type == file_type)
+    
+    query = query.order_by(desc(SharedDriveFile.updated_at)).limit(limit)
+    
+    result = await db.execute(query)
+    files = result.scalars().all()
+    
+    return [
+        {
+            "id": f.id,
+            "file_name": f.file_name,
+            "file_type": f.file_type,
+            "department": f.department,
+            "employee_id": f.employee_id,
+            "employee_name": f.employee.name if f.employee else None,
+            "project_id": f.project_id,
+            "project_name": f.project.name if f.project else None,
+            "file_size": f.file_size,
+            "current_version": f.current_version,
+            "last_updated_by_id": f.last_updated_by_id,
+            "last_updated_by_name": f.last_updated_by.name if f.last_updated_by else None,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+            "metadata": f.file_metadata
+        }
+        for f in files
+    ]
+
+@router.get("/shared-drive/files/{file_id}")
+async def get_shared_drive_file(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Get file details and HTML content."""
+    result = await db.execute(
+        select(SharedDriveFile)
+        .options(
+            selectinload(SharedDriveFile.employee),
+            selectinload(SharedDriveFile.project),
+            selectinload(SharedDriveFile.last_updated_by)
+        )
+        .where(SharedDriveFile.id == file_id)
+    )
+    file = result.scalar_one_or_none()
+    
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return {
+        "id": file.id,
+        "file_name": file.file_name,
+        "file_type": file.file_type,
+        "department": file.department,
+        "employee_id": file.employee_id,
+        "employee_name": file.employee.name if file.employee else None,
+        "project_id": file.project_id,
+        "project_name": file.project.name if file.project else None,
+        "file_path": file.file_path,
+        "file_size": file.file_size,
+        "content_html": file.content_html,
+        "current_version": file.current_version,
+        "last_updated_by_id": file.last_updated_by_id,
+        "last_updated_by_name": file.last_updated_by.name if file.last_updated_by else None,
+        "created_at": file.created_at.isoformat() if file.created_at else None,
+        "updated_at": file.updated_at.isoformat() if file.updated_at else None,
+        "metadata": file.file_metadata
+    }
+
+@router.get("/shared-drive/files/{file_id}/view")
+async def view_shared_drive_file(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve file HTML for viewing."""
+    result = await db.execute(
+        select(SharedDriveFile).where(SharedDriveFile.id == file_id)
+    )
+    file = result.scalar_one_or_none()
+    
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=file.content_html)
+
+@router.get("/shared-drive/files/{file_id}/versions")
+async def get_file_versions(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Get version history for a file."""
+    result = await db.execute(
+        select(SharedDriveFile).where(SharedDriveFile.id == file_id)
+    )
+    file = result.scalar_one_or_none()
+    
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    result = await db.execute(
+        select(SharedDriveFileVersion)
+        .options(selectinload(SharedDriveFileVersion.created_by))
+        .where(SharedDriveFileVersion.file_id == file_id)
+        .order_by(desc(SharedDriveFileVersion.version_number))
+    )
+    versions = result.scalars().all()
+    
+    return [
+        {
+            "id": v.id,
+            "version_number": v.version_number,
+            "file_size": v.file_size,
+            "created_by_id": v.created_by_id,
+            "created_by_name": v.created_by.name if v.created_by else None,
+            "change_summary": v.change_summary,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "metadata": v.file_metadata
+        }
+        for v in versions
+    ]
+
+@router.get("/shared-drive/files/{file_id}/versions/{version_number}")
+async def get_file_version_content(
+    file_id: int,
+    version_number: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get specific version content."""
+    result = await db.execute(
+        select(SharedDriveFileVersion)
+        .options(selectinload(SharedDriveFileVersion.created_by))
+        .where(
+            SharedDriveFileVersion.file_id == file_id,
+            SharedDriveFileVersion.version_number == version_number
+        )
+    )
+    version = result.scalar_one_or_none()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    return {
+        "id": version.id,
+        "file_id": version.file_id,
+        "version_number": version.version_number,
+        "content_html": version.content_html,
+        "file_size": version.file_size,
+        "created_by_id": version.created_by_id,
+        "created_by_name": version.created_by.name if version.created_by else None,
+        "change_summary": version.change_summary,
+        "created_at": version.created_at.isoformat() if version.created_at else None,
+        "metadata": version.file_metadata
+    }
+
+@router.get("/employees/{employee_id}/recent-files")
+async def get_employee_recent_files(
+    employee_id: int,
+    limit: int = 15,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get recent files created/updated by employee."""
+    from business.shared_drive_manager import SharedDriveManager
+    manager = SharedDriveManager(db)
+    files = await manager.get_employee_recent_files(employee_id, limit)
+    
+    return [
+        {
+            "id": f.id,
+            "file_name": f.file_name,
+            "file_type": f.file_type,
+            "department": f.department,
+            "project_id": f.project_id,
+            "project_name": f.project.name if f.project else None,
+            "current_version": f.current_version,
+            "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+            "version_count": len(f.versions) if f.versions else 0
+        }
+        for f in files
+    ]
+
+@router.post("/shared-drive/generate")
+async def generate_shared_drive_documents(
+    employee_id: Optional[int] = None,
+    count: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually trigger document generation (for testing)."""
+    from business.shared_drive_manager import SharedDriveManager
+    from engine.office_simulator import get_business_context
+    
+    manager = SharedDriveManager(db)
+    business_context = await get_business_context(db)
+    
+    if employee_id:
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employees = [result.scalar_one_or_none()] if result.scalar_one_or_none() else []
+    else:
+        result = await db.execute(
+            select(Employee).where(Employee.status == "active").limit(count)
+        )
+        employees = result.scalars().all()
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No active employees found")
+    
+    total_created = 0
+    total_updated = 0
+    errors = []
+    
+    for employee in employees:
+        try:
+            created = await manager.generate_documents_for_employee(employee, business_context)
+            total_created += len(created)
+            
+            updated = await manager.update_existing_documents(employee, business_context)
+            total_updated += len(updated)
+        except Exception as e:
+            errors.append(f"Employee {employee.id} ({employee.name}): {str(e)}")
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Generated documents for {len(employees)} employees",
+        "files_created": total_created,
+        "files_updated": total_updated,
+        "employees_processed": len(employees),
+        "errors": errors if errors else None
+    }
 

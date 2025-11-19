@@ -521,7 +521,7 @@ async def assign_rooms_to_existing_employees(db_session):
         if not employee.current_room:
             employee.current_room = room_id
         if not employee.activity_state:
-            employee.activity_state = "idle"
+            employee.activity_state = "working"
     
     await db_session.commit()
 

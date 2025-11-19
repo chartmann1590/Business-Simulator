@@ -174,25 +174,63 @@ class PetManager:
             await update_employee_location(employee, pet.current_room, "break", self.db)
             employee.floor = pet.floor
             
-            # Create interaction activity
-            interactions = [
-                f"🐾 {employee.name} stopped to pet {pet.name}",
-                f"🐾 {pet.name} is keeping {employee.name} company",
-                f"🐾 {employee.name} is playing with {pet.name}",
-                f"🐾 {pet.name} is sitting with {employee.name}",
-                f"🐾 {employee.name} is feeding {pet.name} treats",
-                f"🐾 {employee.name} paused to say hello to {pet.name}"
-            ]
+            # Get pet stats before interaction
+            stats_before = await self.get_pet_stats(pet)
             
+            # Determine care action and calculate stat changes
+            # Randomly choose between feed, play, or pet based on pet needs
+            if stats_before["hunger"] > 70:
+                action = "feed"
+                stats_after = stats_before.copy()
+                hunger_reduction = 20 + random.randint(0, 15)  # 20-35
+                happiness_increase = 3 + random.randint(0, 10)  # 3-13
+                stats_after["hunger"] = max(0, stats_after["hunger"] - hunger_reduction)
+                stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
+                interaction_desc = f"🍖 {employee.name} fed {pet.name} treats"
+            elif stats_before["energy"] > 40 and stats_before["happiness"] < 70:
+                action = "play"
+                stats_after = stats_before.copy()
+                energy_reduction = 10 + random.randint(0, 10)  # 10-20
+                happiness_increase = 5 + random.randint(0, 15)  # 5-20
+                stats_after["energy"] = max(0, stats_after["energy"] - energy_reduction)
+                stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
+                interaction_desc = f"🎾 {employee.name} played with {pet.name}"
+            else:
+                action = "pet"
+                stats_after = stats_before.copy()
+                happiness_increase = 3 + random.randint(0, 10)  # 3-13
+                energy_increase = 1 + random.randint(0, 5)  # 1-6
+                stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
+                stats_after["energy"] = min(100, stats_after["energy"] + energy_increase)
+                interaction_desc = f"❤️ {employee.name} petted {pet.name}"
+            
+            # Create PetCareLog entry
+            care_log = PetCareLog(
+                pet_id=pet.id,
+                employee_id=employee.id,
+                care_action=action,
+                pet_happiness_before=stats_before["happiness"],
+                pet_hunger_before=stats_before["hunger"],
+                pet_energy_before=stats_before["energy"],
+                pet_happiness_after=stats_after["happiness"],
+                pet_hunger_after=stats_after["hunger"],
+                pet_energy_after=stats_after["energy"],
+                ai_reasoning=f"Automatic interaction: {employee.name} noticed {pet.name} and provided care"
+            )
+            self.db.add(care_log)
+            
+            # Create interaction activity
             activity = Activity(
                 employee_id=employee.id,
-                activity_type="pet_interaction",
-                description=random.choice(interactions),
+                activity_type="pet_care",
+                description=interaction_desc,
                 activity_metadata={
                     "pet_id": pet.id,
                     "pet_name": pet.name,
                     "room": pet.current_room,
-                    "floor": pet.floor
+                    "floor": pet.floor,
+                    "care_action": action,
+                    "care_log_id": care_log.id
                 }
             )
             self.db.add(activity)

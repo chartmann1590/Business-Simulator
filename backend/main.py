@@ -27,6 +27,11 @@ async def lifespan(app: FastAPI):
         await init_db()
         print("Database initialized.")
         
+        # Ensure shared_drive directory exists
+        shared_drive_path = os.path.join(os.path.dirname(__file__), "shared_drive")
+        os.makedirs(shared_drive_path, exist_ok=True)
+        print(f"Shared drive directory ready: {shared_drive_path}")
+        
         # Auto-seed if database is empty
         from database.database import async_session_maker
         from database.models import Employee

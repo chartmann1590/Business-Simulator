@@ -52,6 +52,8 @@ class OfficeSimulator:
         self.last_weather_date = None  # Track last weather update date
         self.last_birthday_meeting_generation = None  # Track last birthday meeting generation date
         self.last_birthday_check_date = None  # Track last birthday check date
+        self.shared_drive_update_counter = 0  # Counter for shared drive updates
+        self.last_shared_drive_update = None  # Track last shared drive update time
     
     async def add_websocket(self, websocket):
         """Add a WebSocket connection for real-time updates."""
@@ -115,10 +117,265 @@ class OfficeSimulator:
         except Exception as e:
             print(f"Error fixing waiting employees in training rooms: {e}")
     
+    async def fix_idle_employees(self):
+        """IMMEDIATELY fix ALL employees stuck in idle state - they should be working!"""
+        try:
+            async with async_session_maker() as db:
+                # Get ALL idle employees
+                result = await db.execute(
+                    select(Employee).where(
+                        Employee.status == "active",
+                        Employee.activity_state == "idle"
+                    )
+                )
+                idle_employees = result.scalars().all()
+                
+                if not idle_employees:
+                    return
+                
+                fixed_count = 0
+                
+                # Fix ALL idle employees immediately
+                for employee in idle_employees:
+                    try:
+                        await db.refresh(employee, ["current_room", "home_room", "activity_state"])
+                        
+                        # Set them to working - they should NEVER be idle
+                        employee.activity_state = "working"
+                        fixed_count += 1
+                        await db.flush()
+                    except Exception as e:
+                        print(f"Error fixing idle employee {getattr(employee, 'name', 'unknown')}: {e}")
+                        continue
+                
+                if fixed_count > 0:
+                    await db.commit()
+                    print(f"🔥 FIXED {fixed_count} IDLE EMPLOYEES - They are now WORKING!")
+                    
+        except Exception as e:
+            print(f"Error fixing idle employees: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def process_waiting_employees(self):
+        """Process ALL employees stuck in waiting state to retry their movement."""
+        try:
+            async with async_session_maker() as db:
+                from engine.movement_system import (
+                    process_employee_movement, 
+                    find_available_training_room,
+                    update_employee_location,
+                    check_room_has_space,
+                    determine_target_room
+                )
+                from employees.room_assigner import ROOM_TRAINING_ROOM, ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                from datetime import datetime, timedelta
+                
+                # Get ALL waiting employees - process them all immediately
+                result = await db.execute(
+                    select(Employee).where(
+                        Employee.status == "active",
+                        Employee.activity_state == "waiting"
+                    )
+                )
+                waiting_employees = result.scalars().all()
+                
+                if not waiting_employees:
+                    return
+                
+                processed_count = 0
+                fixed_count = 0
+                
+                # Process ALL waiting employees - no limit
+                for employee in waiting_employees:
+                    try:
+                        # Refresh employee to get latest state
+                        await db.refresh(employee, ["current_room", "home_room", "activity_state", "hired_at"])
+                        
+                        # Check if they're in a training room but marked as waiting
+                        training_rooms = [
+                            ROOM_TRAINING_ROOM,
+                            f"{ROOM_TRAINING_ROOM}_floor2",
+                            f"{ROOM_TRAINING_ROOM}_floor4",
+                            f"{ROOM_TRAINING_ROOM}_floor4_2",
+                            f"{ROOM_TRAINING_ROOM}_floor4_3",
+                            f"{ROOM_TRAINING_ROOM}_floor4_4",
+                            f"{ROOM_TRAINING_ROOM}_floor4_5"
+                        ]
+                        
+                        is_in_training_room = employee.current_room in training_rooms
+                        
+                        if is_in_training_room:
+                            # They're already in a training room - just fix the status
+                            employee.activity_state = "training"
+                            fixed_count += 1
+                            await db.flush()
+                            continue
+                        
+                        # Check if they should be in training (recently hired)
+                        hired_at = getattr(employee, 'hired_at', None)
+                        is_new_hire = False
+                        if hired_at:
+                            try:
+                                if hasattr(hired_at, 'replace'):
+                                    if hired_at.tzinfo is not None:
+                                        hired_at_naive = hired_at.replace(tzinfo=None)
+                                    else:
+                                        hired_at_naive = hired_at
+                                else:
+                                    hired_at_naive = hired_at
+                                
+                                time_since_hire = local_now() - hired_at_naive
+                                if time_since_hire <= timedelta(hours=1):
+                                    is_new_hire = True
+                            except Exception:
+                                pass
+                        
+                        if is_new_hire:
+                            # New hire waiting for training - find any available training room
+                            available_training_room = await find_available_training_room(db, exclude_employee_id=employee.id)
+                            if available_training_room:
+                                await update_employee_location(employee, available_training_room, "training", db)
+                                fixed_count += 1
+                            else:
+                                # All training rooms full - check if training should be complete
+                                if hired_at:
+                                    try:
+                                        if hasattr(hired_at, 'replace'):
+                                            if hired_at.tzinfo is not None:
+                                                hired_at_naive = hired_at.replace(tzinfo=None)
+                                            else:
+                                                hired_at_naive = hired_at
+                                        else:
+                                            hired_at_naive = hired_at
+                                        
+                                        time_since_hire = local_now() - hired_at_naive
+                                        if time_since_hire > timedelta(hours=1):
+                                            # Training complete - move to home room and start working
+                                            employee.activity_state = "working"
+                                            if employee.home_room:
+                                                await update_employee_location(employee, employee.home_room, "working", db)
+                                            fixed_count += 1
+                                    except Exception:
+                                        pass
+                        else:
+                            # Not a new hire - AGGRESSIVELY find them a room
+                            # Try multiple fallback options in order
+                            moved = False
+                            
+                            # Strategy 1: Try home room
+                            if employee.home_room:
+                                has_space = await check_room_has_space(employee.home_room, db, exclude_employee_id=employee.id)
+                                if has_space:
+                                    await update_employee_location(employee, employee.home_room, "working", db)
+                                    fixed_count += 1
+                                    moved = True
+                            
+                            # Strategy 2: If home room full, try cubicles on their floor
+                            if not moved:
+                                employee_floor = getattr(employee, 'floor', 1)
+                                cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                                has_space = await check_room_has_space(cubicles_room, db, exclude_employee_id=employee.id)
+                                if has_space:
+                                    await update_employee_location(employee, cubicles_room, "working", db)
+                                    fixed_count += 1
+                                    moved = True
+                            
+                            # Strategy 3: Try open office on their floor
+                            if not moved:
+                                open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                                has_space = await check_room_has_space(open_office_room, db, exclude_employee_id=employee.id)
+                                if has_space:
+                                    await update_employee_location(employee, open_office_room, "working", db)
+                                    fixed_count += 1
+                                    moved = True
+                            
+                            # Strategy 4: Try any available room using determine_target_room
+                            if not moved:
+                                target_room = await determine_target_room("working", "", employee, db)
+                                if target_room and target_room != employee.current_room:
+                                    has_space = await check_room_has_space(target_room, db, exclude_employee_id=employee.id)
+                                    if has_space:
+                                        await update_employee_location(employee, target_room, "working", db)
+                                        fixed_count += 1
+                                        moved = True
+                            
+                            # Strategy 5: If still nothing, try ANY cubicles or open office on ANY floor
+                            if not moved:
+                                # Try all floors' cubicles and open offices
+                                for floor in [1, 2, 3, 4]:
+                                    if floor == 1:
+                                        test_rooms = [ROOM_CUBICLES, ROOM_OPEN_OFFICE]
+                                    else:
+                                        test_rooms = [
+                                            f"{ROOM_CUBICLES}_floor{floor}",
+                                            f"{ROOM_OPEN_OFFICE}_floor{floor}"
+                                        ]
+                                    
+                                    for test_room in test_rooms:
+                                        has_space = await check_room_has_space(test_room, db, exclude_employee_id=employee.id)
+                                        if has_space:
+                                            await update_employee_location(employee, test_room, "working", db)
+                                            fixed_count += 1
+                                            moved = True
+                                            break
+                                    if moved:
+                                        break
+                            
+                            # Strategy 6: Last resort - if they have a current_room, set to working
+                            # Better than staying in waiting forever
+                            if not moved and employee.current_room:
+                                employee.activity_state = "working"
+                                fixed_count += 1
+                                moved = True
+                        
+                        processed_count += 1
+                        await db.flush()
+                        
+                    except Exception as e:
+                        print(f"Error processing waiting employee {getattr(employee, 'name', 'unknown')} (ID: {getattr(employee, 'id', 'unknown')}): {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                # Always commit to ensure changes are saved
+                if fixed_count > 0:
+                    await db.commit()
+                    print(f"✅ Processed {processed_count} waiting employees, fixed {fixed_count}")
+                else:
+                    # Even if no fixes, commit to ensure any state changes are saved
+                    await db.commit()
+                    if processed_count > 0:
+                        print(f"ℹ️ Processed {processed_count} waiting employees (none needed fixing)")
+                    
+        except Exception as e:
+            print(f"Error processing waiting employees: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def simulation_tick(self):
         """Execute one simulation tick."""
-        # First, fix any employees stuck in training rooms with waiting status
+        # FIRST: Fix ALL idle employees immediately - they should be working!
+        await self.fix_idle_employees()
+        
+        # Second: Fix any employees stuck in training rooms with waiting status
         await self.fix_waiting_in_training_rooms()
+        
+        # Third: Process waiting employees to retry their movement
+        await self.process_waiting_employees()
+        
+        # System-level break enforcement (runs every tick to catch abuse immediately)
+        try:
+            async with async_session_maker() as break_db:
+                from business.coffee_break_manager import CoffeeBreakManager
+                break_manager = CoffeeBreakManager(break_db)
+                enforcement_stats = await break_manager.enforce_break_limits_system_level()
+                if enforcement_stats["total_returned"] > 0:
+                    print(f"⏰ System-level break enforcement: returned {enforcement_stats['total_returned']} employee(s) to work ({enforcement_stats['managers_returned']} managers, {enforcement_stats['regular_employees_returned']} regular employees)")
+        except Exception as e:
+            import traceback
+            print(f"❌ Error in system-level break enforcement: {e}")
+            traceback.print_exc()
         
         # Conduct periodic reviews every tick to ensure reviews happen promptly
         # This ensures we catch reviews as soon as they're due
@@ -559,16 +816,6 @@ class OfficeSimulator:
                                     print(f"Error generating expenses: {e}")
                                     await expense_db.rollback()
                         
-                        # Manage project overload periodically (40% chance per tick - more frequent!)
-                        if random.random() < 0.4:  # 40% chance per tick
-                            async with async_session_maker() as project_db:
-                                try:
-                                    await self._manage_project_capacity(project_db)
-                                    await project_db.commit()
-                                except Exception as e:
-                                    print(f"Error managing project capacity: {e}")
-                                    await project_db.rollback()
-                        
                         # Check for completed projects and trigger new project creation (30% chance per tick)
                         if random.random() < 0.3:  # 30% chance per tick
                             async with async_session_maker() as completion_db:
@@ -598,62 +845,6 @@ class OfficeSimulator:
                                     print(f"Error ensuring active work: {e}")
                                     await activity_db.rollback()
                 
-                # Handle employee hiring/firing based on business performance (use separate session)
-                async with async_session_maker() as manage_db:
-                    try:
-                        # Import Task model for task overload checking
-                        from database.models import Task
-                        
-                        # Check more frequently if we're below minimum staffing or over capacity
-                        result = await manage_db.execute(select(Employee).where(Employee.status == "active"))
-                        active_check = result.scalars().all()
-                        active_count_check = len(active_check)
-                        
-                        # Check if we're over capacity for projects
-                        from business.project_manager import ProjectManager
-                        project_manager = ProjectManager(manage_db)
-                        active_projects = await project_manager.get_active_projects()
-                        project_count = len(active_projects)
-                        max_projects = max(1, int(active_count_check / 3))
-                        is_over_capacity = project_count > max_projects
-                        
-                        # Check for extreme task overload - always check if severe
-                        result = await manage_db.execute(
-                            select(Task).where(
-                                Task.employee_id.is_(None),
-                                Task.status.in_(["pending", "in_progress"])
-                            )
-                        )
-                        unassigned_check = result.scalars().all()
-                        unassigned_count_check = len(unassigned_check)
-                        tasks_per_employee_check = unassigned_count_check / max(1, active_count_check)
-                        
-                        # Always check if below minimum, over capacity, or extreme task overload
-                        if active_count_check < 15:
-                            check_interval = 0.5  # 50% chance if below min
-                        elif tasks_per_employee_check > 10:  # Extreme overload - always check!
-                            check_interval = 1.0  # 100% chance - emergency situation
-                        elif is_over_capacity or tasks_per_employee_check > 5:
-                            check_interval = 0.8  # 80% chance if over capacity or severe task overload
-                        elif tasks_per_employee_check > 2:
-                            check_interval = 0.6  # 60% chance if moderate task overload
-                        else:
-                            check_interval = 0.1  # 10% otherwise
-                        
-                        if random.random() < check_interval:
-                            try:
-                                await self._manage_employees(manage_db, business_context)
-                                await manage_db.commit()
-                            except Exception as e:
-                                print(f"Error managing employees: {e}")
-                                await manage_db.rollback()
-                    except Exception as e:
-                        print(f"Error in employee management section: {e}")
-                        try:
-                            await manage_db.rollback()
-                        except:
-                            pass
-                        
             except Exception as e:
                 print(f"Error in simulation tick: {e}")
                 import traceback
@@ -814,8 +1005,10 @@ class OfficeSimulator:
         
         # Minimum staffing requirement: Office needs at least 15 employees to run
         MIN_EMPLOYEES = 15
-        # Maximum staffing cap: Don't hire beyond 300 employees
-        MAX_EMPLOYEES = 300
+        # Maximum staffing cap: Don't hire beyond 500 employees
+        MAX_EMPLOYEES = 500
+        
+        print(f"📊 Employee Management: {active_count} active, profit: ${profit:,.2f}, revenue: ${revenue:,.2f}, max: {MAX_EMPLOYEES}")
         
         # Firing logic: Can fire employees with cause (performance issues, budget cuts, restructuring, etc.)
         # But we must maintain minimum staffing
@@ -1202,169 +1395,209 @@ class OfficeSimulator:
         if active_count >= 20 and project_count < 5 and active_count < MAX_EMPLOYEES:
             # Many employees but few projects - hire strategically to prepare for more projects
             if random.random() < 0.2:  # 20% chance
-                await self._hire_employee(db, business_context)
-                print(f"Strategic hiring: Preparing for project growth ({active_count} employees, {project_count} projects, max: {MAX_EMPLOYEES})")
+                try:
+                    await self._hire_employee(db, business_context)
+                    print(f"Strategic hiring: Preparing for project growth ({active_count} employees, {project_count} projects, max: {MAX_EMPLOYEES})")
+                except Exception as e:
+                    print(f"❌ Error in strategic hiring: {e}")
+                    import traceback
+                    traceback.print_exc()
+        
+        # Priority 6: Fallback growth hiring - if we're below max and have work, occasionally hire
+        # This ensures we continue growing even when other conditions aren't met
+        if active_count < MAX_EMPLOYEES and (project_count > 0 or unassigned_count > 0):
+            # If we have work but are below max, occasionally hire to grow
+            # Lower chance to avoid over-hiring, but ensures growth continues
+            growth_chance = 0.15 if profit > 0 else 0.05  # 15% if profitable, 5% if not
+            if random.random() < growth_chance:
+                try:
+                    hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))
+                    if hires > 0:
+                        for _ in range(hires):
+                            await self._hire_employee(db, business_context)
+                        print(f"Growth hiring (fallback): Hired {hires} employee(s) (current: {active_count}, projects: {project_count}, tasks: {unassigned_count}, max: {MAX_EMPLOYEES})")
+                except Exception as e:
+                    print(f"❌ Error in fallback growth hiring: {e}")
+                    import traceback
+                    traceback.print_exc()
+        
+        # Final summary - get updated count
+        result = await db.execute(select(Employee).where(Employee.status == "active"))
+        final_active_employees = result.scalars().all()
+        final_count = len(final_active_employees)
+        
+        if final_count != active_count:
+            print(f"📈 Employee count changed: {active_count} → {final_count} (delta: {final_count - active_count})")
+        else:
+            print(f"📊 No employee count change this tick (still {final_count}/{MAX_EMPLOYEES})")
     
     async def _hire_employee(self, db: AsyncSession, business_context: dict):
         """Hire a new employee."""
-        from database.models import Employee, Activity
-        from datetime import datetime
-        import random
-        
-        departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration", "HR", "Design"]
-        roles = ["Employee", "Manager"]
-        
-        # Get existing employee names to avoid duplicates
-        result = await db.execute(select(Employee.name))
-        existing_names = [row[0] for row in result.all()]
-        
-        # Generate unique employee name using AI
-        role = random.choice(roles)
-        department = random.choice(departments)
-        hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
-        
-        name = await self.llm_client.generate_unique_employee_name(
-            existing_names=existing_names,
-            department=department,
-            role=role
-        )
-        
-        titles_by_role = {
-            "Employee": [
-                "Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", 
-                "Operations Coordinator", "IT Specialist", "IT Support Technician", "Receptionist", 
-                "Administrative Assistant", "HR Specialist", "HR Coordinator", "Human Resources Specialist",
-                "Designer", "UI Designer", "UX Designer", "Graphic Designer"
-            ],
-            "Manager": [
-                "Engineering Manager", "Product Manager", "Marketing Manager", "Sales Manager", 
-                "Operations Manager", "IT Manager", "HR Manager", "Human Resources Manager", "Design Manager"
+        try:
+            from database.models import Employee, Activity
+            from datetime import datetime
+            import random
+            
+            departments = ["Engineering", "Product", "Marketing", "Sales", "Operations", "IT", "Administration", "HR", "Design"]
+            roles = ["Employee", "Manager"]
+            
+            # Get existing employee names to avoid duplicates
+            result = await db.execute(select(Employee.name))
+            existing_names = [row[0] for row in result.all()]
+            
+            # Generate unique employee name using AI
+            role = random.choice(roles)
+            department = random.choice(departments)
+            hierarchy_level = 2 if role in ["Manager", "CTO", "COO", "CFO"] else 3
+            
+            name = await self.llm_client.generate_unique_employee_name(
+                existing_names=existing_names,
+                department=department,
+                role=role
+            )
+            
+            titles_by_role = {
+                "Employee": [
+                    "Software Engineer", "Product Designer", "Marketing Specialist", "Sales Representative", 
+                    "Operations Coordinator", "IT Specialist", "IT Support Technician", "Receptionist", 
+                    "Administrative Assistant", "HR Specialist", "HR Coordinator", "Human Resources Specialist",
+                    "Designer", "UI Designer", "UX Designer", "Graphic Designer"
+                ],
+                "Manager": [
+                    "Engineering Manager", "Product Manager", "Marketing Manager", "Sales Manager", 
+                    "Operations Manager", "IT Manager", "HR Manager", "Human Resources Manager", "Design Manager"
+                ]
+            }
+            
+            # Special handling for IT and Reception to ensure they get appropriate titles
+            if department == "IT":
+                if role in ["Manager", "CTO", "COO", "CFO"]:
+                    title = "IT Manager"
+                else:
+                    title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
+            elif department == "Administration":
+                # Sometimes create receptionists
+                if random.random() < 0.4:  # 40% chance for receptionist
+                    title = "Receptionist"
+                    department = "Administration"
+                else:
+                    title = random.choice(["Administrative Assistant", "Office Coordinator"])
+            else:
+                title = random.choice(titles_by_role[role])
+            
+            personality_traits = random.sample(
+                ["analytical", "creative", "collaborative", "detail-oriented", "innovative", "reliable", "adaptable", "proactive"],
+                k=3
+            )
+            
+            # Assign random birthday
+            birthday_month = random.randint(1, 12)
+            if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
+                max_day = 31
+            elif birthday_month in [4, 6, 9, 11]:
+                max_day = 30
+            else:  # February
+                max_day = 28
+            birthday_day = random.randint(1, max_day)
+            
+            # Assign random hobbies
+            hobbies_list = [
+                ["photography", "hiking", "cooking"],
+                ["reading", "yoga", "gardening"],
+                ["gaming", "music", "traveling"],
+                ["sports", "writing", "painting"],
+                ["reading", "chess", "puzzles"]
             ]
-        }
-        
-        # Special handling for IT and Reception to ensure they get appropriate titles
-        if department == "IT":
-            if role in ["Manager", "CTO", "COO", "CFO"]:
-                title = "IT Manager"
-            else:
-                title = random.choice(["IT Specialist", "IT Support Technician", "Network Administrator", "Systems Administrator"])
-        elif department == "Administration":
-            # Sometimes create receptionists
-            if random.random() < 0.4:  # 40% chance for receptionist
-                title = "Receptionist"
-                department = "Administration"
-            else:
-                title = random.choice(["Administrative Assistant", "Office Coordinator"])
-        else:
-            title = random.choice(titles_by_role[role])
-        
-        personality_traits = random.sample(
-            ["analytical", "creative", "collaborative", "detail-oriented", "innovative", "reliable", "adaptable", "proactive"],
-            k=3
-        )
-        
-        # Assign random birthday
-        birthday_month = random.randint(1, 12)
-        if birthday_month in [1, 3, 5, 7, 8, 10, 12]:
-            max_day = 31
-        elif birthday_month in [4, 6, 9, 11]:
-            max_day = 30
-        else:  # February
-            max_day = 28
-        birthday_day = random.randint(1, max_day)
-        
-        # Assign random hobbies
-        hobbies_list = [
-            ["photography", "hiking", "cooking"],
-            ["reading", "yoga", "gardening"],
-            ["gaming", "music", "traveling"],
-            ["sports", "writing", "painting"],
-            ["reading", "chess", "puzzles"]
-        ]
-        hobbies = random.choice(hobbies_list)
-        
-        new_employee = Employee(
-            name=name,
-            title=title,
-            role=role,
-            hierarchy_level=hierarchy_level,
-            department=department,
-            status="active",
-            personality_traits=personality_traits,
-            backstory=f"{name} joined the team to help drive growth and innovation.",
-            hired_at=local_now(),
-            birthday_month=birthday_month,
-            birthday_day=birthday_day,
-            hobbies=hobbies
-        )
-        db.add(new_employee)
-        await db.flush()  # Flush to get the employee ID
-        
-        # Assign home room and floor based on role/department
-        home_room, floor = await assign_home_room(new_employee, db)
-        new_employee.home_room = home_room
-        new_employee.floor = floor
-        
-        # New hires start in training room - find any available training room
-        from employees.room_assigner import ROOM_TRAINING_ROOM
-        from engine.movement_system import find_available_training_room
-        
-        # Find an available training room (checks all floors including floor 4 overflow)
-        training_room = await find_available_training_room(db, exclude_employee_id=None)
-        
-        if not training_room:
-            # All training rooms are full - use floor 4 as fallback (it has the most capacity)
-            training_room = f"{ROOM_TRAINING_ROOM}_floor4"
-            new_employee.floor = 4
-        else:
-            # Update floor based on training room location
-            if training_room.endswith('_floor2'):
-                new_employee.floor = 2
-            elif training_room.endswith('_floor4') or '_floor4_' in training_room:
+            hobbies = random.choice(hobbies_list)
+            
+            new_employee = Employee(
+                name=name,
+                title=title,
+                role=role,
+                hierarchy_level=hierarchy_level,
+                department=department,
+                status="active",
+                personality_traits=personality_traits,
+                backstory=f"{name} joined the team to help drive growth and innovation.",
+                hired_at=local_now(),
+                birthday_month=birthday_month,
+                birthday_day=birthday_day,
+                hobbies=hobbies
+            )
+            db.add(new_employee)
+            await db.flush()  # Flush to get the employee ID
+            
+            # Assign home room and floor based on role/department
+            home_room, floor = await assign_home_room(new_employee, db)
+            new_employee.home_room = home_room
+            new_employee.floor = floor
+            
+            # New hires start in training room - find any available training room
+            from employees.room_assigner import ROOM_TRAINING_ROOM
+            from engine.movement_system import find_available_training_room
+            
+            # Find an available training room (checks all floors including floor 4 overflow)
+            training_room = await find_available_training_room(db, exclude_employee_id=None)
+            
+            if not training_room:
+                # All training rooms are full - use floor 4 as fallback (it has the most capacity)
+                training_room = f"{ROOM_TRAINING_ROOM}_floor4"
                 new_employee.floor = 4
             else:
-                new_employee.floor = 1
-        
-        new_employee.current_room = training_room
-        new_employee.activity_state = "training"  # Mark as in training
-        
-        # Create activity
-        activity = Activity(
-            employee_id=None,
-            activity_type="hiring",
-            description=f"Hired {name} as {title} in {department}",
-            activity_metadata={"employee_id": None, "action": "hire"}
-        )
-        db.add(activity)
-        
-        await db.flush()
-        activity.activity_metadata["employee_id"] = new_employee.id
-        
-        # Create notification for employee hire
-        from database.models import Notification
-        notification = Notification(
-            notification_type="employee_hired",
-            title=f"New Employee Hired: {name}",
-            message=f"{name} has been hired as {title} in the {department} department.",
-            employee_id=new_employee.id,
-            review_id=None,
-            read=False
-        )
-        db.add(notification)
-        
-        await db.commit()
-        
-        # Generate birthday party meeting for new employee if birthday is within 90 days
-        try:
-            from business.birthday_manager import BirthdayManager
-            birthday_manager = BirthdayManager(db)
-            result = await birthday_manager.generate_birthday_party_for_employee(new_employee)
-            if result and result.get("created"):
-                print(f"🎂 Generated birthday party meeting for {name}")
+                # Update floor based on training room location
+                if training_room.endswith('_floor2'):
+                    new_employee.floor = 2
+                elif training_room.endswith('_floor4') or '_floor4_' in training_room:
+                    new_employee.floor = 4
+                else:
+                    new_employee.floor = 1
+            
+            new_employee.current_room = training_room
+            new_employee.activity_state = "training"  # Mark as in training
+            
+            # Create activity
+            activity = Activity(
+                employee_id=None,
+                activity_type="hiring",
+                description=f"Hired {name} as {title} in {department}",
+                activity_metadata={"employee_id": None, "action": "hire"}
+            )
+            db.add(activity)
+            
+            await db.flush()
+            activity.activity_metadata["employee_id"] = new_employee.id
+            
+            # Create notification for employee hire
+            from database.models import Notification
+            notification = Notification(
+                notification_type="employee_hired",
+                title=f"New Employee Hired: {name}",
+                message=f"{name} has been hired as {title} in the {department} department.",
+                employee_id=new_employee.id,
+                review_id=None,
+                read=False
+            )
+            db.add(notification)
+            
+            await db.commit()
+            
+            # Generate birthday party meeting for new employee if birthday is within 90 days
+            try:
+                from business.birthday_manager import BirthdayManager
+                birthday_manager = BirthdayManager(db)
+                result = await birthday_manager.generate_birthday_party_for_employee(new_employee)
+                if result and result.get("created"):
+                    print(f"🎂 Generated birthday party meeting for {name}")
+            except Exception as e:
+                print(f"Warning: Could not generate birthday party for {name}: {e}")
+            
+            print(f"Hired new employee: {name} ({title})")
         except Exception as e:
-            print(f"Warning: Could not generate birthday party for {name}: {e}")
-        
-        print(f"Hired new employee: {name} ({title})")
+            print(f"❌ Error hiring employee: {e}")
+            import traceback
+            traceback.print_exc()
+            # Re-raise to let caller know hiring failed
+            raise
     
     async def _hire_employee_specific(self, db: AsyncSession, business_context: dict, 
                                      department: str = None, title: str = None, role: str = "Employee"):
@@ -1855,6 +2088,9 @@ class OfficeSimulator:
         from business.project_manager import ProjectManager
         from database.models import Activity
         
+        # Maximum staffing cap: Don't hire beyond 500 employees
+        MAX_EMPLOYEES = 500
+        
         project_manager = ProjectManager(db)
         
         # Check project overload (now returns hiring info instead of cancelling)
@@ -1868,7 +2104,7 @@ class OfficeSimulator:
             max_projects = overload_info.get("max_projects", 0)
             
             # Hire 2-3 employees per check when over capacity
-            # Respect max cap of 215 employees
+            # Respect max cap of 500 employees
             if employees_short > 0 and employee_count < MAX_EMPLOYEES:
                 # For severe overload, hire more aggressively
                 if employees_short > 20:
@@ -1880,8 +2116,13 @@ class OfficeSimulator:
                 business_context = await self.get_business_context(db)
                 
                 if hires_needed > 0:
-                    for _ in range(hires_needed):
-                        await self._hire_employee(db, business_context)
+                    try:
+                        for _ in range(hires_needed):
+                            await self._hire_employee(db, business_context)
+                    except Exception as e:
+                        print(f"❌ Error in capacity management hiring: {e}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # Create activity for hiring
                 activity = Activity(
@@ -2508,6 +2749,137 @@ Return ONLY the termination reason text, nothing else."""
             # Wait 60 minutes (3600 seconds) before next processing
             await asyncio.sleep(3600)
     
+    async def update_shared_drive_periodically(self):
+        """Background task to update shared drive every 20-30 minutes (optimized to prevent freezing)."""
+        import random
+        from business.shared_drive_manager import SharedDriveManager
+        
+        # Wait longer on startup to let system stabilize
+        await asyncio.sleep(30)
+        first_run = True
+        
+        while self.running:
+            try:
+                async with async_session_maker() as db:
+                    shared_drive_manager = SharedDriveManager(db)
+                    business_context = await get_business_context(db)
+                    
+                    # Get active employees
+                    result = await db.execute(
+                        select(Employee).where(Employee.status == "active")
+                    )
+                    employees = result.scalars().all()
+                    
+                    if employees:
+                        # Process only 1-2 employees per cycle to prevent freezing
+                        if first_run:
+                            num_to_process = min(2, len(employees))  # Only 2 on startup
+                        else:
+                            num_to_process = min(1, len(employees))  # Only 1 per cycle
+                        
+                        employees_to_process = random.sample(list(employees), num_to_process)
+                        
+                        files_created = 0
+                        files_updated = 0
+                        
+                        print(f"📁 Processing {num_to_process} employee(s) for shared drive update...")
+                        
+                        for employee in employees_to_process:
+                            # Store employee info before try block
+                            employee_name = employee.name
+                            employee_id = employee.id
+                            
+                            try:
+                                # Generate new documents (AI decides what to create, limited to 1 per cycle)
+                                created = await shared_drive_manager.generate_documents_for_employee(
+                                    employee, business_context, max_documents=1
+                                )
+                                files_created += len(created)
+                                
+                                # Small delay to prevent overwhelming the system
+                                await asyncio.sleep(1)
+                                
+                                # Update existing documents (only if not too many files)
+                                updated = await shared_drive_manager.update_existing_documents(
+                                    employee, business_context, max_updates=1
+                                )
+                                files_updated += len(updated)
+                                
+                                await db.commit()
+                                
+                                if created or updated:
+                                    print(f"  ✓ Employee {employee_name}: {len(created)} created, {len(updated)} updated")
+                                
+                                # Delay between employees to prevent blocking
+                                await asyncio.sleep(2)
+                                
+                            except Exception as e:
+                                print(f"  ✗ Error processing shared drive for employee {employee_id} ({employee_name}): {e}")
+                                import traceback
+                                traceback.print_exc()
+                                await db.rollback()
+                                # Continue with next employee even if one fails
+                                await asyncio.sleep(1)
+                        
+                        if files_created > 0 or files_updated > 0:
+                            print(f"📁 Shared drive updated: {files_created} created, {files_updated} updated")
+                        elif first_run:
+                            print(f"📁 Shared drive background task started (processed {num_to_process} employees)")
+                    else:
+                        print("⚠️  No active employees found for shared drive update")
+                        
+            except Exception as e:
+                print(f"❌ Error updating shared drive: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Mark first run as complete
+            first_run = False
+            
+            # Wait 20-30 minutes (1200-1800 seconds) before next update - much less frequent
+            wait_time = random.randint(1200, 1800)
+            print(f"📁 Next shared drive update in {wait_time // 60} minutes")
+            await asyncio.sleep(wait_time)
+    
+    async def manage_employees_periodically(self):
+        """Background task to manage employee hiring and firing every 30-60 seconds."""
+        print("👥 Starting employee management background task (every 30-60 seconds)...")
+        import random
+        
+        # Wait a bit on startup to let system stabilize
+        await asyncio.sleep(10)
+        
+        while self.running:
+            try:
+                async with async_session_maker() as manage_db:
+                    business_context = await self.get_business_context(manage_db)
+                    
+                    print(f"🔄 Running employee management background task...")
+                    await self._manage_employees(manage_db, business_context)
+                    await manage_db.commit()
+                    print(f"✅ Employee management background task completed")
+                    
+            except Exception as e:
+                print(f"❌ Error in employee management background task: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Also manage project capacity in the same task
+            try:
+                async with async_session_maker() as project_db:
+                    print(f"🔄 Running project capacity management...")
+                    await self._manage_project_capacity(project_db)
+                    await project_db.commit()
+                    print(f"✅ Project capacity management completed")
+            except Exception as e:
+                print(f"❌ Error in project capacity management: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 30-60 seconds before next check
+            wait_time = random.randint(30, 60)
+            await asyncio.sleep(wait_time)
+    
     async def run(self):
         """Run the simulation loop."""
         self.running = True
@@ -2532,6 +2904,14 @@ Return ONLY the termination reason text, nothing else."""
         # Start the suggestion processing task in the background (every 60 minutes)
         suggestion_task = asyncio.create_task(self.process_suggestions_periodically())
         print(f"✅ Created suggestion processing background task (every 60 minutes): {suggestion_task}")
+        
+        # Start the shared drive update task in the background (every 20-30 minutes, optimized)
+        shared_drive_task = asyncio.create_task(self.update_shared_drive_periodically())
+        print(f"✅ Created shared drive update background task (every 20-30 minutes, optimized): {shared_drive_task}")
+        
+        # Start the employee management task in the background (every 30-60 seconds)
+        employee_management_task = asyncio.create_task(self.manage_employees_periodically())
+        print(f"✅ Created employee management background task (every 30-60 seconds): {employee_management_task}")
         
         while self.running:
             try:

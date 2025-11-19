@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react'
 import ChatView from '../components/ChatView'
 import EmailView from '../components/EmailView'
 import CalendarView from '../components/CalendarView'
+import SharedDriveView from '../components/SharedDriveView'
 
 function Communications() {
-  const [activeTab, setActiveTab] = useState('teams')
+  // Check for tab in URL params or default to 'teams'
+  const urlParams = new URLSearchParams(window.location.search)
+  const initialTab = urlParams.get('tab') || 'teams'
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [emails, setEmails] = useState([])
   const [chats, setChats] = useState([])
   const [employees, setEmployees] = useState([])
@@ -15,6 +19,17 @@ function Communications() {
     const interval = setInterval(fetchData, 10000)
     return () => clearInterval(interval)
   }, [])
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const url = new URL(window.location)
+    if (activeTab === 'teams') {
+      url.searchParams.delete('tab')
+    } else {
+      url.searchParams.set('tab', activeTab)
+    }
+    window.history.replaceState({}, '', url)
+  }, [activeTab])
 
   const fetchData = async () => {
     try {
@@ -83,6 +98,16 @@ function Communications() {
             >
               Calendar
             </button>
+            <button
+              onClick={() => setActiveTab('share-drive')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'share-drive'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Share Drive
+            </button>
           </nav>
         </div>
       </div>
@@ -93,8 +118,10 @@ function Communications() {
           <ChatView chats={chats} employees={employees} />
         ) : activeTab === 'outlook' ? (
           <EmailView emails={emails} employees={employees} />
-        ) : (
+        ) : activeTab === 'calendar' ? (
           <CalendarView employees={employees} />
+        ) : (
+          <SharedDriveView />
         )}
       </div>
     </div>

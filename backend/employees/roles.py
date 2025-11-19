@@ -64,6 +64,19 @@ class CEOAgent(EmployeeAgent):
     async def execute_decision(self, decision: Dict, business_context: Dict):
         activity = await super().execute_decision(decision, business_context)
         
+        # PRIORITY 0: CEO monitors manager break abuse (20% chance per decision cycle)
+        if random.random() < 0.2:
+            try:
+                from business.coffee_break_manager import CoffeeBreakManager
+                break_manager = CoffeeBreakManager(self.db)
+                enforcement_stats = await break_manager.enforce_break_limits_system_level()
+                if enforcement_stats["managers_returned"] > 0:
+                    print(f"👔 CEO {self.employee.name} detected and corrected {enforcement_stats['managers_returned']} manager(s) abusing breaks")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error in CEO break monitoring: {e}")
+                traceback.print_exc()
+        
         # PRIORITY 1: Make strategic business decisions (increased frequency - 80% chance)
         if random.random() < 0.8:
             await self._make_strategic_business_decision(business_context)

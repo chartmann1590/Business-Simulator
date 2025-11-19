@@ -1,0 +1,43 @@
+<div style="background: #ffffff; margin: 1in; padding: 1in; font-family: 'Times New Roman', serif; line-height: 1.5;">
+    <h2 style="margin-top: 0in;">Market Expansion Initiative</h2>
+    <p style="color: #000000; font-size: 14pt;">Project Status: CANCELLED<br>As of today, the Market Expansion Initiative project is no longer in progress. The strategic project, initiated by Sarah Chen, aimed to enhance team capabilities and improve customer satisfaction.</p>
+
+    <table style="width:100%margin-top:0in; margin-bottom:0.5in; border-collapse: collapse;">
+        <tr>
+            <th style="text-align:left;background-color:#cccccc;padding:2px 4px 2px 4px;">Current Task</th>
+            <th style="text-align:right/background-color:#cccccc	padding:2px 4px 2px 4px;">Status</th>
+        </tr>
+
+        <tr>
+            <td style="padding:0.5in; border-bottom:1px solid #000000;">Initial planning for Market Expansion Initiative</td>
+            <td style="border-right:1px solid #000000;padding:2px 4px 2px 4px;" id="status-cell">in_progress</td>
+        </tr>
+
+    </table>
+
+    <p style="color: #000000; font-size: 14pt;">Business Revenue: $9,948,721.47<br>Business Profit: $7,737,266.06</p>
+
+    <h3 style="margin-top:0in;">Project Overview</h3>
+    <ul style="list-style-type:disc;padding:0in; margin-bottom: 0.5in;">
+        <li style="background-color:#f2f2f2padding:0.5in">Launch a new strategic project to expand team capabilities and improve customer satisfaction.</li>
+
+        <li style="background-color:#f2f2f2padding:0.5in">Improve operational efficiency and streamline processes</li>
+    </ul>
+
+    <h3 style="margin-top: 0in;">Current Status Report</h3>
+    <p style="color: #000000; font-size: 14pt;">As the project is currently cancelled, there are no recent updates or progress reports to provide.</p>
+
+    <table style="width:100%margin-top:0in; margin-bottom:0.5in; border-collapse: collapse;">
+        <tr>
+            <th style="text-align:left;background-color:#cccccc;padding:2px 4px 2px 4px;">Task Date</th>
+            <th style="text-align:right	background-color:#cccccc	padding:2px 4px 2px 4px;">Status Update</th>
+        </tr>
+
+        <tr>
+            <td style="padding:0.5in; border-bottom:1px solid #000000;">Initial Project Plan Submission (Date)</td>
+            <td style="border-right:1px solid #000000;padding:2px 4px 2px 4px;" id="status-cell">Completed</td>
+        </tr>
+
+    </table>
+
+</div>

@@ -35,7 +35,7 @@ class Employee(Base):
     current_room = Column(String, nullable=True)  # tracks which room employee is currently in
     home_room = Column(String, nullable=True)  # tracks employee's assigned home room
     floor = Column(Integer, default=1)  # floor number (1 or 2)
-    activity_state = Column(String, default="idle")  # idle, working, walking, meeting, break, etc.
+    activity_state = Column(String, default="working")  # working, walking, meeting, break, training, etc.
     hired_at = Column(DateTime(timezone=True), server_default=func.now())
     fired_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -435,4 +435,43 @@ class BirthdayCelebration(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     employee = relationship("Employee", foreign_keys=[employee_id])
+
+class SharedDriveFile(Base):
+    __tablename__ = "shared_drive_files"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    file_name = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)  # word, spreadsheet, powerpoint
+    department = Column(String, nullable=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # Original creator
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    file_path = Column(String, nullable=False)
+    file_size = Column(Integer, default=0)
+    content_html = Column(Text, nullable=False)  # Current version HTML
+    file_metadata = Column(JSON, default=dict)  # Renamed from metadata (reserved in SQLAlchemy)
+    last_updated_by_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    current_version = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    last_updated_by = relationship("Employee", foreign_keys=[last_updated_by_id])
+    project = relationship("Project", foreign_keys=[project_id])
+    versions = relationship("SharedDriveFileVersion", back_populates="file", cascade="all, delete-orphan", order_by="SharedDriveFileVersion.version_number.desc()")
+
+class SharedDriveFileVersion(Base):
+    __tablename__ = "shared_drive_file_versions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("shared_drive_files.id"), nullable=False)
+    version_number = Column(Integer, nullable=False)
+    content_html = Column(Text, nullable=False)
+    file_size = Column(Integer, default=0)
+    created_by_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    change_summary = Column(Text, nullable=True)  # AI-generated summary
+    file_metadata = Column(JSON, default=dict)  # Renamed from metadata (reserved in SQLAlchemy)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    file = relationship("SharedDriveFile", back_populates="versions")
+    created_by = relationship("Employee", foreign_keys=[created_by_id])
 

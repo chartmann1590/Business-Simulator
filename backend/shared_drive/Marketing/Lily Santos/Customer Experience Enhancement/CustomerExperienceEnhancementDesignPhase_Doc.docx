@@ -1,0 +1,37 @@
+<div style="background-color: #ffffff; font-family: 'Times New Roman', serif; margin-top: 1in; padding: 0.5in; border-bottom: 1px solid #000000;">
+  <h2 style="margin-top: 0in; margin-bottom: 0.25in; font-size: 14pt; color: #000000;">Customer Experience Enhancement Project</h2>
+  <p style="margin-top: 0.5in; line-height: 1.5; font-size: 12pt; color: #000000;">
+    This project was initiated by Sarah Chen to launch a new strategic project aimed at improving customer satisfaction and expanding team capabilities.
+  </p>
+
+  <table style="border-collapse: collapse; width: 100%; margin-top: 0in; margin-bottom: 0.25in;">
+    <tr>
+      <th style="background-color: #f0f0f0; border-width: 1px; padding: 5pt 10pt 5pt 5pt;">Project Status</th>
+      <td style="border-width: 1px; padding: 5pt 10pt 5pt 5pt;">in_progress</td>
+    </tr>
+    <tr>
+      <th style="background-color: #f0f0f0; border-width: 1px; padding: 5pt 10pt 5pt 5pt;">Current Task</th>
+      <td style="border-width: 1px; padding: 5pt 10pt 5pt 5pt;">Design phase for Customer Experience Enhancement</td>
+    </tr>
+  </table>
+
+  <p style="margin-top: 0.25in; line-height: 1.5; font-size: 12pt; color: #000000;">
+    The project has been cancelled due to unforeseen circumstances.
+  </p>
+
+  <div style="background-color: #f0f0f0; padding: 0.5in; margin-top: 0.25in; border-bottom: 1px solid #000000;">
+    <b style="font-size: 14pt; color: #000000;">Business Revenue</b>
+    <br style="margin-top: 0.2in; font-family: 'Times New Roman', serif; font-size: 12pt; color: #000000;">
+    $9,955,105.79
+  </div>
+
+  <div style="background-color: #f0f0f0; padding: 0.5in; margin-top: 0.25in; border-bottom: 1px solid #000000;">
+    <b style="font-size: 14pt; color: #000000;">Business Profit</b>
+    <br style="margin-top: 0.2in; font-family: 'Times New Roman', serif; font-size: 12pt; color: #000000;">
+    $7,743,650.38
+  </div>
+
+  <p style="margin-top: 1in; line-height: 1.5; font-size: 12pt; color: #000000;">
+    As the designer responsible for this project, I will ensure that all necessary design elements are completed and delivered to the stakeholders.
+  </p>
+</div>

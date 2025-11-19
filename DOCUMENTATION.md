@@ -50,6 +50,7 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Random Events**: Dynamic office events affecting productivity and morale
 - **Suggestion System**: Employee suggestion box with voting and manager feedback
 - **Weather System**: Office weather tracking affecting office mood
+- **Shared Drive System**: AI-powered document management with version control
 
 ---
 
@@ -271,6 +272,15 @@ Business logic managers:
 - Weather affects office mood and productivity
 - Generates weather updates
 
+**`shared_drive_manager.py`**:
+- Manages AI-powered document generation and version control
+- Generates documents (Word, Spreadsheet, PowerPoint) using LLM
+- Organizes files by department/employee/project structure
+- Handles document versioning and history
+- Provides document viewing and editing capabilities
+- Tracks recent files for employees
+- All document content is AI-generated using Ollama (no hardcoded content)
+
 #### 5. `database/`
 Database layer:
 
@@ -294,6 +304,8 @@ Database layer:
 - `Notification`: System notifications
 - `CustomerReview`: Customer reviews for completed projects
 - `Meeting`: Meeting records with schedules, attendees, agendas, and transcripts
+- `SharedDriveFile`: Shared drive document files with version control
+- `SharedDriveFileVersion`: Version history for shared drive files
 
 #### 6. `api/`
 API endpoints:
@@ -334,6 +346,13 @@ API endpoints:
 - `/api/employees/initialize-award` (POST): Initialize performance award system
 - `/api/reviews/debug`: Debug endpoint to see all reviews in the database
 - `/api/reviews/award-diagnostic`: Diagnostic endpoint to check award assignment
+- `/api/shared-drive/structure`: Get hierarchical file structure
+- `/api/shared-drive/files`: Get all files with optional filters
+- `/api/shared-drive/files/{file_id}`: Get specific file details
+- `/api/shared-drive/files/{file_id}/view`: View file content (HTML)
+- `/api/shared-drive/files/{file_id}/versions`: Get all versions of a file
+- `/api/shared-drive/files/{file_id}/versions/{version_number}`: Get specific version
+- `/api/shared-drive/generate` (POST): Generate new documents
 
 **`websocket.py`**: WebSocket handler
 - Manages WebSocket connections
@@ -630,6 +649,28 @@ Performance award display:
 - Award win statistics
 - Visual award presentation
 
+#### `components/SharedDriveView.jsx`
+Shared drive interface:
+- Hierarchical file tree (department/employee/project)
+- File search and filtering capabilities
+- File type filtering (Word, Spreadsheet, PowerPoint)
+- Department filtering
+- Recent files display
+- File selection and viewing integration
+
+#### `components/DocumentViewer.jsx`
+Document viewing component:
+- Renders HTML document content with formatting
+- Version history viewer
+- Document metadata display
+- Edit capabilities
+
+#### `components/RecentFiles.jsx`
+Recent files component:
+- Shows recently accessed files for an employee
+- Quick access to frequently used documents
+- Integration with employee profile pages
+
 #### `components/BoardroomView.jsx`
 Boardroom visualization and management:
 - Visual boardroom scene with executives positioned around a table
@@ -869,6 +910,31 @@ WebSocket hook for real-time updates:
 - `meeting_metadata`: JSON metadata (live_messages, last_content_update, etc.)
 - `created_at`: Timestamp
 - `updated_at`: Timestamp
+
+#### `shared_drive_files`
+- `id`: Primary key
+- `file_name`: File name
+- `file_type`: File type (word, spreadsheet, powerpoint)
+- `department`: Department name (nullable)
+- `employee_id`: Foreign key to employees (original creator, nullable)
+- `project_id`: Foreign key to projects (nullable)
+- `file_path`: Physical file path
+- `file_size`: File size in bytes
+- `content_html`: Current version HTML content
+- `file_metadata`: JSON metadata
+- `last_updated_by_id`: Foreign key to employees (last updater, nullable)
+- `current_version`: Current version number
+- `created_at`: Timestamp
+- `updated_at`: Timestamp
+
+#### `shared_drive_file_versions`
+- `id`: Primary key
+- `file_id`: Foreign key to shared_drive_files
+- `version_number`: Version number
+- `content_html`: Version HTML content
+- `version_metadata`: JSON metadata for this version
+- `created_by_id`: Foreign key to employees (version creator, nullable)
+- `created_at`: Timestamp
 
 #### `notifications`
 - `id`: Primary key
@@ -2364,6 +2430,113 @@ The weather system tracks office weather conditions and their impact on office m
 1. **Weather Generation**: System generates weather conditions
 2. **Mood Calculation**: Weather affects overall office mood
 3. **Productivity Impact**: Weather conditions can affect employee productivity
+
+## Shared Drive System
+
+The shared drive system provides AI-powered document management with version control, allowing employees to create, view, and edit documents organized by department, employee, and project.
+
+### Features
+
+- **AI-Powered Document Generation**: All documents are generated using LLM (Ollama) - no hardcoded content
+- **Document Types**: Supports Word documents, Spreadsheets, and PowerPoint presentations
+- **Version Control**: Complete version history for all documents with ability to view and restore previous versions
+- **Organized Structure**: Files organized hierarchically by department → employee → project
+- **Document Viewing**: Rich HTML document viewer with formatted content
+- **Recent Files**: Track recently accessed files per employee
+- **File Metadata**: Stores file size, creation date, update date, and custom metadata
+- **Employee Tracking**: Tracks original creator and last updater for each file
+
+### How It Works
+
+1. **Document Generation**: 
+   - Documents are generated using LLM with business context
+   - Content is created based on current business state, projects, and employee information
+   - Documents are stored as HTML for easy viewing and editing
+
+2. **File Organization**:
+   - Files are organized in a hierarchical structure: `department/employee/project/filename`
+   - Physical files stored in `backend/shared_drive/` directory
+   - Database tracks file metadata and relationships
+
+3. **Version Control**:
+   - Each document edit creates a new version
+   - Version history is maintained in the database
+   - Users can view any previous version
+   - Current version is always accessible
+
+4. **Document Types**:
+   - **Word Documents**: Text-based documents with formatting
+   - **Spreadsheets**: Tabular data with calculations
+   - **PowerPoint**: Presentation slides with content
+
+### Database Structure
+
+**SharedDriveFile Table:**
+- Stores file information (name, type, department, employee, project)
+- Tracks file path, size, and HTML content
+- Maintains current version number
+- Links to employee (creator and last updater) and project
+
+**SharedDriveFileVersion Table:**
+- Stores version history for each file
+- Tracks version number, content, and metadata for each version
+- Links back to parent file
+
+### Frontend Components
+
+- **SharedDriveView**: Main shared drive interface with:
+  - Hierarchical file tree (department/employee/project)
+  - File search and filtering
+  - File type filtering (Word, Spreadsheet, PowerPoint)
+  - Department filtering
+  - Recent files display
+  - File selection and viewing
+
+- **DocumentViewer**: Document viewing component:
+  - Renders HTML document content
+  - Version history viewer
+  - Document metadata display
+  - Edit capabilities
+
+- **RecentFiles**: Component showing recently accessed files for an employee
+
+### API Endpoints
+
+- `GET /api/shared-drive/structure` - Get hierarchical file structure
+- `GET /api/shared-drive/files` - Get all files with optional filters (department, employee_id, project_id, file_type, limit)
+- `GET /api/shared-drive/files/{file_id}` - Get specific file details
+- `GET /api/shared-drive/files/{file_id}/view` - View file content (HTML)
+- `GET /api/shared-drive/files/{file_id}/versions` - Get all versions of a file
+- `GET /api/shared-drive/files/{file_id}/versions/{version_number}` - Get specific version
+- `POST /api/shared-drive/generate` - Generate new documents
+
+### File Organization
+
+Files are physically stored in:
+```
+backend/shared_drive/
+  ├── Department1/
+  │   ├── Employee1/
+  │   │   ├── Project1/
+  │   │   │   └── document.html
+  │   │   └── Project2/
+  │   │       └── spreadsheet.html
+  │   └── Employee2/
+  │       └── ...
+  └── Department2/
+      └── ...
+```
+
+### Document Generation
+
+Documents are generated using LLM with the following context:
+- Current business metrics (revenue, profit, expenses)
+- Active projects and their details
+- Employee information and department distribution
+- Financial data and trends
+- Project-specific information when generating project documents
+
+All document content is dynamically generated - no templates or hardcoded content.
 
 ## Products System
 

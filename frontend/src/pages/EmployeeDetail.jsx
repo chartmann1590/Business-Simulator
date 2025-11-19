@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getAvatarPath } from '../utils/avatarMapper'
 import EmployeeChatModal from '../components/EmployeeChatModal'
 import PerformanceAwardModal from '../components/PerformanceAwardModal'
+import RecentFiles from '../components/RecentFiles'
 
 function EmployeeDetail() {
   const { id } = useParams()
@@ -682,6 +683,12 @@ function EmployeeDetail() {
           </div>
         </div>
       )}
+
+      {/* Recent Files */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Files</h3>
+        <RecentFiles employeeId={parseInt(id)} />
+      </div>
 
       {/* Recent Activities */}
       {employee.activities && employee.activities.length > 0 && (

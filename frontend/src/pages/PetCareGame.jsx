@@ -101,19 +101,54 @@ function PetCareGame() {
     }, 3000)
   }
 
-  const feedPet = (pet) => {
+  const logCareAction = async (pet, action, statsBefore, statsAfter) => {
+    try {
+      await fetch(`/api/pets/${pet.id}/care`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: action,
+          happiness_before: statsBefore.happiness,
+          hunger_before: statsBefore.hunger,
+          energy_before: statsBefore.energy,
+          happiness_after: statsAfter.happiness,
+          hunger_after: statsAfter.hunger,
+          energy_after: statsAfter.energy,
+          reasoning: `User-initiated ${action} action`
+        })
+      })
+    } catch (error) {
+      console.error('Error logging pet care action:', error)
+    }
+  }
+
+  const feedPet = async (pet) => {
     if (!petStats[pet.id]) return
     
     const stats = petStats[pet.id]
     const hungerReduction = 30 + Math.floor(Math.random() * 20) // 30-50
     const happinessIncrease = 5 + Math.floor(Math.random() * 10) // 5-15
     
+    const statsBefore = {
+      happiness: stats.happiness,
+      hunger: stats.hunger,
+      energy: stats.energy
+    }
+    
+    const statsAfter = {
+      happiness: Math.min(100, stats.happiness + happinessIncrease),
+      hunger: Math.max(0, stats.hunger - hungerReduction),
+      energy: stats.energy
+    }
+    
     setPetStats(prev => ({
       ...prev,
       [pet.id]: {
         ...prev[pet.id],
-        hunger: Math.max(0, stats.hunger - hungerReduction),
-        happiness: Math.min(100, stats.happiness + happinessIncrease),
+        hunger: statsAfter.hunger,
+        happiness: statsAfter.happiness,
         lastCare: new Date().toISOString()
       }
     }))
@@ -124,6 +159,9 @@ function PetCareGame() {
       totalCares: prev.totalCares + 1
     }))
 
+    // Log to database
+    await logCareAction(pet, 'feed', statsBefore, statsAfter)
+
     const messages = [
       `🍖 ${pet.name} loved the food!`,
       `🍖 ${pet.name} is happily eating!`,
@@ -133,7 +171,7 @@ function PetCareGame() {
     addNotification(messages[Math.floor(Math.random() * messages.length)], 'success')
   }
 
-  const playWithPet = (pet) => {
+  const playWithPet = async (pet) => {
     if (!petStats[pet.id]) return
     
     const stats = petStats[pet.id]
@@ -145,12 +183,24 @@ function PetCareGame() {
       return
     }
 
+    const statsBefore = {
+      happiness: stats.happiness,
+      hunger: stats.hunger,
+      energy: stats.energy
+    }
+    
+    const statsAfter = {
+      happiness: Math.min(100, stats.happiness + happinessIncrease),
+      hunger: stats.hunger,
+      energy: Math.max(0, stats.energy - energyReduction)
+    }
+
     setPetStats(prev => ({
       ...prev,
       [pet.id]: {
         ...prev[pet.id],
-        energy: Math.max(0, stats.energy - energyReduction),
-        happiness: Math.min(100, stats.happiness + happinessIncrease),
+        energy: statsAfter.energy,
+        happiness: statsAfter.happiness,
         lastCare: new Date().toISOString()
       }
     }))
@@ -161,6 +211,9 @@ function PetCareGame() {
       totalCares: prev.totalCares + 1
     }))
 
+    // Log to database
+    await logCareAction(pet, 'play', statsBefore, statsAfter)
+
     const messages = [
       `🎾 ${pet.name} is having so much fun playing!`,
       `🎾 ${pet.name} is running around excitedly!`,
@@ -170,19 +223,31 @@ function PetCareGame() {
     addNotification(messages[Math.floor(Math.random() * messages.length)], 'success')
   }
 
-  const petPet = (pet) => {
+  const petPet = async (pet) => {
     if (!petStats[pet.id]) return
     
     const stats = petStats[pet.id]
     const happinessIncrease = 5 + Math.floor(Math.random() * 10) // 5-15
     const energyIncrease = 2 + Math.floor(Math.random() * 5) // 2-7
     
+    const statsBefore = {
+      happiness: stats.happiness,
+      hunger: stats.hunger,
+      energy: stats.energy
+    }
+    
+    const statsAfter = {
+      happiness: Math.min(100, stats.happiness + happinessIncrease),
+      hunger: stats.hunger,
+      energy: Math.min(100, stats.energy + energyIncrease)
+    }
+    
     setPetStats(prev => ({
       ...prev,
       [pet.id]: {
         ...prev[pet.id],
-        happiness: Math.min(100, stats.happiness + happinessIncrease),
-        energy: Math.min(100, stats.energy + energyIncrease),
+        happiness: statsAfter.happiness,
+        energy: statsAfter.energy,
         lastCare: new Date().toISOString()
       }
     }))
@@ -192,6 +257,9 @@ function PetCareGame() {
       totalPets: prev.totalPets + 1,
       totalCares: prev.totalCares + 1
     }))
+
+    // Log to database
+    await logCareAction(pet, 'pet', statsBefore, statsAfter)
 
     const messages = [
       `❤️ ${pet.name} is purring/whining happily!`,
