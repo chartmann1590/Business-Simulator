@@ -3,7 +3,9 @@ import { useParams, Link } from 'react-router-dom'
 import { getAvatarPath } from '../utils/avatarMapper'
 import EmployeeChatModal from '../components/EmployeeChatModal'
 import PerformanceAwardModal from '../components/PerformanceAwardModal'
+import EmployeeScreenModal from '../components/EmployeeScreenModal'
 import RecentFiles from '../components/RecentFiles'
+import { formatDate, formatTime, formatDateTime, formatDateWithWeekday, formatDateShort } from '../utils/timezone'
 
 function EmployeeDetail() {
   const { id } = useParams()
@@ -18,6 +20,7 @@ function EmployeeDetail() {
   const [thoughts, setThoughts] = useState(null)
   const [loadingThoughts, setLoadingThoughts] = useState(false)
   const [showAwardModal, setShowAwardModal] = useState(false)
+  const [showScreenModal, setShowScreenModal] = useState(false)
 
   useEffect(() => {
     fetchEmployee()
@@ -161,18 +164,18 @@ function EmployeeDetail() {
               <p className="text-sm text-gray-500 mt-1">{employee.department}</p>
               {employee.hired_at && (
                 <p className="text-xs text-gray-400 mt-1">
-                  Hired: {new Date(employee.hired_at).toLocaleDateString()}
+                  Hired: {formatDate(employee.hired_at)}
                 </p>
               )}
               {employee.birthday_month && employee.birthday_day && (
                 <p className="text-xs text-gray-400 mt-1">
-                  Birthday: {new Date(2000, employee.birthday_month - 1, employee.birthday_day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                  Birthday: {formatDateShort(new Date(2000, employee.birthday_month - 1, employee.birthday_day))}
                 </p>
               )}
               {(employee.fired_at || employee.status === 'fired') && (
                 <div className="mt-1">
                   <p className="text-xs text-red-600">
-                    Terminated: {employee.fired_at ? new Date(employee.fired_at).toLocaleDateString() : 'Date not available'}
+                    Terminated: {employee.fired_at ? formatDate(employee.fired_at) : 'Date not available'}
                   </p>
                   {employee.termination_reason && (
                     <p className="text-xs text-red-700 mt-1 italic font-medium">
@@ -224,6 +227,19 @@ function EmployeeDetail() {
             }`}>
               {employee.role}
             </span>
+            {employee.activity_state === 'working' && employee.status === 'active' && (
+              <button
+                onClick={() => setShowScreenModal(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                title="View Employee Screen"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span>View Screen</span>
+              </button>
+            )}
             {employee.has_performance_award === true && (
               <button
                 onClick={() => setShowAwardModal(true)}
@@ -296,10 +312,10 @@ function EmployeeDetail() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                               <span>
-                                {startTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                {formatDateWithWeekday(startTime)}
                                 {' '}
-                                {startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                {endTime && ` - ${endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+                                {formatTime(startTime)}
+                                {endTime && ` - ${formatTime(endTime)}`}
                               </span>
                             </div>
                           )}
@@ -408,7 +424,7 @@ function EmployeeDetail() {
               <div className="space-y-2">
                 {employee.fired_at && (
                   <p className="text-sm text-red-800">
-                    <span className="font-medium">Termination Date:</span> {new Date(employee.fired_at).toLocaleDateString()} at {new Date(employee.fired_at).toLocaleTimeString()}
+                    <span className="font-medium">Termination Date:</span> {formatDate(employee.fired_at)} at {formatTime(employee.fired_at)}
                   </p>
                 )}
                 {employee.termination_reason ? (
@@ -456,7 +472,7 @@ function EmployeeDetail() {
                         <div className="flex items-center gap-2">
                           <span className="text-2xl font-bold text-red-600">Overdue</span>
                           <span className="text-sm text-gray-500">
-                            (Was scheduled for {new Date(employee.next_review.scheduled_at).toLocaleString()})
+                            (Was scheduled for {formatDateTime(employee.next_review.scheduled_at)})
                           </span>
                         </div>
                       ) : (
@@ -482,7 +498,7 @@ function EmployeeDetail() {
                     <p className="text-gray-600">Calculating...</p>
                   )}
                   <p className="text-xs text-gray-500 mt-3">
-                    Scheduled date: {new Date(employee.next_review.scheduled_at).toLocaleString()}
+                    Scheduled date: {formatDateTime(employee.next_review.scheduled_at)}
                   </p>
                 </div>
               )}
@@ -522,10 +538,10 @@ function EmployeeDetail() {
                     </div>
                     <div className="text-right ml-4">
                       <p className="text-xs text-gray-500">
-                        {award.timestamp ? new Date(award.timestamp).toLocaleDateString() : 'N/A'}
+                        {award.timestamp ? formatDate(award.timestamp) : 'N/A'}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {award.timestamp ? new Date(award.timestamp).toLocaleTimeString() : ''}
+                        {award.timestamp ? formatTime(award.timestamp) : ''}
                       </p>
                     </div>
                   </div>
@@ -575,10 +591,10 @@ function EmployeeDetail() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-400">
-                        {review.review_date ? new Date(review.review_date).toLocaleDateString() : 'N/A'}
+                        {review.review_date ? formatDate(review.review_date) : 'N/A'}
                         {review.review_period_start && review.review_period_end && (
                           <span className="ml-2">
-                            ({new Date(review.review_period_start).toLocaleDateString()} - {new Date(review.review_period_end).toLocaleDateString()})
+                            ({formatDate(review.review_period_start)} - {formatDate(review.review_period_end)})
                           </span>
                         )}
                       </p>
@@ -671,7 +687,7 @@ function EmployeeDetail() {
                     {decision.decision_type}
                   </span>
                   <span className="text-xs text-gray-500">
-                    {new Date(decision.timestamp).toLocaleString()}
+                    {formatDateTime(decision.timestamp)}
                   </span>
                 </div>
                 <p className="text-gray-900 font-medium mb-1">{decision.description}</p>
@@ -699,7 +715,7 @@ function EmployeeDetail() {
               <div key={activity.id} className="border-l-4 border-blue-500 pl-4 py-2">
                 <p className="text-gray-900">{activity.description}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {new Date(activity.timestamp).toLocaleString()}
+                  {formatDateTime(activity.timestamp)}
                 </p>
               </div>
             ))}
@@ -721,7 +737,7 @@ function EmployeeDetail() {
                     {email.sender_id === parseInt(id) ? `To: ${email.recipient_name}` : `From: ${email.sender_name}`}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {new Date(email.timestamp).toLocaleString()}
+                    {formatDateTime(email.timestamp)}
                   </p>
                 </div>
               ))}
@@ -741,7 +757,7 @@ function EmployeeDetail() {
                     {chat.sender_id === parseInt(id) ? `To: ${chat.recipient_name}` : `From: ${chat.sender_name}`}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {new Date(chat.timestamp).toLocaleString()}
+                    {formatDateTime(chat.timestamp)}
                   </p>
                 </div>
               ))}
@@ -783,6 +799,15 @@ function EmployeeDetail() {
           employee={employee}
           isOpen={showAwardModal}
           onClose={() => setShowAwardModal(false)}
+        />
+      )}
+
+      {/* Screen View Modal */}
+      {employee && employee.activity_state === 'working' && employee.status === 'active' && (
+        <EmployeeScreenModal
+          employeeId={parseInt(id)}
+          isOpen={showScreenModal}
+          onClose={() => setShowScreenModal(false)}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
 
-function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }) {
+function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, onScreenView }) {
   const isWalking = employee.activity_state === 'walking'
   const activityState = employee.activity_state || 'idle'
   const prevPositionRef = useRef(position)
@@ -75,12 +75,31 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick }
             {activityIcon}
           </div>
         )}
+        {/* Screen View Button - Only show when working */}
+        {activityState === 'working' && employee.status === 'active' && onScreenView && (
+          <div
+            className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 shadow-lg cursor-pointer z-30 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation()
+              onScreenView(employee)
+            }}
+            title="View Screen"
+          >
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </div>
+        )}
         {/* Tooltip */}
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
           <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
             <div className="font-semibold">{employee.name}</div>
             <div className="text-gray-300">{employee.title}</div>
             <div className="text-gray-400 capitalize">{activityState}</div>
+            {activityState === 'working' && employee.status === 'active' && (
+              <div className="text-blue-400 mt-1">Click screen icon to view</div>
+            )}
           </div>
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
             <div className="border-4 border-transparent border-t-gray-900"></div>

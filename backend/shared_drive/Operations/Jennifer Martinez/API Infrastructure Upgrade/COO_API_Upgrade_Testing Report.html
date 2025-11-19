@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Context Document</title>
+    <style>
+        /* Header Styles */
+        header {
+            background: #ffffff;
+            border-bottom: 2px solid #ddd;
+            padding: 1em;
+            text-align: center;
+        }
+
+        /* Title Styles */
+        h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            text-decoration: underline;
+            color: #000000;
+            margin-left: -10px;
+        }
+
+        /* Section Styles */
+        section {
+            background: #ffffff;
+            padding: 2em;
+            margin-bottom: 1em;
+            border-top: 2px solid #ddd;
+        }
+
+        /* Table Styles */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 1em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 0.5em;
+            text-align: left;
+        }
+
+        /* List Styles */
+        ul, ol {
+            list-style-type: none;
+            margin-bottom: 0;
+        }
+
+        li {
+            padding: 0.5em;
+            border-top: 1px solid #ddd;
+        }
+
+        /* Paragraph Styles */
+        p {
+            line-height: 1.5;
+            margin-bottom: 1em;
+        }
+
+        /* Body Styles */
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 2in;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Footer Styles */
+        footer {
+            padding: 1em;
+            text-align: center;
+            clear: both;
+            margin-top: 2em;
+            color: #666666;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 style="color: #000000;">Business Context Document</h1>
+        <p style="font-size: 12pt; color: #666666;">Date: {{date}}</p>
+        <p style="font-size: 12pt; color: #666666;">{{employee_name}}, Operations</p>
+        <p style="font-size: 12pt; color: #666666;">Classification: Strategic Report</p>
+    </header>
+
+    <h1>Executive Summary</h1>
+    <section>
+        <p style="font-size: 14pt; color: #000000;">This document provides an overview of our current business context, including key performance indicators, project status, and department distribution. We have identified areas for improvement and provide recommendations to optimize our operations.</p>
+        <ul>
+            <li style="font-size: 12pt; color: #666666;">Revenue increased by 15% QoQ</li>
+            <li style="font-size: 12pt; color: #666666;">Total Profit reached $443,364.05</li>
+        </ul>
+    </section>
+
+    <h2>Employee Information</h2>
+    <section>
+        <table>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Name</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">{{employee_name}}</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Title</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">{{title}}</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Department</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">Operations</td>
+            </tr>
+        </table>
+    </section>
+
+    <h2>Current Project</h2>
+    <section>
+        <p style="font-size: 14pt; color: #000000;">The API Infrastructure Upgrade project is currently active and has a budget of $100,000.00.</p>
+        <table>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Project Name</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">API Infrastructure Upgrade</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Status</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">Active</td>
+            </tr>
+        </table>
+    </section>
+
+    <h2>Current Task</h2>
+    <section>
+        <p style="font-size: 14pt; color: #000000;">The current task is testing for the API Infrastructure Upgrade project.</p>
+        <ul>
+            <li style="font-size: 12pt; color: #666666;">Project status: in_progress</li>
+        </ul>
+    </section>
+
+    <h2>Business Metrics</h2>
+    <section>
+        <table>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Metric</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">Value</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Total Revenue</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">$500,864.05</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Total Profit</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">$443,364.05</td>
+            </tr>
+        </table>
+    </section>
+
+    <h2>Active Projects</h2>
+    <section>
+        <ul>
+            <li style="font-size: 12pt; color: #666666;">Customer Portal Redesign ($75,000.00 budget, active status)</li>
+            <li style="font-size: 12pt; color: #666666;">API Infrastructure Upgrade ($100,000.00 budget, active status)</li>
+            <li style="font-size: 12pt; color: #666666;">Mobile App Development ($150,000.00 budget, active status)</li>
+        </ul>
+    </section>
+
+    <h2>Department Distribution</h2>
+    <section>
+        <table>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Department</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">Employees</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Executive</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">1</td>
+            </tr>
+            <tr>
+                <th style="border: 1px solid #ddd; text-align: left;">Engineering</th>
+                <td style="border: 1px solid #ddd; padding: 0.5em;">5</td>
+            </tr>
+        </table>
+    </section>
+
+    <h2>Critical Requirements</h2>
+    <section>
+        <ul>
+            <li style="font-size: 12pt; color: #666666;">1. Document type: Create a realistic business document based on the employee's role.</li>
+            <li style="font-size: 12pt; color: #666666;">2. Premium styling: Use white background, subtle shadows, and proper typography.</li>
+            <li style="font-size: 12pt; color: #666666;">3. Document structure: Include a fancy title, header, executive summary, main sections, data sections, conclusion, and footer.</li>
+        </ul>
+    </section>
+
+    <h2>Conclusion</h2>
+    <section>
+        <p style="font-size: 14pt; color: #000000;">In conclusion, our business context provides a comprehensive overview of our current projects, department distribution, and key performance indicators. We recommend optimizing our operations to improve revenue growth.</p>
+        <ul>
+            <li style="font-size: 12pt; color: #666666;">Implement process improvements</li>
+            <li style="font-size: 12pt; color: #666666;">Invest in employee development</li>
+        </ul>
+    </section>
+
+    <footer>
+        <p style="font-size: 12pt; color: #666666;">Document Version: 1.0, Confidentiality Notice: This document contains confidential information.</p>
+        <p style="font-size: 12pt; color: #666666;">Page {{pageNumber}}, {{totalPages}} of {{totalPages}}</p>
+    </footer>
+
+</body>
+</html>

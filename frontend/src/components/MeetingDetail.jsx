@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { formatDateShortTime } from '../utils/timezone'
 
 function MeetingDetail({ meeting, onClose, employees = [] }) {
   const [meetingData, setMeetingData] = useState(meeting)
@@ -28,17 +29,6 @@ function MeetingDetail({ meeting, onClose, employees = [] }) {
     }
   }
 
-  const formatTime = (timeString) => {
-    if (!timeString) return ''
-    const date = new Date(timeString)
-    return date.toLocaleString('en-US', { 
-      weekday: 'short',
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })
-  }
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -134,7 +124,7 @@ function MeetingDetail({ meeting, onClose, employees = [] }) {
             </div>
             <p className="text-gray-600 mb-3">{meetingData.description}</p>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>🕐 {formatTime(meetingData.start_time)} - {formatTime(meetingData.end_time)}</span>
+              <span>🕐 {formatDateShortTime(meetingData.start_time)} - {formatDateShortTime(meetingData.end_time)}</span>
               <span>👤 Organized by {meetingData.organizer_name}</span>
             </div>
           </div>

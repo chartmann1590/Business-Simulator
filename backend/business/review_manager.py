@@ -4,6 +4,7 @@ Review Manager - Handles periodic employee reviews and performance evaluations.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from database.models import Employee, EmployeeReview, Task, Activity, Project, Email, ChatMessage
+from database.database import safe_commit, safe_flush
 from datetime import datetime, timedelta
 import random
 from typing import Optional, List
@@ -77,7 +78,9 @@ class ReviewManager:
                     # Employee has no hire date - review them anyway if they've been active
                     # This handles edge cases where hired_at might be null
                     needs_review = True
-                    print(f"  ⚠️  Employee {employee.name} has no hire date - scheduling review anyway")
+                    # Store name early to avoid lazy loading
+                    employee_name_temp = employee.name
+                    print(f"  ⚠️  Employee {employee_name_temp} has no hire date - scheduling review anyway")
             else:
                 # Check if last review was before cutoff
                 if last_review.review_date:
@@ -90,28 +93,47 @@ class ReviewManager:
                             is_overdue = True
             
             if needs_review:
+                # Store employee name early to avoid lazy loading issues in exception handlers
+                employee_name = employee.name
+                employee_hired_at = employee.hired_at
+                employee_role = employee.role
+                employee_hierarchy = employee.hierarchy_level
+                
                 try:
-                    print(f"  📋 Generating review for {employee.name} (hired: {employee.hired_at}, role: {employee.role}, hierarchy: {employee.hierarchy_level})")
+                    print(f"  📋 Generating review for {employee_name} (hired: {employee_hired_at}, role: {employee_role}, hierarchy: {employee_hierarchy})")
                     review = await self._generate_review(employee)
                     if review:
                         reviews_created.append(review)
                         if is_overdue:
                             overdue_count += 1
-                        print(f"  ✅ Successfully created review for {employee.name}")
+                        print(f"  ✅ Successfully created review for {employee_name}")
                     else:
-                        print(f"  ❌ Failed to create review for {employee.name} - no manager available or generation failed")
+                        print(f"  ❌ Failed to create review for {employee_name} - no manager available or generation failed")
                 except Exception as e:
                     import traceback
-                    print(f"  ❌ Error generating review for {employee.name}: {e}")
-                    print(f"  Traceback: {traceback.format_exc()}")
+                    from sqlalchemy.exc import OperationalError, PendingRollbackError
+                    
+                    # Rollback session on any error to prevent it from getting into a bad state
+                    try:
+                        await self.db.rollback()
+                    except Exception as rollback_error:
+                        # Rollback might fail if session is already rolled back
+                        pass
+                    
+                    error_msg = str(e).lower()
+                    if "database is locked" in error_msg or "locked" in error_msg:
+                        print(f"  ⚠️  Database locked while generating review for {employee_name}, will retry later")
+                    else:
+                        print(f"  ❌ Error generating review for {employee_name}: {e}")
+                        print(f"  Traceback: {traceback.format_exc()}")
         
         if reviews_created:
             try:
                 # Flush first to ensure all objects are in the session
-                await self.db.flush()
+                await safe_flush(self.db)
                 
                 # Now commit
-                await self.db.commit()
+                await safe_commit(self.db)
                 print(f"✅ Committed {len(reviews_created)} review(s) to database")
                 
                 # Verify reviews were actually saved by querying them back
@@ -135,7 +157,7 @@ class ReviewManager:
                 print(f"  [AWARD] Updating performance award after {len(reviews_created)} new review(s)...")
                 await self._update_performance_award()
                 # Commit award changes
-                await self.db.commit()
+                await safe_commit(self.db)
                 print(f"  [AWARD] Award update completed and committed")
             except Exception as e:
                 import traceback
@@ -152,6 +174,9 @@ class ReviewManager:
         """
         Generate a review for an employee based on their performance metrics.
         """
+        # Store employee name early to avoid lazy loading issues later
+        employee_name = employee.name
+        
         # Find a manager to conduct the review
         result = await self.db.execute(
             select(Employee).where(
@@ -162,7 +187,7 @@ class ReviewManager:
         managers = result.scalars().all()
         
         if not managers:
-            print(f"  ⚠️  No active managers found to review {employee.name}")
+            print(f"  ⚠️  No active managers found to review {employee_name}")
             return None
         
         # Prefer manager in same department
@@ -170,7 +195,10 @@ class ReviewManager:
         if not manager:
             manager = managers[0]
         
-        print(f"  👤 Found {len(managers)} manager(s) - assigning to {manager.name}")
+        # Store manager name early to avoid lazy loading issues later
+        manager_name = manager.name
+        
+        print(f"  👤 Found {len(managers)} manager(s) - assigning to {manager_name}")
         
         # Determine review period (last 6 hours or since last review)
         review_period_end = datetime.utcnow()
@@ -237,21 +265,21 @@ class ReviewManager:
         
         self.db.add(review)
         # Flush to get the review ID before using it in activities/notifications
-        await self.db.flush()
+        await safe_flush(self.db)
         
         # Verify the review was added and has an ID
         if not review.id:
-            print(f"  ⚠️  Warning: Review for {employee.name} has no ID after flush")
-            await self.db.flush()  # Try again
+            print(f"  ⚠️  Warning: Review for {employee_name} has no ID after flush")
+            await safe_flush(self.db)  # Try again
         else:
-            print(f"  ✓ Review ID {review.id} created for {employee.name}")
+            print(f"  ✓ Review ID {review.id} created for {employee_name}")
         
         # Create activity log
         from database.models import Activity
         activity = Activity(
             employee_id=employee.id,
             activity_type="performance_review",
-            description=f"{employee.name} received a performance review from {manager.name}. Overall rating: {overall_rating}/5.0",
+            description=f"{employee_name} received a performance review from {manager_name}. Overall rating: {overall_rating}/5.0",
             activity_metadata={
                 "review_id": review.id,
                 "overall_rating": overall_rating,
@@ -264,7 +292,7 @@ class ReviewManager:
         manager_activity = Activity(
             employee_id=manager.id,
             activity_type="conducted_review",
-            description=f"{manager.name} conducted a performance review for {employee.name}. Overall rating: {overall_rating}/5.0",
+            description=f"{manager_name} conducted a performance review for {employee_name}. Overall rating: {overall_rating}/5.0",
             activity_metadata={
                 "review_id": review.id,
                 "reviewed_employee_id": employee.id,
@@ -278,8 +306,8 @@ class ReviewManager:
         rating_label = "Excellent" if overall_rating >= 4.5 else "Very Good" if overall_rating >= 4.0 else "Good" if overall_rating >= 3.0 else "Needs Improvement" if overall_rating >= 2.0 else "Poor"
         notification = Notification(
             notification_type="review_completed",
-            title=f"Performance Review Completed: {employee.name}",
-            message=f"{manager.name} completed a performance review for {employee.name}. Overall rating: {overall_rating:.1f}/5.0 ({rating_label})",
+            title=f"Performance Review Completed: {employee_name}",
+            message=f"{manager_name} completed a performance review for {employee_name}. Overall rating: {overall_rating:.1f}/5.0 ({rating_label})",
             employee_id=employee.id,
             review_id=review.id,
             read=False
@@ -289,8 +317,8 @@ class ReviewManager:
         # Create notification for the manager (reminder they conducted a review)
         manager_notification = Notification(
             notification_type="review_conducted",
-            title=f"Review Conducted: {employee.name}",
-            message=f"You completed a performance review for {employee.name}. Rating: {overall_rating:.1f}/5.0 ({rating_label})",
+            title=f"Review Conducted: {employee_name}",
+            message=f"You completed a performance review for {employee_name}. Rating: {overall_rating:.1f}/5.0 ({rating_label})",
             employee_id=manager.id,
             review_id=review.id,
             read=False
@@ -315,7 +343,7 @@ class ReviewManager:
                     raise_activity = Activity(
                         employee_id=employee.id,
                         activity_type="raise_recommendation",
-                        description=f"{employee.name} has received excellent performance reviews and is recommended for a salary increase.",
+                        description=f"{employee_name} has received excellent performance reviews and is recommended for a salary increase.",
                         activity_metadata={
                             "review_id": review.id,
                             "overall_rating": overall_rating,
@@ -328,8 +356,8 @@ class ReviewManager:
                     from database.models import Notification
                     raise_notification = Notification(
                         notification_type="raise_recommendation",
-                        title=f"Raise Recommended: {employee.name}",
-                        message=f"{employee.name} has received two consecutive excellent performance reviews and is recommended for a 5% salary increase.",
+                        title=f"Raise Recommended: {employee_name}",
+                        message=f"{employee_name} has received two consecutive excellent performance reviews and is recommended for a 5% salary increase.",
                         employee_id=employee.id,
                         review_id=review.id,
                         read=False
@@ -467,6 +495,10 @@ class ReviewManager:
         Generate review comments, strengths, and areas for improvement using Ollama.
         The manager conducts the review from their perspective.
         """
+        # Store names early to avoid lazy loading issues in exception handlers
+        employee_name = employee.name
+        manager_name = manager.name
+        
         # Get employee's recent work data for context
         result = await self.db.execute(
             select(Task)
@@ -514,14 +546,14 @@ class ReviewManager:
         period_str = f"{review_period_start.strftime('%Y-%m-%d %H:%M')} to {review_period_end.strftime('%Y-%m-%d %H:%M')}"
         
         # Build prompt for Ollama
-        prompt = f"""You are {manager.name}, {manager.title} at a company. You are conducting a performance review for {employee.name}, {employee.title}.
+        prompt = f"""You are {manager_name}, {manager.title} at a company. You are conducting a performance review for {employee_name}, {employee.title}.
 
 Your personality traits: {manager_personality}
 Your role: {manager.role}
 Your backstory: {manager.backstory or "Experienced manager focused on team development"}
 
 Employee being reviewed:
-- Name: {employee.name}
+- Name: {employee_name}
 - Title: {employee.title}
 - Department: {employee.department}
 - Personality: {employee_personality}
@@ -549,9 +581,9 @@ Tasks:
 Recent Activities:
 {activity_summary_str}
 
-Write a professional performance review from your perspective as {manager.name}. The review should:
+Write a professional performance review from your perspective as {manager_name}. The review should:
 
-1. Include overall comments (2-3 sentences) about {employee.name}'s performance during this period
+1. Include overall comments (2-3 sentences) about {employee_name}'s performance during this period
 2. List 2-3 key strengths (be specific and constructive)
 3. List 1-2 areas for improvement (be supportive and actionable)
 
@@ -608,9 +640,22 @@ Be professional, fair, and constructive. Match your personality traits when writ
                 strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
                 areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
             
+            # Convert lists to strings if needed (handle case where LLM returns arrays)
+            if isinstance(comments, list):
+                comments = "; ".join(str(item) for item in comments) if comments else ""
+            if isinstance(strengths, list):
+                strengths = "; ".join(str(item) for item in strengths) if strengths else ""
+            if isinstance(areas_for_improvement, list):
+                areas_for_improvement = "; ".join(str(item) for item in areas_for_improvement) if areas_for_improvement else ""
+            
+            # Convert to strings if not already
+            comments = str(comments) if comments is not None else ""
+            strengths = str(strengths) if strengths is not None else ""
+            areas_for_improvement = str(areas_for_improvement) if areas_for_improvement is not None else ""
+            
             # Ensure we have values - never return empty strings or None
             if not comments or (isinstance(comments, str) and comments.strip() == ""):
-                comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
+                comments = f"{employee_name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
             if not strengths or (isinstance(strengths, str) and strengths.strip() == ""):
                 strengths = "Consistent performance" if overall_rating >= 3.0 else "Room for growth"
             if not areas_for_improvement or (isinstance(areas_for_improvement, str) and areas_for_improvement.strip() == ""):
@@ -628,7 +673,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
         except Exception as e:
             print(f"  ⚠️  Error generating review with Ollama: {e}")
             # Fallback to simple review - ensure non-empty values
-            comments = f"{employee.name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
+            comments = f"{employee_name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
             strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
             areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
             print(f"  📝 Using fallback review content")
@@ -755,7 +800,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
                     if not winner.has_performance_award:
                         print(f"  [AWARD] Fixing database inconsistency: {winner.name} should have award but flag is False. Setting it now.")
                         winner.has_performance_award = True
-                        await self.db.flush()
+                        await safe_flush(self.db)
                     print(f"  [AWARD] {winner.name} already holds the performance award (rating: {max_rating:.1f}/5.0) - no change needed")
                     return
                 else:
@@ -865,7 +910,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
                     )
                     self.db.add(acknowledgment)
             
-            await self.db.flush()
+            await safe_flush(self.db)
             print(f"  [AWARD] Performance award system updated - {winner.name} is the new award holder (rating: {max_rating:.1f}/5.0)")
             
             # Debug: Print all top employees for verification

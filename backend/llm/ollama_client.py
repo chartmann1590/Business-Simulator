@@ -1067,6 +1067,183 @@ Generate the name now (ONLY the name):"""
             counter += 1
         return f"{base_name} {counter}"
     
+    async def generate_screen_activity(
+        self,
+        employee_name: str,
+        employee_title: str,
+        employee_role: str,
+        personality_traits: List[str],
+        current_task: Optional[str] = None,
+        project_name: Optional[str] = None,
+        project_description: Optional[str] = None,
+        recent_emails: List[Dict] = None,
+        recent_chats: List[Dict] = None,
+        shared_drive_files: List[Dict] = None,
+        business_context: Dict = None
+    ) -> Dict:
+        """Generate realistic screen activity for an employee based on their work context."""
+        
+        personality_str = ", ".join(personality_traits) if personality_traits else "balanced"
+        
+        # Build work context
+        work_context_parts = []
+        if project_name:
+            work_context_parts.append(f"working on the '{project_name}' project")
+        if project_description:
+            work_context_parts.append(f"project description: {project_description}")
+        if current_task:
+            work_context_parts.append(f"current task: {current_task}")
+        
+        work_context = ". ".join(work_context_parts) if work_context_parts else "available for work"
+        
+        # Build recent activity context with actual data
+        activity_context = ""
+        if recent_emails and len(recent_emails) > 0:
+            activity_context += f"\nRecent emails ({len(recent_emails)}):\n"
+            for email in recent_emails[:3]:  # Show first 3
+                activity_context += f"  - From: {email.get('sender_name', 'Unknown')}, Subject: {email.get('subject', 'No Subject')}\n"
+                if email.get('body'):
+                    body_preview = email.get('body', '')[:150]
+                    activity_context += f"    Preview: {body_preview}...\n"
+        if recent_chats and len(recent_chats) > 0:
+            activity_context += f"\nRecent Teams messages ({len(recent_chats)}):\n"
+            for chat in recent_chats[:3]:  # Show first 3
+                activity_context += f"  - {chat.get('sender_name', 'Unknown')}: {chat.get('message', '')[:100]}...\n"
+        if shared_drive_files and len(shared_drive_files) > 0:
+            activity_context += f"\nAvailable documents ({len(shared_drive_files)}):\n"
+            for file in shared_drive_files[:3]:  # Show first 3
+                activity_context += f"  - {file.get('file_name', 'Unknown')} ({file.get('file_type', 'file')})\n"
+        
+        # Build business context string
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get('revenue'):
+                business_parts.append(f"revenue: ${business_context.get('revenue', 0):,.2f}")
+            if business_context.get('profit'):
+                business_parts.append(f"profit: ${business_context.get('profit', 0):,.2f}")
+            if business_context.get('active_projects'):
+                business_parts.append(f"active projects: {business_context.get('active_projects', 0)}")
+            if business_parts:
+                business_context_section = f"\nCompany status: {', '.join(business_parts)}"
+        
+        prompt = f"""You are simulating what {employee_name} ({employee_title}) is currently doing on their computer screen.
+
+Employee context:
+- Name: {employee_name}
+- Title: {employee_title}
+- Role: {employee_role}
+- Personality: {personality_str}
+- Current work: {work_context}
+{activity_context}{business_context_section}
+
+Based on this context, determine what application they are actively using and what they are doing. Choose ONE of these applications:
+1. Outlook (email) - if they should be sending/reading emails
+2. Teams (chat) - if they should be messaging colleagues
+3. Browser (web) - if they should be researching or browsing
+4. ShareDrive (documents) - if they should be working on documents
+
+Generate realistic content for the chosen application that matches their current work context and personality.
+
+IMPORTANT: When generating content, use the actual data provided above when available:
+- For Outlook: Use actual email subjects, senders, and content from recent emails
+- For Teams: Use actual messages and sender names from recent chats
+- For ShareDrive: Use actual file names and content from available documents
+- For Browser: Generate realistic web content related to their work
+
+If viewing/reading, show actual content from the data above. If composing/editing, create new content that relates to the actual data.
+
+Return a JSON object with this exact structure:
+{{
+    "application": "outlook|teams|browser|sharedrive",
+    "action": "composing|reading|replying|browsing|viewing|editing",
+    "content": {{
+        // Application-specific content
+        // For Outlook: subject, recipient, sender, body (use actual email data if viewing)
+        // For Teams: conversation_with (colleague name), messages array (use actual messages if viewing)
+        // For Browser: url, page_title, page_content (HTML content that will be rendered)
+        // For ShareDrive: file_name, file_type, document_content (use actual file content if viewing)
+    }},
+    "mouse_position": {{"x": 0-100, "y": 0-100}},
+    "window_state": "active|minimized|maximized"
+}}
+
+Make the content realistic and relevant to their current task and project. Use actual data when available."""
+
+        try:
+            client = await self._get_client()
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Parse JSON response
+            try:
+                # Remove markdown code blocks if present
+                if response_text.startswith("```"):
+                    import re
+                    response_text = re.sub(r'```json\s*', '', response_text)
+                    response_text = re.sub(r'```\s*', '', response_text)
+                
+                activity_data = json.loads(response_text)
+                
+                # Validate and set defaults
+                if "application" not in activity_data:
+                    activity_data["application"] = random.choice(["outlook", "teams", "browser", "sharedrive"])
+                
+                if "action" not in activity_data:
+                    activity_data["action"] = "viewing"
+                
+                if "content" not in activity_data:
+                    activity_data["content"] = {}
+                
+                if "mouse_position" not in activity_data:
+                    activity_data["mouse_position"] = {"x": random.randint(20, 80), "y": random.randint(20, 80)}
+                
+                if "window_state" not in activity_data:
+                    activity_data["window_state"] = "active"
+                
+                return activity_data
+                
+            except json.JSONDecodeError as e:
+                print(f"Error parsing screen activity JSON: {e}")
+                print(f"Response was: {response_text[:500]}")
+                # Return fallback activity
+                return {
+                    "application": "outlook",
+                    "action": "viewing",
+                    "content": {
+                        "subject": "Work Update",
+                        "recipient": "Team",
+                        "body": f"{employee_name} is reviewing emails related to their current work."
+                    },
+                    "mouse_position": {"x": 50, "y": 50},
+                    "window_state": "active"
+                }
+                
+        except Exception as e:
+            print(f"Error generating screen activity: {e}")
+            # Return fallback activity
+            return {
+                "application": "outlook",
+                "action": "viewing",
+                "content": {
+                    "subject": "Work Update",
+                    "recipient": "Team",
+                    "body": f"{employee_name} is working on their current tasks."
+                },
+                "mouse_position": {"x": 50, "y": 50},
+                "window_state": "active"
+            }
+    
     async def close(self):
         if self._client is not None:
             await self._client.aclose()

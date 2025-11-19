@@ -2611,13 +2611,29 @@ Return ONLY the termination reason text, nothing else."""
     async def update_meetings_frequently(self):
         """Background task to update meeting status and generate live content very frequently (every 2-3 seconds)."""
         print("🔄 Starting frequent meeting update background task...")
+        from database.database import retry_on_lock
+        from sqlalchemy.exc import OperationalError
+        
         while self.running:
             try:
-                async with async_session_maker() as meeting_db:
-                    from business.meeting_manager import MeetingManager
-                    meeting_manager = MeetingManager(meeting_db)
-                    await meeting_manager.update_meeting_status()
+                async def update_meetings():
+                    async with async_session_maker() as meeting_db:
+                        from business.meeting_manager import MeetingManager
+                        meeting_manager = MeetingManager(meeting_db)
+                        await meeting_manager.update_meeting_status()
+                
+                # Use retry logic for database operations
+                await retry_on_lock(update_meetings, max_retries=3, initial_delay=1.0)
                 await asyncio.sleep(10)  # Update meetings every 10 seconds (slower pace, one message at a time)
+            except OperationalError as e:
+                if "database is locked" in str(e):
+                    print(f"❌ Meeting update failed after retries (database locked)")
+                    await asyncio.sleep(5)  # Wait longer before retrying
+                else:
+                    print(f"❌ Error in frequent meeting update: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    await asyncio.sleep(2)  # Wait a bit before retrying
             except Exception as e:
                 print(f"❌ Error in frequent meeting update: {e}")
                 import traceback
@@ -2771,6 +2787,8 @@ Return ONLY the termination reason text, nothing else."""
         """Background task to update shared drive every 20-30 minutes (optimized to prevent freezing)."""
         import random
         from business.shared_drive_manager import SharedDriveManager
+        from database.database import retry_on_lock
+        from sqlalchemy.exc import OperationalError
         
         # Wait longer on startup to let system stabilize
         await asyncio.sleep(30)
@@ -2778,74 +2796,85 @@ Return ONLY the termination reason text, nothing else."""
         
         while self.running:
             try:
-                async with async_session_maker() as db:
-                    shared_drive_manager = SharedDriveManager(db)
-                    business_context = await get_business_context(db)
-                    
-                    # Get active employees
-                    result = await db.execute(
-                        select(Employee).where(Employee.status == "active")
-                    )
-                    employees = result.scalars().all()
-                    
-                    if employees:
-                        # Process only 1-2 employees per cycle to prevent freezing
-                        if first_run:
-                            num_to_process = min(2, len(employees))  # Only 2 on startup
-                        else:
-                            num_to_process = min(1, len(employees))  # Only 1 per cycle
+                async def update_shared_drive():
+                    async with async_session_maker() as db:
+                        shared_drive_manager = SharedDriveManager(db)
+                        business_context = await get_business_context(db)
                         
-                        employees_to_process = random.sample(list(employees), num_to_process)
+                        # Get active employees
+                        result = await db.execute(
+                            select(Employee).where(Employee.status == "active")
+                        )
+                        employees = result.scalars().all()
                         
-                        files_created = 0
-                        files_updated = 0
-                        
-                        print(f"📁 Processing {num_to_process} employee(s) for shared drive update...")
-                        
-                        for employee in employees_to_process:
-                            # Store employee info before try block
-                            employee_name = employee.name
-                            employee_id = employee.id
+                        if employees:
+                            # Process only 1-2 employees per cycle to prevent freezing
+                            if first_run:
+                                num_to_process = min(2, len(employees))  # Only 2 on startup
+                            else:
+                                num_to_process = min(1, len(employees))  # Only 1 per cycle
                             
-                            try:
-                                # Generate new documents (AI decides what to create, limited to 1 per cycle)
-                                created = await shared_drive_manager.generate_documents_for_employee(
-                                    employee, business_context, max_documents=1
-                                )
-                                files_created += len(created)
+                            employees_to_process = random.sample(list(employees), num_to_process)
+                            
+                            files_created = 0
+                            files_updated = 0
+                            
+                            print(f"📁 Processing {num_to_process} employee(s) for shared drive update...")
+                            
+                            for employee in employees_to_process:
+                                # Store employee info before try block
+                                employee_name = employee.name
+                                employee_id = employee.id
                                 
-                                # Small delay to prevent overwhelming the system
-                                await asyncio.sleep(1)
-                                
-                                # Update existing documents (only if not too many files)
-                                updated = await shared_drive_manager.update_existing_documents(
-                                    employee, business_context, max_updates=1
-                                )
-                                files_updated += len(updated)
-                                
-                                await db.commit()
-                                
-                                if created or updated:
-                                    print(f"  ✓ Employee {employee_name}: {len(created)} created, {len(updated)} updated")
-                                
-                                # Delay between employees to prevent blocking
-                                await asyncio.sleep(2)
-                                
-                            except Exception as e:
-                                print(f"  ✗ Error processing shared drive for employee {employee_id} ({employee_name}): {e}")
-                                import traceback
-                                traceback.print_exc()
-                                await db.rollback()
-                                # Continue with next employee even if one fails
-                                await asyncio.sleep(1)
+                                try:
+                                    # Generate new documents (AI decides what to create, limited to 1 per cycle)
+                                    created = await shared_drive_manager.generate_documents_for_employee(
+                                        employee, business_context, max_documents=1
+                                    )
+                                    files_created += len(created)
+                                    
+                                    # Small delay to prevent overwhelming the system
+                                    await asyncio.sleep(1)
+                                    
+                                    # Update existing documents (only if not too many files)
+                                    updated = await shared_drive_manager.update_existing_documents(
+                                        employee, business_context, max_updates=1
+                                    )
+                                    files_updated += len(updated)
+                                    
+                                    await db.commit()
+                                    
+                                    if created or updated:
+                                        print(f"  ✓ Employee {employee_name}: {len(created)} created, {len(updated)} updated")
+                                    
+                                    # Delay between employees to prevent blocking
+                                    await asyncio.sleep(2)
+                                    
+                                except Exception as e:
+                                    print(f"  ✗ Error processing shared drive for employee {employee_id} ({employee_name}): {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    await db.rollback()
+                                    # Continue with next employee even if one fails
+                                    await asyncio.sleep(1)
+                            
+                            if files_created > 0 or files_updated > 0:
+                                print(f"📁 Shared drive updated: {files_created} created, {files_updated} updated")
+                            elif first_run:
+                                print(f"📁 Shared drive background task started (processed {num_to_process} employees)")
+                        else:
+                            print("⚠️  No active employees found for shared drive update")
+                
+                # Use retry logic for database operations
+                await retry_on_lock(update_shared_drive, max_retries=3, initial_delay=1.0)
                         
-                        if files_created > 0 or files_updated > 0:
-                            print(f"📁 Shared drive updated: {files_created} created, {files_updated} updated")
-                        elif first_run:
-                            print(f"📁 Shared drive background task started (processed {num_to_process} employees)")
-                    else:
-                        print("⚠️  No active employees found for shared drive update")
-                        
+            except OperationalError as e:
+                if "database is locked" in str(e):
+                    print(f"❌ Shared drive update failed after retries (database locked)")
+                else:
+                    print(f"❌ Error updating shared drive: {e}")
+                    import traceback
+                    traceback.print_exc()
             except Exception as e:
                 print(f"❌ Error updating shared drive: {e}")
                 import traceback
@@ -2863,20 +2892,37 @@ Return ONLY the termination reason text, nothing else."""
         """Background task to manage employee hiring and firing every 30-60 seconds."""
         print("👥 Starting employee management background task (every 30-60 seconds)...")
         import random
+        from database.database import retry_on_lock
+        from sqlalchemy.exc import OperationalError
         
         # Wait a bit on startup to let system stabilize
         await asyncio.sleep(10)
         
         while self.running:
             try:
-                async with async_session_maker() as manage_db:
-                    business_context = await self.get_business_context(manage_db)
+                async def manage_employees():
+                    async with async_session_maker() as manage_db:
+                        try:
+                            business_context = await self.get_business_context(manage_db)
+                            
+                            print(f"🔄 Running employee management background task...")
+                            await self._manage_employees(manage_db, business_context)
+                            await manage_db.commit()
+                            print(f"✅ Employee management background task completed")
+                        except Exception as e:
+                            await manage_db.rollback()
+                            raise
+                
+                # Use retry logic for database operations
+                await retry_on_lock(manage_employees, max_retries=3, initial_delay=1.0)
                     
-                    print(f"🔄 Running employee management background task...")
-                    await self._manage_employees(manage_db, business_context)
-                    await manage_db.commit()
-                    print(f"✅ Employee management background task completed")
-                    
+            except OperationalError as e:
+                if "database is locked" in str(e):
+                    print(f"❌ Employee management failed after retries (database locked)")
+                else:
+                    print(f"❌ Error in employee management background task: {e}")
+                    import traceback
+                    traceback.print_exc()
             except Exception as e:
                 print(f"❌ Error in employee management background task: {e}")
                 import traceback
@@ -2884,11 +2930,26 @@ Return ONLY the termination reason text, nothing else."""
             
             # Also manage project capacity in the same task
             try:
-                async with async_session_maker() as project_db:
-                    print(f"🔄 Running project capacity management...")
-                    await self._manage_project_capacity(project_db)
-                    await project_db.commit()
-                    print(f"✅ Project capacity management completed")
+                async def manage_projects():
+                    async with async_session_maker() as project_db:
+                        try:
+                            print(f"🔄 Running project capacity management...")
+                            await self._manage_project_capacity(project_db)
+                            await project_db.commit()
+                            print(f"✅ Project capacity management completed")
+                        except Exception as e:
+                            await project_db.rollback()
+                            raise
+                
+                # Use retry logic for database operations
+                await retry_on_lock(manage_projects, max_retries=3, initial_delay=1.0)
+            except OperationalError as e:
+                if "database is locked" in str(e):
+                    print(f"❌ Project management failed after retries (database locked)")
+                else:
+                    print(f"❌ Error in project capacity management: {e}")
+                    import traceback
+                    traceback.print_exc()
             except Exception as e:
                 print(f"❌ Error in project capacity management: {e}")
                 import traceback

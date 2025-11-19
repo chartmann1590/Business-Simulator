@@ -3,9 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Employee, BirthdayCelebration, Activity, Notification
 from sqlalchemy import select, func
 from datetime import datetime, timedelta
-from config import now as local_now
+from config import now as local_now, get_timezone
 import random
 import json
+
+def ensure_timezone_aware(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware, adding default timezone if naive."""
+    if dt.tzinfo is None:
+        # If datetime is naive, add the configured timezone
+        return get_timezone().localize(dt)
+    return dt
 
 class BirthdayManager:
     def __init__(self, db: AsyncSession):
@@ -31,7 +38,7 @@ class BirthdayManager:
         """Create a birthday celebration for an employee and organize a party in breakroom."""
         from engine.movement_system import update_employee_location
         from employees.room_assigner import ROOM_BREAKROOM
-        today = local_now()
+        today = ensure_timezone_aware(local_now())
         
         # Check if we already celebrated today
         result = await self.db.execute(
@@ -46,7 +53,9 @@ class BirthdayManager:
         # Calculate age (rough estimate based on hired_at)
         age = 25  # Default age
         if employee.hired_at:
-            years_employed = (today - employee.hired_at).days / 365.25
+            # Ensure hired_at is timezone-aware for comparison
+            hired_at_aware = ensure_timezone_aware(employee.hired_at)
+            years_employed = (today - hired_at_aware).days / 365.25
             age = int(25 + years_employed)
         
         # Get 14 employees + birthday person = 15 total for the party
@@ -157,7 +166,7 @@ class BirthdayManager:
     async def get_upcoming_birthdays(self, days: int = 7) -> List[dict]:
         """Get employees with birthdays in the next N days. Excludes terminated employees."""
         from datetime import timezone
-        today = local_now()
+        today = ensure_timezone_aware(local_now())
         upcoming = []
         
         result = await self.db.execute(
@@ -173,11 +182,12 @@ class BirthdayManager:
         for emp in employees:
             # Create a date for this year
             try:
-                # Create timezone-aware datetime
-                birthday_this_year = datetime(today.year, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+                # Create timezone-aware datetime with explicit timezone
+                tz = today.tzinfo if today.tzinfo else get_timezone()
+                birthday_this_year = tz.localize(datetime(today.year, emp.birthday_month, emp.birthday_day))
                 # If birthday already passed this year, use next year
                 if birthday_this_year < today:
-                    birthday_this_year = datetime(today.year + 1, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+                    birthday_this_year = tz.localize(datetime(today.year + 1, emp.birthday_month, emp.birthday_day))
                 
                 days_until = (birthday_this_year.date() - today.date()).days
                 if 0 <= days_until <= days:
@@ -186,8 +196,9 @@ class BirthdayManager:
                         "days_until": days_until,
                         "date": birthday_this_year
                     })
-            except ValueError:
-                # Invalid date (e.g., Feb 30)
+            except (ValueError, AttributeError) as e:
+                # Invalid date (e.g., Feb 30) or timezone issue
+                print(f"⚠️  Error processing birthday for {emp.name}: {e}")
                 continue
         
         return sorted(upcoming, key=lambda x: x["days_until"])
@@ -195,7 +206,7 @@ class BirthdayManager:
     async def get_scheduled_parties(self) -> List[dict]:
         """Get all scheduled birthday parties with room information."""
         from datetime import datetime, timedelta
-        today = local_now()
+        today = ensure_timezone_aware(local_now())
         today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
         week_from_now = today_start + timedelta(days=7)
         
@@ -250,17 +261,18 @@ class BirthdayManager:
         if not employee.birthday_month or not employee.birthday_day:
             return None
         
-        today = local_now()
+        today = ensure_timezone_aware(local_now())
         today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = today_start + timedelta(days=90)
         
         try:
-            # Calculate birthday date for this year
-            birthday_this_year = datetime(today.year, employee.birthday_month, employee.birthday_day, tzinfo=today.tzinfo)
+            # Calculate birthday date for this year with proper timezone
+            tz = today.tzinfo if today.tzinfo else get_timezone()
+            birthday_this_year = tz.localize(datetime(today.year, employee.birthday_month, employee.birthday_day))
             
             # If birthday already passed this year, use next year
             if birthday_this_year < today_start:
-                birthday_this_year = datetime(today.year + 1, employee.birthday_month, employee.birthday_day, tzinfo=today.tzinfo)
+                birthday_this_year = tz.localize(datetime(today.year + 1, employee.birthday_month, employee.birthday_day))
             
             # Only create meetings for birthdays within the date range
             if birthday_this_year > end_date:
@@ -400,9 +412,10 @@ class BirthdayManager:
         from database.models import Meeting
         from employees.room_assigner import ROOM_BREAKROOM
         
-        today = local_now()
+        today = ensure_timezone_aware(local_now())
         today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = today_start + timedelta(days=days_ahead)
+        tz = today.tzinfo if today.tzinfo else get_timezone()
         
         # Get all active employees with birthdays (exclude terminated employees)
         # Use simpler query - just check status and birthday fields
@@ -445,16 +458,16 @@ class BirthdayManager:
             if processed % 50 == 0:
                 print(f"  📊 Processed {processed}/{len(employees)} employees...")
             try:
-                # Calculate birthday date for this year
+                # Calculate birthday date for this year with proper timezone
                 try:
-                    birthday_this_year = datetime(today.year, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+                    birthday_this_year = tz.localize(datetime(today.year, emp.birthday_month, emp.birthday_day))
                 except ValueError:
                     errors += 1
                     continue
                 
                 # If birthday already passed this year, use next year
                 if birthday_this_year < today_start:
-                    birthday_this_year = datetime(today.year + 1, emp.birthday_month, emp.birthday_day, tzinfo=today.tzinfo)
+                    birthday_this_year = tz.localize(datetime(today.year + 1, emp.birthday_month, emp.birthday_day))
                 
                 # Only create meetings for birthdays within the date range
                 birthday_date = birthday_this_year.date()

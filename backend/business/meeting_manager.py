@@ -4,6 +4,7 @@ Meeting Manager - Handles meeting generation, scheduling, and live meeting trans
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database.models import Employee, Meeting
+from database.database import safe_commit
 from datetime import datetime, timedelta
 import random
 import json
@@ -157,7 +158,7 @@ class MeetingManager:
             self.db.add(meeting)
             meetings_created += 1
         
-        await self.db.commit()
+        await safe_commit(self.db)
         return meetings_created
     
     async def generate_meetings_for_date_range(self, start_date: datetime, end_date: datetime) -> int:
@@ -279,7 +280,7 @@ class MeetingManager:
             current_date += timedelta(days=1)
             current_date = current_date.replace(hour=9, minute=0, second=0, microsecond=0)
         
-        await self.db.commit()
+        await safe_commit(self.db)
         return meetings_created
     
     async def generate_in_progress_meeting(self) -> Optional[Meeting]:
@@ -362,11 +363,11 @@ class MeetingManager:
         )
         
         self.db.add(meeting)
-        await self.db.commit()
+        await safe_commit(self.db)
         
         # Generate initial live content
         await self._generate_live_meeting_content(meeting)
-        await self.db.commit()
+        await safe_commit(self.db)
         
         return meeting
     
@@ -590,7 +591,7 @@ Respond in JSON format:
             # CRITICAL: Refresh each meeting to ensure changes are tracked
             for meeting in in_progress_meetings:
                 await self.db.refresh(meeting)
-            await self.db.commit()
+            await safe_commit(self.db)
             # Refresh again after commit to verify
             for meeting in in_progress_meetings:
                 await self.db.refresh(meeting)
@@ -655,6 +656,9 @@ Respond in JSON format:
                     should_update = True
             
             if should_update:
+                # Store meeting info before try block to avoid accessing session after rollback
+                meeting_id = meeting.id
+                meeting_title = meeting.title
                 try:
                     # Refresh meeting to get latest state
                     await self.db.refresh(meeting)
@@ -670,7 +674,7 @@ Respond in JSON format:
                     metadata["last_content_update"] = now.isoformat()
                     meeting.meeting_metadata = metadata
                     # Commit the metadata update first
-                    await self.db.commit()
+                    await safe_commit(self.db)
                     
                     # Now generate content (which will also commit and update last_content_update)
                     await self._generate_live_meeting_content(meeting)
@@ -683,13 +687,25 @@ Respond in JSON format:
                     if "last_content_update" not in final_metadata:
                         final_metadata["last_content_update"] = local_now().isoformat()
                         meeting.meeting_metadata = final_metadata
-                        await self.db.commit()
+                        await safe_commit(self.db)
                     
-                    print(f"✅ Generated live content for meeting {meeting.id}: {meeting.title}")
+                    print(f"✅ Generated live content for meeting {meeting_id}: {meeting_title}")
                 except Exception as e:
-                    print(f"❌ Error generating live content for meeting {meeting.id}: {e}")
                     import traceback
-                    traceback.print_exc()
+                    from sqlalchemy.exc import OperationalError, PendingRollbackError
+                    
+                    error_msg = str(e).lower()
+                    if "database is locked" in error_msg or "locked" in error_msg:
+                        print(f"⚠️  Database locked while generating live content for meeting {meeting_id}, will retry later")
+                    else:
+                        print(f"❌ Error generating live content for meeting {meeting_id}: {e}")
+                        traceback.print_exc()
+                    
+                    # Rollback the session to recover from the error
+                    try:
+                        await self.db.rollback()
+                    except Exception as rollback_error:
+                        print(f"⚠️  Error during rollback: {rollback_error}")
         
         # Update meetings that should be completed (both in_progress and scheduled that have passed)
         result = await self.db.execute(
@@ -785,7 +801,7 @@ Respond in JSON format:
                         from sqlalchemy.orm.attributes import flag_modified
                         flag_modified(meeting, "meeting_metadata")
         
-        await self.db.commit()
+        await safe_commit(self.db)
     
     async def _generate_meeting_closing(self, meeting: Meeting):
         """Generate closing sequence: organizer summary, thank you, and attendee goodbyes."""
@@ -1015,7 +1031,7 @@ Write only the goodbye message, nothing else."""
         flag_modified(meeting, "live_transcript")
         
         # Commit the closing sequence
-        await self.db.commit()
+        await safe_commit(self.db)
         print(f"✅ Generated closing sequence for meeting {meeting.id} with {len(live_messages)} total messages")
     
     async def _generate_live_meeting_content(self, meeting: Meeting):
@@ -1519,7 +1535,7 @@ Write only the message, nothing else."""
         flag_modified(meeting, "live_transcript")
         
         # Commit immediately to ensure changes are saved
-        await self.db.commit()
+        await safe_commit(self.db)
         
         # Verify the commit worked by refreshing
         await self.db.refresh(meeting)

@@ -1,39 +1,49 @@
 """Migration script to add performance_award_wins field to employees table."""
 import asyncio
-import aiosqlite
 import os
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
 
 async def migrate_database():
     """Add performance_award_wins field to employees table if it doesn't exist."""
-    # Database is in the backend directory
-    db_path = os.path.join(os.path.dirname(__file__), "office.db")
+    # Get database URL from environment or use default
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
+    )
     
-    if not os.path.exists(db_path):
-        print(f"Database not found at {db_path}")
-        return
+    # Create async engine
+    engine = create_async_engine(database_url, echo=False)
     
-    async with aiosqlite.connect(db_path) as db:
-        # Check if column exists
-        cursor = await db.execute("PRAGMA table_info(employees)")
-        columns = await cursor.fetchall()
-        column_names = [col[1] for col in columns]
-        
-        print(f"Existing columns: {column_names}")
-        
-        # Add column if it doesn't exist
-        if 'performance_award_wins' not in column_names:
-            print("Adding performance_award_wins column...")
-            await db.execute("ALTER TABLE employees ADD COLUMN performance_award_wins INTEGER DEFAULT 0")
-            await db.commit()
-            print("[OK] Added performance_award_wins column")
-        else:
-            print("[OK] performance_award_wins column already exists")
+    try:
+        async with engine.begin() as conn:
+            # Check if column exists using PostgreSQL information_schema
+            result = await conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'employees'
+            """))
+            column_rows = result.fetchall()
+            column_names = [row[0] for row in column_rows]
+            
+            print(f"Existing columns: {column_names}")
+            
+            # Add column if it doesn't exist
+            if 'performance_award_wins' not in column_names:
+                print("Adding performance_award_wins column...")
+                await conn.execute(text("ALTER TABLE employees ADD COLUMN performance_award_wins INTEGER DEFAULT 0"))
+                print("[OK] Added performance_award_wins column")
+            else:
+                print("[OK] performance_award_wins column already exists")
         
         print("\nMigration completed!")
+    except Exception as e:
+        print(f"Error during migration: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(migrate_database())
-
-
-
-

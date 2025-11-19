@@ -1,6 +1,6 @@
 import EmployeeAvatar from './EmployeeAvatar'
 
-function OfficeLayout({ rooms, employees, pets = [], onEmployeeClick, onRoomClick }) {
+function OfficeLayout({ rooms, employees, pets = [], onEmployeeClick, onRoomClick, onScreenView }) {
   // Generate random positions for employees within a room
   const getEmployeePosition = (employeeIndex, totalInRoom) => {
     // Distribute employees evenly across the room
@@ -118,6 +118,7 @@ function OfficeLayout({ rooms, employees, pets = [], onEmployeeClick, onRoomClic
                   employee={employee}
                   position={getEmployeePosition(index, roomEmployees.length)}
                   onEmployeeClick={onEmployeeClick}
+                  onScreenView={onScreenView}
                 />
               ))}
               

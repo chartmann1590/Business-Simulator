@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import OfficeLayout from '../components/OfficeLayout'
 import RoomDetailModal from '../components/RoomDetailModal'
+import EmployeeScreenModal from '../components/EmployeeScreenModal'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 // Animated number component
@@ -86,6 +87,7 @@ function OfficeView() {
   const [pets, setPets] = useState([])
   const [birthdayParties, setBirthdayParties] = useState([])
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([])
+  const [screenViewEmployee, setScreenViewEmployee] = useState(null)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const audioContextRef = useRef(null)
@@ -361,6 +363,17 @@ function OfficeView() {
       playSound('click')
     }
   }
+
+  const handleScreenView = (employee) => {
+    setScreenViewEmployee(employee)
+    if (soundEnabled) {
+      playSound('click')
+    }
+  }
+
+  const handleCloseScreenView = () => {
+    setScreenViewEmployee(null)
+  }
   
   const handleCloseRoomModal = () => {
     setSelectedRoom(null)
@@ -500,6 +513,7 @@ function OfficeView() {
         pets={pets.filter(pet => pet.floor === selectedFloor)}
         onEmployeeClick={handleEmployeeClick}
         onRoomClick={handleRoomClick}
+        onScreenView={handleScreenView}
       />
       
       {/* Birthday Parties Section */}
@@ -658,7 +672,17 @@ function OfficeView() {
         isOpen={!!selectedRoom}
         onClose={handleCloseRoomModal}
         onEmployeeClick={handleEmployeeClick}
+        onScreenView={handleScreenView}
       />
+
+      {/* Employee Screen View Modal */}
+      {screenViewEmployee && (
+        <EmployeeScreenModal
+          employeeId={screenViewEmployee.id}
+          isOpen={!!screenViewEmployee}
+          onClose={handleCloseScreenView}
+        />
+      )}
       
     </div>
   )

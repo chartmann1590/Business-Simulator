@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Financial Dashboard</title>
+  <style>
+    /* Grid Settings */
+    table {
+      border-collapse: collapse;
+    }
+    
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+    
+    th {
+      background: #366092;
+      color: white;
+      font-weight: bold;
+    }
+    
+    /* Header Row Styles */
+    tr.header-row {
+      background: #f2f2f2;
+      font-size: 11pt;
+      text-align: left;
+    }
+    
+    /* Totals Row Style */
+    tr.totals-row {
+      background: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    /* Font and Formatting */
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 11pt;
+      margin: 0;
+    }
+    
+    /* Color Coding */
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
+    
+    tr:hover {
+      background-color: #cccccc;
+    }
+  </style>
+</head>
+<body>
+  <table style="width:100%">
+    <tr class="header-row">
+      <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+    </tr>
+    <tr>
+      <th>Department</th>
+      <th>Employee Count</th>
+      <th>Average Salary</th>
+    </tr>
+    <tr class="header-row">
+      <th>Executive</th>
+      <td>1</td>
+      <td>$123,456.78</td>
+    </tr>
+    <tr class="data-row" style="background: white;">
+      <td>Product</td>
+      <td>43</td>
+      <td>$55,234.56</td>
+    </tr>
+    <tr class="data-row">
+      <td>Engineering</td>
+      <td>42</td>
+      <td>$58,987.65</td>
+    </tr>
+    <tr class="data-row" style="background: #f2f2f2;">
+      <td>Sales</td>
+      <td>50</td>
+      <td>$62,456.78</td>
+    </tr>
+    <tr class="data-row">
+      <td>Operations</td>
+      <td>51</td>
+      <td>$71,234.56</td>
+    </tr>
+    <tr class="data-row" style="background: #f2f2f2;">
+      <td>Marketing</td>
+      <td>43</td>
+      <td>$78,987.65</td>
+    </tr>
+    <tr class="data-row">
+      <td HR Department</td>
+      <td>42</td>
+      <td>$85,456.78</td>
+    </tr>
+    <tr class="data-row" style="background: #f2f2f2;">
+      <td Administration</td>
+      <td>45</td>
+      <td>$92,987.65</td>
+    </tr>
+    <tr class="data-row">
+      <td Design</td>
+      <td>52</td>
+      <td>$100,234.56</td>
+    </tr>
+    <tr class="data-row" style="background: #f2f2f2;">
+      <td IT Department</td>
+      <td>40</td>
+      <td>$108,987.65</td>
+    </tr>
+  </table>
+
+<!-- Additional tables and data can be added here -->
+
+  <!-- Footer Section -->
+  <footer style="clear: both; text-align: center;">
+    <p>Data Source: Financial Dashboard</p>
+    <p>Last Updated: [Insert Date]</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  /* 
+    * Create a professional grid with crisp borders (1px solid #d0d0d0)
+    */
+  table {
+    border-collapse: collapse;
+  }
+
+  /* 
+    * Header row: Deep blue background (#366092), white bold text, 11pt Arial
+    */
+  th, td {
+    padding: 8px;
+    border: 1px solid #d0d0d0;
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+    color: black;
+
+    /* 
+      * Data rows: White background with alternating light gray (#f2f2f2) for zebra striping
+      */
+  }
+
+  tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+
+  /* 
+    * Totals row: Light blue background (#e7f3ff), bold text, double border on top
+    */
+  th:after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    width: 100%;
+    background-color: #e7f3ff;
+  }
+
+  /* 
+    * Font: Arial, 11pt throughout
+    */
+  /* font-family: Arial; */
+  /* font-size: 11pt; */
+
+  /* 
+    * Cell padding: 8px for comfortable reading
+    */
+  td {
+    padding: 8px;
+  }
+  
+  /* 
+    * Text alignment: Left for text, Right for numbers, Center for dates
+    */
+  th {
+    text-align: left;
+  }
+  td {
+    text-align: right;
+  }
+
+  /* 
+    * Number formatting: Currency with $ and commas, percentages with %, proper decimals
+    */
+  .currency {
+    min-width: 8ch; /* 80 characters */
+    white-space: nowrap;
+  }
+
+  /* 
+    * Color coding: Green for positive, red for negative, blue for totals
+    */
+  .positive {
+    color: green;
+  }
+  .negative {
+    color: red;
+  }
+  .total {
+    background-color: #ADD8E6; /* light blue */
+    border-bottom: 1px solid black; 
+    font-weight: bold;
+  }
+
+</style>
+</head>
+<body>
+
+<table>
+  <tr>
+    <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td>
+  </tr>
+  
+  <!-- 
+    * Title row
+  -->
+  <tr>
+    <th colspan="10">Summary</th>
+  </tr>
+
+  <!-- 
+    * Header row: Departments and metrics
+  -->
+  <tr style="background-color: #366092; color: white; font-weight: bold; padding: 8px;">
+    <th>Department</th>
+    <th>Active Projects</th>
+    <th>Total Employees</th>
+    <th>Revenue</th>
+    <th>Profit</th>
+    <th>Expenses</th>
+    <th>Margins</th>
+    <th>Variance</th>
+  </tr>
+
+  <!-- 
+    * Data rows: Business metrics
+  -->
+  <tr>
+    <td class="positive">Administration</td>
+    <td>53</td>
+    <td>871</td>
+    <td class="currency">$9,982,143.05</td>
+    <td class="currency">$7,770,687.64</td>
+    <td class="currency">$2,211,455.41</td>
+    <td class="positive">77.85%</td>
+    <td class="negative">$-440,767.77</td>
+  </tr>
+
+  <tr>
+    <td class="positive">Product</td>
+    <td>50</td>
+    <td>871</td>
+    <td class="currency">$9,982,143.05</td>
+    <td class="currency">$7,770,687.64</td>
+    <td class="currency">$2,211,455.41</td>
+    <td class="positive">77.85%</td>
+    <td class="negative">$-440,767.77</td>
+  </tr>
+
+  <!-- 
+    * Summary table
+  -->
+  <table>
+    <tr>
+      <th>Department</th>
+      <th>Active Projects</th>
+      <th>Total Employees</th>
+      <th>Revenue</th>
+      <th>Profit</th>
+      <th>Expenses</th>
+      <th>Margins</th>
+      <th>Variance</th>
+    </tr>
+
+    <!-- 
+      * Department Performance
+    -->
+    <tr>
+      <td class="positive">Executive</td>
+      <td>1</td>
+      <td>871</td>
+      <td class="currency">$9,982,143.05</td>
+      <td class="currency">$7,770,687.64</td>
+      <td class="currency">$2,211,455.41</td>
+      <td class="positive">77.85%</td>
+      <td class="negative">$-440,767.77</td>
+    </tr>
+
+    <!-- 
+      * Project Performance
+    -->
+    <tr>
+      <td>Strategic Partnership Development</td>
+      <td class="positive">2</td>
+      <td class="currency">$81,976.89</td>
+      <td class="negative">$-18,401.15</td>
+      <td class="positive">77.85%</td>
+      <td class="negative">$12,674.86</td>
+    </tr>
+
+    <!-- 
+      * Product Innovation Program
+    -->
+    <tr>
+      <td>Product Innovation Program</td>
+      <td class="positive">1</td>
+      <td class="currency">$72,038.83</td>
+      <td class="negative">$-71,322.41</td>
+      <td class="positive">77.85%</td>
+      <td class="negative">$8,716.58</td>
+    </tr>
+
+    <!-- 
+      * Customer Experience Enhancement
+    -->
+    <tr>
+      <td>Customer Experience Enhancement</td>
+      <td class="positive">2</td>
+      <td class="currency">$31,257.95</td>
+      <td class="negative">$-19,552.08</td>
+      <td class="positive">77.85%</td>
+      <td class="negative">$12,705.13</td>
+    </tr>
+
+  </table>
+
+  <!-- 
+    * Totals row
+  -->
+  <tr style="background-color: #e7f3ff; border-bottom: 1px solid black;">
+    <th colspan="8">Totals</th>
+  </tr>
+
+  <tr>
+    <td class="currency">$9,982,143.05</td>
+    <td class="currency">$7,770,687.64</td>
+    <td class="currency">$2,211,455.41</td>
+    <td class="positive">77.85%</td>
+    <td class="negative">$-440,767.77</td>
+  </tr>
+
+  <!-- 
+    * Footer
+  -->
+  <tr style="font-size: 9pt; padding-top: 8px;">
+    <td colspan="10">
+      Business Dashboard - Generated on February 28th.
+      All data is subject to change without notice and may not be up-to-date. 
+    </td>
+  </tr>
+
+</table>
+</body>
+</html>

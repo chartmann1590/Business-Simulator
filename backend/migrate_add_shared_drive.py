@@ -1,31 +1,36 @@
 """Migration script to add shared_drive_files and shared_drive_file_versions tables."""
 import asyncio
-import aiosqlite
 import os
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
 
 async def migrate_database():
     """Add shared_drive_files and shared_drive_file_versions tables if they don't exist."""
-    # Database is in the backend directory
-    db_path = os.path.join(os.path.dirname(__file__), "office.db")
+    # Get database URL from environment or use default
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
+    )
     
-    if not os.path.exists(db_path):
-        print(f"Database not found at {db_path}")
-        return
+    # Create async engine
+    engine = create_async_engine(database_url, echo=False)
     
-    async with aiosqlite.connect(db_path) as db:
-        # Check if shared_drive_files table exists
-        try:
-            cursor = await db.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='shared_drive_files'
-            """)
-            table_exists = await cursor.fetchone()
+    try:
+        async with engine.begin() as conn:
+            # Check if shared_drive_files table exists using PostgreSQL information_schema
+            result = await conn.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'shared_drive_files'
+            """))
+            table_exists = result.fetchone()
             
             if not table_exists:
                 print("Creating shared_drive_files table...")
-                await db.execute("""
+                await conn.execute(text("""
                     CREATE TABLE shared_drive_files (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id SERIAL PRIMARY KEY,
                         file_name TEXT NOT NULL,
                         file_type TEXT NOT NULL,
                         department TEXT,
@@ -43,33 +48,29 @@ async def migrate_database():
                         FOREIGN KEY (project_id) REFERENCES projects(id),
                         FOREIGN KEY (last_updated_by_id) REFERENCES employees(id)
                     )
-                """)
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_employee_id ON shared_drive_files(employee_id)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_project_id ON shared_drive_files(project_id)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_department ON shared_drive_files(department)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_file_type ON shared_drive_files(file_type)")
-                await db.commit()
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_employee_id ON shared_drive_files(employee_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_project_id ON shared_drive_files(project_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_department ON shared_drive_files(department)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_files_file_type ON shared_drive_files(file_type)"))
                 print("[OK] Created shared_drive_files table")
             else:
                 print("[OK] shared_drive_files table already exists")
-        except Exception as e:
-            print(f"Error creating shared_drive_files table: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Check if shared_drive_file_versions table exists
-        try:
-            cursor = await db.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='shared_drive_file_versions'
-            """)
-            table_exists = await cursor.fetchone()
+            
+            # Check if shared_drive_file_versions table exists
+            result = await conn.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'shared_drive_file_versions'
+            """))
+            table_exists = result.fetchone()
             
             if not table_exists:
                 print("Creating shared_drive_file_versions table...")
-                await db.execute("""
+                await conn.execute(text("""
                     CREATE TABLE shared_drive_file_versions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id SERIAL PRIMARY KEY,
                         file_id INTEGER NOT NULL,
                         version_number INTEGER NOT NULL,
                         content_html TEXT NOT NULL,
@@ -81,21 +82,21 @@ async def migrate_database():
                         FOREIGN KEY (file_id) REFERENCES shared_drive_files(id),
                         FOREIGN KEY (created_by_id) REFERENCES employees(id)
                     )
-                """)
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_file_id ON shared_drive_file_versions(file_id)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_version_number ON shared_drive_file_versions(file_id, version_number)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_created_by_id ON shared_drive_file_versions(created_by_id)")
-                await db.commit()
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_file_id ON shared_drive_file_versions(file_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_version_number ON shared_drive_file_versions(file_id, version_number)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_shared_drive_file_versions_created_by_id ON shared_drive_file_versions(created_by_id)"))
                 print("[OK] Created shared_drive_file_versions table")
             else:
                 print("[OK] shared_drive_file_versions table already exists")
-        except Exception as e:
-            print(f"Error creating shared_drive_file_versions table: {e}")
-            import traceback
-            traceback.print_exc()
         
         print("\nMigration completed!")
+    except Exception as e:
+        print(f"Error during migration: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(migrate_database())
-

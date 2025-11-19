@@ -31,8 +31,36 @@ A fully autonomous office simulation where AI employees make decisions, work on 
 
 - Python 3.10+
 - Node.js 18+ and npm
+- PostgreSQL 12+ installed and running
 - Ollama installed and running locally
 - Llama3.2 model downloaded in Ollama
+
+### Setting up PostgreSQL
+
+1. Install PostgreSQL:
+   - **Windows**: Download from https://www.postgresql.org/download/windows/
+   - **macOS**: `brew install postgresql`
+   - **Linux**: `sudo apt-get install postgresql` (Ubuntu/Debian) or `sudo yum install postgresql` (CentOS/RHEL)
+
+2. Start PostgreSQL service:
+   - **Windows**: Check Services panel, start "postgresql" service
+   - **macOS**: `brew services start postgresql`
+   - **Linux**: `sudo systemctl start postgresql`
+
+3. Setup the database:
+   ```bash
+   cd backend
+   python setup_postgresql.py
+   ```
+   
+   This will create the `office_db` database if it doesn't exist.
+
+4. (Optional) Migrate existing SQLite data:
+   If you have an existing SQLite database with data:
+   ```bash
+   cd backend
+   python migrate_data_sqlite_to_postgresql.py
+   ```
 
 ### Setting up Ollama
 
@@ -76,13 +104,19 @@ chmod +x setup.sh
    pip install -r backend/requirements.txt
    ```
 
-4. Seed the database:
+4. Setup PostgreSQL database:
+   ```bash
+   cd backend
+   python setup_postgresql.py
+   ```
+
+5. Seed the database:
    ```bash
    cd backend
    python seed.py
    ```
 
-5. Install frontend dependencies:
+6. Install frontend dependencies:
    ```bash
    cd frontend
    npm install
@@ -126,7 +160,7 @@ Create a `.env` file in the `backend` directory (optional):
 ```
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
-DATABASE_URL=sqlite+aiosqlite:///./office.db
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/office_db
 ```
 
 ## How It Works
@@ -252,7 +286,7 @@ All views update in real-time as the simulation runs via WebSocket.
 ## Architecture
 
 - **Backend**: FastAPI with async SQLAlchemy
-- **Database**: SQLite (can be easily switched to PostgreSQL)
+- **Database**: PostgreSQL 12+ (optimized with indexes and connection pooling)
 - **LLM**: Ollama API client
 - **Frontend**: React with Vite and Tailwind CSS
 - **Real-time**: WebSocket for live updates
@@ -267,8 +301,11 @@ All views update in real-time as the simulation runs via WebSocket.
 
 ### Database Issues
 
-- Delete `office.db` and re-run `seed.py` to reset
-- Check database path in configuration
+- Ensure PostgreSQL is running and accessible
+- Check database connection string in `.env` file
+- Verify database `office_db` exists (run `setup_postgresql.py` if needed)
+- Check PostgreSQL logs for connection errors
+- For performance issues, see [POSTGRESQL_OPTIMIZATIONS.md](POSTGRESQL_OPTIMIZATIONS.md)
 
 ### Frontend Not Updating
 
@@ -279,6 +316,8 @@ All views update in real-time as the simulation runs via WebSocket.
 ## Documentation
 
 For comprehensive documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
+
+For PostgreSQL optimization details, see [POSTGRESQL_OPTIMIZATIONS.md](POSTGRESQL_OPTIMIZATIONS.md)
 
 ## Starting a New Game
 

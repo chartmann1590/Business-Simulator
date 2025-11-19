@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import MeetingDetail from './MeetingDetail'
 import LiveMeetingView from './LiveMeetingView'
 import BirthdayDetail from './BirthdayDetail'
+import { formatTime, formatDateWithWeekday, formatDateLong, formatTimestamp } from '../utils/timezone'
 
 function CalendarView({ employees = [] }) {
   const [meetings, setMeetings] = useState([])
@@ -68,26 +69,14 @@ function CalendarView({ employees = [] }) {
   }
 
 
-  const formatTime = (timeString) => {
+  const formatTimeLocal = (timeString) => {
     if (!timeString) return ''
-    const date = new Date(timeString)
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    return formatTime(timeString)
   }
 
   const formatDate = (date) => {
     if (!date) return ''
-    if (typeof date === 'string') {
-      date = new Date(date)
-    }
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  }
-
-  const formatDateLong = (date) => {
-    if (!date) return ''
-    if (typeof date === 'string') {
-      date = new Date(date)
-    }
-    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    return formatDateWithWeekday(date)
   }
 
   const getDateRange = () => {
@@ -434,7 +423,7 @@ function CalendarView({ employees = [] }) {
                       </span>
                       <span className="flex items-center gap-1">
                         <span>🕐</span>
-                        {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
+                        {formatTimeLocal(meeting.start_time)} - {formatTimeLocal(meeting.end_time)}
                       </span>
                     </div>
                   ) : meeting.is_birthday ? (
@@ -448,7 +437,7 @@ function CalendarView({ employees = [] }) {
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <span>🕐</span>
-                        {formatTime(meeting.start_time)} - {formatTime(meeting.end_time)}
+                        {formatTimeLocal(meeting.start_time)} - {formatTimeLocal(meeting.end_time)}
                       </span>
                       <span className="flex items-center gap-1">
                         <span>👤</span>
@@ -510,13 +499,13 @@ function CalendarView({ employees = [] }) {
               key={index} 
               onClick={() => handleDayClick(day)}
               className={`border rounded-lg p-3 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors ${isToday ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}
-              title={`Click to view ${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}
+              title={`Click to view ${formatDateLong(day)}`}
             >
               <div className={`text-sm font-semibold mb-2 ${isToday ? 'text-blue-700' : 'text-gray-700'}`}>
-                {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                {formatDateWithWeekday(day).split(',')[0]}
               </div>
               <div className={`text-xs mb-3 ${isToday ? 'text-blue-600' : 'text-gray-500'}`}>
-                {day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {formatDateWithWeekday(day).split(', ')[1]}
               </div>
               <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                 {dayMeetings.slice(0, 3).map(meeting => (
@@ -529,7 +518,7 @@ function CalendarView({ employees = [] }) {
                   >
                     <div className="font-medium truncate">{meeting.title}</div>
                     {!meeting.is_birthday && (
-                      <div className="text-xs opacity-75">{formatTime(meeting.start_time)}</div>
+                      <div className="text-xs opacity-75">{formatTimeLocal(meeting.start_time)}</div>
                     )}
                   </div>
                 ))}
@@ -602,7 +591,7 @@ function CalendarView({ employees = [] }) {
                         ? 'bg-white border-gray-200' 
                         : 'bg-gray-50 border-gray-100'
                   }`}
-                  title={`Click to view ${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}
+                  title={`Click to view ${formatDateLong(day)}`}
                 >
                   <div className={`text-xs font-medium mb-1 ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
                     {day.getDate()}
@@ -618,7 +607,7 @@ function CalendarView({ employees = [] }) {
                         title={meeting.title}
                       >
                         <div className="truncate">
-                          {meeting.is_holiday ? '🎉' : meeting.is_birthday ? '🎂' : formatTime(meeting.start_time)}
+                          {meeting.is_holiday ? '🎉' : meeting.is_birthday ? '🎂' : formatTimeLocal(meeting.start_time)}
                         </div>
                       </div>
                     ))}
@@ -732,7 +721,7 @@ function CalendarView({ employees = [] }) {
                 end.setDate(end.getDate() + 6)
                 return `${formatDate(start)} - ${formatDate(end)}`
               })()}
-              {viewMode === 'month' && currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              {viewMode === 'month' && formatTimestamp(currentDate, { month: 'long', year: 'numeric' })}
             </div>
           </div>
 

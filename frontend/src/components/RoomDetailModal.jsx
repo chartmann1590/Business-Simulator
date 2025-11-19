@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import EmployeeAvatar from './EmployeeAvatar'
 import ChatBubble from './ChatBubble'
 
-function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick }) {
+function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick, onScreenView }) {
   const [conversations, setConversations] = useState([])
   const [currentMessageIndices, setCurrentMessageIndices] = useState({})
   const conversationIntervalRef = useRef(null)
@@ -275,24 +275,39 @@ function RoomDetailModal({ room, isOpen, onClose, onEmployeeClick }) {
               {roomEmployees.map((employee) => (
                 <div
                   key={employee.id}
-                  onClick={() => onEmployeeClick && onEmployeeClick(employee)}
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors"
+                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-white transition-colors group"
                 >
                   <img
                     src={employee.avatar_path || '/avatars/office_char_01_manager.png'}
                     alt={employee.name}
-                    className="w-10 h-10 rounded-full object-cover"
+                    onClick={() => onEmployeeClick && onEmployeeClick(employee)}
+                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
                     onError={(e) => {
                       e.target.src = '/avatars/office_char_01_manager.png'
                     }}
                   />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{employee.name}</div>
+                  <div className="flex-1 min-w-0" onClick={() => onEmployeeClick && onEmployeeClick(employee)}>
+                    <div className="text-sm font-medium text-gray-900 truncate cursor-pointer">{employee.name}</div>
                     <div className="text-xs text-gray-500 truncate">{employee.title}</div>
                     {employee.activity_state && (
                       <div className="text-xs text-gray-400 capitalize">{employee.activity_state}</div>
                     )}
                   </div>
+                  {employee.activity_state === 'working' && employee.status === 'active' && onScreenView && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onScreenView(employee)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-blue-600 hover:bg-blue-700 rounded text-white"
+                      title="View Screen"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

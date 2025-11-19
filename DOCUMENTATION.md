@@ -82,12 +82,15 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────────┐
-│              Database (SQLite)                          │
+│              Database (PostgreSQL)                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
 │  │Employees │  │ Projects │  │ Tasks    │  │Financial│ │
 │  └──────────┘  └──────────┘  └──────────┘  └─────────┘ │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │Activities│  │ Emails   │  │ Chats    │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │Indexes   │  │ Pooling  │  │Optimized │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -98,7 +101,7 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - Python 3.10+
 - FastAPI (Web framework)
 - SQLAlchemy 2.0 (Async ORM)
-- SQLite (Database)
+- PostgreSQL 12+ (Database with optimizations)
 - Ollama (Local LLM)
 - WebSockets (Real-time communication)
 
@@ -1788,22 +1791,39 @@ TIMEZONE=America/New_York
 
 **Timezone Configuration:**
 - `TIMEZONE`: The timezone for all timestamps, scheduled tasks, and background jobs (default: `America/New_York`)
+  - Backend: Set in `backend/.env` file
+  - Frontend: Set in `frontend/.env` file as `VITE_TIMEZONE` (fallback if API unavailable)
 - All timestamps, scheduled tasks, and background jobs run in the configured timezone
+- All dates and times are displayed in 12-hour format in the configured timezone
+- The frontend automatically fetches the timezone from the backend API at `/api/config/timezone`
 - Use standard timezone names (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`)
 - See [pytz timezone list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid timezone names
 
 ### Database Configuration
 
-The default database is SQLite (`office.db`). To use PostgreSQL:
+The project uses PostgreSQL as the primary database. The database is automatically optimized with indexes and connection pooling.
 
-1. Update `DATABASE_URL` in `.env`:
+1. **Setup PostgreSQL Database**:
+   ```bash
+   cd backend
+   python setup_postgresql.py
+   ```
+   This creates the `office_db` database if it doesn't exist.
+
+2. **Configure Database URL** in `.env`:
    ```env
-   DATABASE_URL=postgresql+asyncpg://user:password@localhost/dbname
+   DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/office_db
    ```
 
-2. Install PostgreSQL driver:
+3. **Database Optimizations**:
+   - Indexes are automatically created on database initialization
+   - Connection pooling is optimized for performance
+   - See [POSTGRESQL_OPTIMIZATIONS.md](../POSTGRESQL_OPTIMIZATIONS.md) for details
+
+4. **Migrate from SQLite** (if needed):
    ```bash
-   pip install asyncpg
+   cd backend
+   python migrate_data_sqlite_to_postgresql.py
    ```
 
 ### Simulation Settings
@@ -2006,10 +2026,13 @@ A Docker setup can be created with:
 **Problem**: Database errors, missing tables
 
 **Solutions**:
-- Delete `office.db` and re-run `seed.py`
-- Check database path in configuration
-- Verify SQLite file permissions
-- Check for database locks (close other connections)
+- Ensure PostgreSQL is running: `sudo systemctl status postgresql` (Linux) or check Services (Windows)
+- Verify database exists: `psql -U postgres -l` (should see `office_db`)
+- Run setup script: `cd backend && python setup_postgresql.py`
+- Check database connection string in `.env` file
+- Verify PostgreSQL user permissions
+- Check PostgreSQL logs for detailed error messages
+- For performance issues, see [POSTGRESQL_OPTIMIZATIONS.md](../POSTGRESQL_OPTIMIZATIONS.md)
 
 #### Frontend Not Updating
 
@@ -2093,6 +2116,10 @@ For issues and questions:
 ---
 
 *Last updated: January 2025*
+
+## Additional Resources
+
+- [PostgreSQL Optimizations Guide](POSTGRESQL_OPTIMIZATIONS.md) - Comprehensive guide to database performance optimizations
 
 ## Utility Scripts
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
+import { formatDateShortTime, formatDateTime } from '../utils/timezone'
 
 function ChatView({ chats, employees }) {
   const [selectedChat, setSelectedChat] = useState(null)
@@ -66,28 +67,24 @@ function ChatView({ chats, employees }) {
 
   // Format time to show actual date and time (never "just now")
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
+    if (!timestamp) return formatDateTime(new Date())
     
-    // Check if date is valid
+    const date = new Date(timestamp)
     if (isNaN(date.getTime())) {
-      return new Date().toLocaleString()
+      return formatDateTime(new Date())
     }
     
     // Always show full date and time
     const now = new Date()
-    const options = {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }
+    const dateYear = new Date(timestamp).getFullYear()
+    const currentYear = now.getFullYear()
     
     // Include year if different from current year
-    if (date.getFullYear() !== now.getFullYear()) {
-      options.year = 'numeric'
+    if (dateYear !== currentYear) {
+      return formatDateTime(timestamp)
     }
     
-    return date.toLocaleString([], options)
+    return formatDateShortTime(timestamp)
   }
 
   return (

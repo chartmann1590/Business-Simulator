@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Report</title>
+    <style>
+        /* White background with subtle shadows */
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 1-inch margins on all sides */
+        margin: 1in;
+
+        /* Times New Roman (12pt) for body, Calibri (11pt) for headers */
+        h1, h2, p {
+            font-size: 12pt;
+        }
+        h2 {
+            font-size: 11pt;
+        }
+
+        /* Black text (#000000) with proper contrast */
+        color: #000000;
+
+        /* Line height: 1.5 for readability */
+        line-height: 1.5;
+
+        /* Professional paragraph spacing (12pt between paragraphs) */
+        p {
+            margin-bottom: 1in;
+        }
+
+        /* Use bold for emphasis, italics for important notes */
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+
+        /* FANCY TITLE: Centered, 18pt, bold, Times New Roman, with decorative underline */
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            border-bottom: 4px solid #000000;
+            margin-bottom: 1in;
+        }
+
+        /* HEADER: Date, employee name, department, document classification */
+        .header {
+            margin-top: -0.5in;
+            padding-bottom: 0.5in;
+            border-bottom: 1px solid #000000;
+        }
+        .header p {
+            font-size: 12pt;
+        }
+
+        /* EXECUTIVE SUMMARY: 2-3 paragraphs summarizing key points */
+        .summary {
+            margin-top: -1in;
+            padding-bottom: 1.5in;
+        }
+
+        /* MAIN SECTIONS: 3-5 sections with clear headings (14pt, bold) */
+        .section {
+            margin-top: 1in;
+            border-top: 2px solid #000000;
+            padding-top: 0.5in;
+        }
+        h2.section {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        /* DATA SECTIONS: Include tables, lists, or formatted data */
+        .data {
+            margin-top: -1in;
+            padding-bottom: 1.5in;
+        }
+        table.data {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th.data, td.data {
+            border: 1px solid #000000;
+            padding: 0.25in;
+        }
+
+        /* CONCLUSION: Summary and recommendations */
+        .conclusion {
+            margin-top: -1in;
+            padding-bottom: 1.5in;
+        }
+
+        /* FOOTER: Page numbers, document version, confidentiality notice */
+        .footer {
+            margin-top: -1in;
+            padding-bottom: 0.5in;
+            border-top: 2px solid #000000;
+        }
+        .footer p {
+            font-size: 12pt;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <p>Date:</p>
+    <p>Employee Name:</p>
+    <p>Department:</p>
+    <p>Document Classification:</p>
+</div>
+
+<h1><u>BUSINESS REPORT</u></h1>
+
+<h2>EXECUTIVE SUMMARY</h2>
+<p>The business has experienced significant growth over the past quarter, with total revenue reaching $500,000.00 and total profit increasing by 15% compared to last year.</p>
+<p>The Operations department is responsible for managing our storage facilities, which are currently occupied by 23 employees. Our active projects include <strong>Project Alpha</strong>, a new storage facility implementation, and <strong>Project Beta</strong>, a system upgrade to improve efficiency.</p>
+
+<h2>Main Sections</h2>
+<h2 class="section">EMPLOYEE INFORMATION</h2>
+<p>Name: Juliana Santos
+Title: Storage Coordinator
+Role: Employee
+Department: Operations</p>
+
+<table class="data">
+    <tr><th>Employee Information</th></tr>
+    <tr><td>Name:</td><td>Juliana Santos</td></tr>
+    <tr><td>Title:</td><td>Storage Coordinator</td></tr>
+    <tr><td>Role:</td><td>Employee</td></tr>
+    <tr><td>Department:</td><td>Operations</td></tr>
+</table>
+
+<h2 class="section">BUSINESS METRICS</h2>
+<p>Total Revenue: $500,000.00
+Total Profit: $442,500.00
+Profit Margin: 88.50%
+Total Expenses: $57,500.00
+Active Projects: 3
+Total Employees: 23</p>
+
+<table class="data">
+    <tr><th>Business Metrics</th></tr>
+    <tr><td>Total Revenue:</td><td>$500,000.00</td></tr>
+    <tr><td>Total Profit:</td><td>$442,500.00</td></tr>
+    <tr><td>Profit Margin:</td><td>88.50%</td></tr>
+    <tr><td>Total Expenses:</td><td>$57,500.00</td></tr>
+    <tr><td>Active Projects:</td><td>3</td></tr>
+    <tr><td>Total Employees:</td><td>23</td></tr>
+</table>
+
+<h2 class="section">DEPARTMENT DISTRIBUTION</h2>
+<p>Executive: 1 employees
+Engineering: 6 employees
+Operations: 4 employees
+Finance: 1 employees
+Product: 2 employees</p>
+
+<table class="data">
+    <tr><th>Department Distribution</th></tr>
+    <tr><td>Executive:</td><td>1</td></tr>
+    <tr><td>Engineering:</td><td>6</td></tr>
+    <tr><td>Operations:</td><td>4</td></tr>
+    <tr><td>Finance:</td><td>1</td></tr>
+    <tr><td>Product:</td><td>2</td></tr>
+</table>
+
+<h2 class="section">CRITICAL REQUIREMENTS</h2>
+<p>The following are critical requirements for the business:
+<ul>
+<li>Document Type: Create a realistic business document based on the employee's role.</li>
+<li>Premium Stylings: Make it look expensive and professional with white background, subtle shadows, 1-inch margins, Times New Roman (12pt), Calibri (11pt) for headers, black text (#000000), line height: 1.5, professional paragraph spacing, bold for emphasis, italics for important notes.</li>
+<li>Document Structure: Comprehensive report with FANCY TITLE, HEADER, EXECUTIVE SUMMARY, MAIN SECTIONS, DATA SECTIONS, CONCLUSION, FOOTER.</li>
+<li>Content Requirements: Include ACTUAL numbers from the business context (revenue, profit, employee counts, project budgets), reference SPECIFIC projects by name and their actual status/budget, mention REAL departments and their employee counts, use ACTUAL profit margins, revenue figures, expense data, include realistic dates, percentages, and calculations.</li>
+<li>Make it FANCY: Add professional formatting (tables, bullet points, numbered lists), include data visualizations described in text (e.g., "Revenue increased 15% QoQ"), use professional language with industry-specific terms, add executive-level insights and strategic recommendations, include realistic business scenarios and case studies.</li>
+</ul>
+
+<h2 class="section">CONCLUSION</h2>
+<p>In conclusion, the business has demonstrated strong performance over the past quarter. We recommend continuing to focus on optimizing operations and investing in new technologies to drive growth and innovation. Additionally, we suggest implementing a comprehensive data analytics system to gain deeper insights into our business performance.</p>
+
+<h2 class="section">FOOTER</h2>
+<p Page Numbers: 1-2
+Document Version: 1.0
+Confidentiality Notice: This document contains confidential information. It is intended for internal use only and should not be shared with external parties without explicit permission.</p>
+
+    </body>
+</html>

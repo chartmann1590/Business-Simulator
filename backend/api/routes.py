@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, or_
+from sqlalchemy import select, func, desc, or_, case
 from sqlalchemy.orm import selectinload
 from database.database import get_db
 from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion
@@ -10,7 +10,7 @@ from business.goal_system import GoalSystem
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from config import now as local_now
+from config import now as local_now, TIMEZONE_NAME
 
 router = APIRouter()
 
@@ -65,25 +65,28 @@ async def get_employees(db: AsyncSession = Depends(get_db)):
     )
     review_counts = {row.employee_id: row.review_count for row in review_count_result.all()}
     
-    # Get latest review info for each employee (using subquery to get the most recent review)
-    # Order by created_at as fallback if review_date is None
-    all_reviews_result = await db.execute(
-        select(EmployeeReview)
-        .order_by(desc(EmployeeReview.created_at))
-    )
-    all_reviews = all_reviews_result.scalars().all()
+    # Optimized: Get latest review info using window function (PostgreSQL-specific)
+    # This is much more efficient than loading all reviews and processing in Python
+    from sqlalchemy import text
     
-    # Create maps for latest review information (only keep the first/latest for each employee)
+    # Use window function with ROW_NUMBER to get latest review per employee
+    # This is a PostgreSQL-optimized query that's much faster than Python processing
+    latest_reviews_result = await db.execute(text("""
+        SELECT DISTINCT ON (employee_id)
+            employee_id,
+            COALESCE(review_date, created_at) as review_date,
+            overall_rating
+        FROM employee_reviews
+        ORDER BY employee_id, COALESCE(review_date, created_at) DESC
+    """))
+    latest_reviews = latest_reviews_result.all()
+    
+    # Create maps for latest review information
     latest_review_dates = {}
     latest_ratings = {}
-    seen_employees = set()
-    for review in all_reviews:
-        if review.employee_id not in seen_employees:
-            # Use review_date if available, otherwise use created_at
-            review_date = review.review_date if review.review_date else review.created_at
-            latest_review_dates[review.employee_id] = review_date
-            latest_ratings[review.employee_id] = review.overall_rating
-            seen_employees.add(review.employee_id)
+    for row in latest_reviews:
+        latest_review_dates[row.employee_id] = row.review_date
+        latest_ratings[row.employee_id] = row.overall_rating
     
     employee_list = []
     for emp in employees:
@@ -575,6 +578,212 @@ async def get_employee_thoughts(employee_id: int, db: AsyncSession = Depends(get
         "thoughts": thoughts,
         "generated_at": datetime.now().isoformat()
     }
+
+@router.get("/employees/{employee_id}/screen-view")
+async def get_employee_screen_view(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get real-time screen view of employee's computer when they are in working state."""
+    try:
+        from llm.ollama_client import OllamaClient
+        from engine.office_simulator import get_business_context
+        from sqlalchemy.orm import selectinload
+        
+        # Get employee
+        result = await db.execute(
+            select(Employee)
+            .where(Employee.id == employee_id)
+        )
+        emp = result.scalar_one_or_none()
+        
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        
+        # Check if employee is in working state
+        if emp.activity_state != "working" or emp.status != "active":
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Employee is not in working state. Current state: {emp.activity_state}, status: {emp.status}"
+            )
+        
+        # Get current task if exists
+        current_task = None
+        project_name = None
+        project_description = None
+        if emp.current_task_id:
+            result = await db.execute(
+                select(Task)
+                .where(Task.id == emp.current_task_id)
+                .options(selectinload(Task.project))
+            )
+            task = result.scalar_one_or_none()
+            if task:
+                current_task = task.description
+                if task.project:
+                    project_name = task.project.name
+                    project_description = task.project.description
+        
+        # Get all employees for name lookup
+        all_employees_result = await db.execute(select(Employee))
+        all_employees = {e.id: e.name for e in all_employees_result.scalars().all()}
+        
+        # Get recent emails (last 5)
+        result = await db.execute(
+            select(Email)
+            .where(
+                (Email.sender_id == employee_id) | (Email.recipient_id == employee_id)
+            )
+            .order_by(desc(Email.timestamp))
+            .limit(5)
+        )
+        recent_emails = result.scalars().all()
+        emails_data = [
+            {
+                "id": email.id,
+                "subject": email.subject,
+                "body": email.body or "",
+                "sender_id": email.sender_id,
+                "sender_name": all_employees.get(email.sender_id, "Unknown"),
+                "recipient_id": email.recipient_id,
+                "recipient_name": all_employees.get(email.recipient_id, "Unknown"),
+                "timestamp": email.timestamp.isoformat() if email.timestamp else None
+            }
+            for email in recent_emails
+        ]
+        
+        # Get recent chats (last 5)
+        result = await db.execute(
+            select(ChatMessage)
+            .where(
+                (ChatMessage.sender_id == employee_id) | (ChatMessage.recipient_id == employee_id)
+            )
+            .order_by(desc(ChatMessage.timestamp))
+            .limit(5)
+        )
+        recent_chats = result.scalars().all()
+        chats_data = [
+            {
+                "id": chat.id,
+                "message": chat.message,
+                "sender_id": chat.sender_id,
+                "sender_name": all_employees.get(chat.sender_id, "Unknown"),
+                "recipient_id": chat.recipient_id,
+                "recipient_name": all_employees.get(chat.recipient_id, "Unknown"),
+                "timestamp": chat.timestamp.isoformat() if chat.timestamp else None
+            }
+            for chat in recent_chats
+        ]
+        
+        # Get shared drive files related to employee's project
+        shared_drive_files = []
+        if project_name or emp.department:
+            if project_name:
+                # Try to find files for this project (use first() to avoid multiple rows error)
+                result = await db.execute(
+                    select(Project).where(Project.name == project_name).limit(1)
+                )
+                project = result.scalars().first()
+                if project:
+                    result = await db.execute(
+                        select(SharedDriveFile)
+                        .where(SharedDriveFile.project_id == project.id)
+                        .order_by(desc(SharedDriveFile.updated_at))
+                        .limit(5)
+                    )
+                    shared_drive_files = result.scalars().all()
+            elif emp.department:
+                # Fallback to department files
+                result = await db.execute(
+                    select(SharedDriveFile)
+                    .where(SharedDriveFile.department == emp.department)
+                    .order_by(desc(SharedDriveFile.updated_at))
+                    .limit(5)
+                )
+                shared_drive_files = result.scalars().all()
+        
+        # Get file content for shared drive files
+        files_data = []
+        for f in shared_drive_files:
+            file_data = {
+                "id": f.id,
+                "file_name": f.file_name,
+                "file_type": f.file_type,
+                "department": f.department,
+                "project_id": f.project_id,
+                "updated_at": f.updated_at.isoformat() if f.updated_at else None
+            }
+            # Get the latest version content if available
+            if f.id:
+                result = await db.execute(
+                    select(SharedDriveFileVersion)
+                    .where(SharedDriveFileVersion.file_id == f.id)
+                    .order_by(desc(SharedDriveFileVersion.version_number))
+                    .limit(1)
+                )
+                latest_version = result.scalar_one_or_none()
+                if latest_version and latest_version.content:
+                    file_data["content"] = latest_version.content[:5000]  # Limit to 5000 chars
+            files_data.append(file_data)
+    
+        # Get business context
+        business_context = await get_business_context(db)
+        
+        # Generate screen activity using Ollama
+        llm_client = OllamaClient()
+        try:
+            screen_activity = await llm_client.generate_screen_activity(
+                employee_name=emp.name,
+                employee_title=emp.title,
+                employee_role=emp.role,
+                personality_traits=emp.personality_traits or [],
+                current_task=current_task,
+                project_name=project_name,
+                project_description=project_description,
+                recent_emails=emails_data,
+                recent_chats=chats_data,
+                shared_drive_files=files_data,
+                business_context=business_context
+            )
+        except Exception as e:
+            print(f"Error generating screen activity: {e}")
+            # Return fallback activity
+            screen_activity = {
+                "application": "outlook",
+                "action": "viewing",
+                "content": {
+                    "subject": "Work Update",
+                    "recipient": "Team",
+                    "body": f"{emp.name} is reviewing emails related to their current work."
+                },
+                "mouse_position": {"x": 50, "y": 50},
+                "window_state": "active"
+            }
+        finally:
+            await llm_client.close()
+        
+        return {
+            "employee_id": employee_id,
+            "employee_name": emp.name,
+            "employee_title": emp.title,
+            "screen_activity": screen_activity,
+            "actual_data": {
+                "emails": emails_data,
+                "chats": chats_data,
+                "files": files_data
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, 403, etc.)
+        raise
+    except Exception as e:
+        # Catch any other errors and return a 500 with details
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in get_employee_screen_view: {e}")
+        print(error_details)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @router.get("/reviews/debug")
 async def debug_reviews(db: AsyncSession = Depends(get_db)):
@@ -1373,31 +1582,27 @@ async def get_products(db: AsyncSession = Depends(get_db)):
         # Sync products from reviews before fetching
         await sync_products_from_reviews(db)
         
-        result = await db.execute(select(Product).order_by(desc(Product.created_at)))
-        products = result.scalars().all()
+        # Optimized query: Get all products with aggregated data in a single query
+        # This eliminates N+1 queries by using LEFT JOINs and aggregations
+        result = await db.execute(
+            select(
+                Product,
+                func.count(CustomerReview.id).label('review_count'),
+                func.coalesce(func.avg(CustomerReview.rating), 0.0).label('avg_rating'),
+                func.coalesce(func.sum(Project.revenue), 0.0).label('total_sales'),
+                func.count(func.distinct(ProductTeamMember.id)).label('team_count')
+            )
+            .outerjoin(CustomerReview, Product.id == CustomerReview.product_id)
+            .outerjoin(Project, Product.id == Project.product_id)
+            .outerjoin(ProductTeamMember, Product.id == ProductTeamMember.product_id)
+            .group_by(Product.id)
+            .order_by(desc(Product.created_at))
+        )
+        
+        rows = result.all()
         
         product_list = []
-        for product in products:
-            # Get customer reviews count and average rating
-            reviews_result = await db.execute(
-                select(CustomerReview).where(CustomerReview.product_id == product.id)
-            )
-            reviews = reviews_result.scalars().all()
-            review_count = len(reviews)
-            avg_rating = sum(r.rating for r in reviews) / review_count if review_count > 0 else 0.0
-            
-            # Get total sales (revenue from projects related to this product)
-            sales_result = await db.execute(
-                select(func.sum(Project.revenue)).where(Project.product_id == product.id)
-            )
-            total_sales = sales_result.scalar() or 0.0
-            
-            # Get team member count
-            team_result = await db.execute(
-                select(func.count(ProductTeamMember.id)).where(ProductTeamMember.product_id == product.id)
-            )
-            team_count = team_result.scalar() or 0
-            
+        for product, review_count, avg_rating, total_sales, team_count in rows:
             product_list.append({
                 "id": product.id,
                 "name": product.name,
@@ -1408,10 +1613,10 @@ async def get_products(db: AsyncSession = Depends(get_db)):
                 "launch_date": product.launch_date.isoformat() if product.launch_date else None,
                 "created_at": product.created_at.isoformat() if product.created_at else None,
                 "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-                "review_count": review_count,
-                "average_rating": round(avg_rating, 1),
-                "total_sales": total_sales,
-                "team_count": team_count
+                "review_count": int(review_count) if review_count else 0,
+                "average_rating": round(float(avg_rating), 1) if avg_rating else 0.0,
+                "total_sales": float(total_sales) if total_sales else 0.0,
+                "team_count": int(team_count) if team_count else 0
             })
         
         return product_list
@@ -4309,27 +4514,29 @@ async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
         if not meeting:
             raise HTTPException(status_code=404, detail="Meeting not found")
         
-        # Get employee names
-        result = await db.execute(select(Employee))
-        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        # Optimized: Get all attendees in a single query instead of N+1 queries
+        attendee_ids_list = meeting.attendee_ids or []
+        
+        # Get all employees in one query (organizer + attendees)
+        all_employee_ids = [meeting.organizer_id] + attendee_ids_list
+        all_employee_ids = list(set(all_employee_ids))  # Remove duplicates
+        
+        if all_employee_ids:
+            result = await db.execute(
+                select(Employee).where(Employee.id.in_(all_employee_ids))
+            )
+            employees_dict = {emp.id: emp for emp in result.scalars().all()}
+        else:
+            employees_dict = {}
+        
+        # Get organizer name
+        organizer = employees_dict.get(meeting.organizer_id)
+        organizer_name = organizer.name if organizer else "Unknown"
         
         # Get attendee details - ensure we get ALL attendees
         attendee_details = []
-        attendee_ids_list = meeting.attendee_ids or []
-        
-        # Create a set for faster lookup
-        employee_cache = {}
-        
         for aid in attendee_ids_list:
-            # Try cache first
-            if aid in employee_cache:
-                emp = employee_cache[aid]
-            else:
-                result = await db.execute(select(Employee).where(Employee.id == aid))
-                emp = result.scalar_one_or_none()
-                if emp:
-                    employee_cache[aid] = emp
-            
+            emp = employees_dict.get(aid)
             if emp:
                 attendee_details.append({
                     "id": emp.id,
@@ -4350,7 +4557,7 @@ async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
             "title": meeting.title,
             "description": meeting.description,
             "organizer_id": meeting.organizer_id,
-            "organizer_name": all_employees.get(meeting.organizer_id, "Unknown"),
+            "organizer_name": organizer_name,
             "attendee_ids": meeting.attendee_ids or [],
             "attendees": attendee_details,
             "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
@@ -6241,5 +6448,12 @@ async def generate_shared_drive_documents(
         "files_updated": total_updated,
         "employees_processed": len(employees),
         "errors": errors if errors else None
+    }
+
+@router.get("/config/timezone")
+async def get_timezone_config():
+    """Get the configured timezone for the application."""
+    return {
+        "timezone": TIMEZONE_NAME
     }
 

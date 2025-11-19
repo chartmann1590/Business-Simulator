@@ -203,7 +203,7 @@ Generate ONLY the file name with appropriate extension (.docx, .xlsx, or .pptx).
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=httpx.Timeout(15.0, connect=5.0)
+                timeout=httpx.Timeout(60.0, connect=10.0)  # Increased from 15s to 60s for LLM processing
             )
             
             if response.status_code == 200:
@@ -845,7 +845,7 @@ Return ONLY the summary text, nothing else."""
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=httpx.Timeout(15.0, connect=5.0)
+                timeout=httpx.Timeout(60.0, connect=10.0)  # Increased from 15s to 60s for LLM processing
             )
             
             if response.status_code == 200:
@@ -1012,9 +1012,10 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                 json={
                     "model": self.llm_client.model,
                     "prompt": prompt,
-                    "stream": False
+                    "stream": False,
+                    "format": "json"  # Request JSON format from LLM
                 },
-                timeout=httpx.Timeout(15.0, connect=5.0)
+                timeout=httpx.Timeout(120.0, connect=10.0)  # Increased from 15s to 120s for LLM processing
             )
             
             documents_to_create = []
@@ -1023,19 +1024,84 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                 response_text = result.get("response", "").strip()
                 # Try to parse JSON
                 try:
-                    import json
-                    if "{" in response_text:
-                        # Try to find JSON in the response
+                    # Helper function to extract JSON with balanced braces
+                    def extract_json_balanced(text):
+                        """Extract JSON object with properly balanced braces."""
+                        start_idx = text.find('{')
+                        if start_idx == -1:
+                            return None
+                        
+                        brace_count = 0
+                        in_string = False
+                        escape_next = False
+                        
+                        for i in range(start_idx, len(text)):
+                            char = text[i]
+                            
+                            if escape_next:
+                                escape_next = False
+                                continue
+                            
+                            if char == '\\':
+                                escape_next = True
+                                continue
+                            
+                            if char == '"' and not escape_next:
+                                in_string = not in_string
+                                continue
+                            
+                            if not in_string:
+                                if char == '{':
+                                    brace_count += 1
+                                elif char == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        return text[start_idx:i+1]
+                        
+                        return None
+                    
+                    # First, try direct JSON parse
+                    if response_text.strip().startswith("{"):
+                        try:
+                            data = json.loads(response_text)
+                            documents_to_create = data.get("documents", [])
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # If that failed, try to extract JSON from markdown code blocks
+                    if not documents_to_create:
+                        code_block_match = re.search(r'```(?:json)?\s*(\{.*?)\s*```', response_text, re.DOTALL)
+                        if code_block_match:
+                            # Extract the content between the braces and try balanced extraction
+                            code_content = code_block_match.group(1)
+                            json_text = extract_json_balanced(code_content)
+                            if json_text:
+                                try:
+                                    data = json.loads(json_text)
+                                    documents_to_create = data.get("documents", [])
+                                except json.JSONDecodeError:
+                                    pass
+                    
+                    # If still no luck, try balanced brace extraction
+                    if not documents_to_create:
+                        json_text = extract_json_balanced(response_text)
+                        if json_text:
+                            try:
+                                data = json.loads(json_text)
+                                documents_to_create = data.get("documents", [])
+                            except json.JSONDecodeError:
+                                pass
+                    
+                    # Last resort: try simple regex (but this may fail on nested JSON)
+                    if not documents_to_create and "{" in response_text:
                         json_match = re.search(r'\{.*?"documents".*?\}', response_text, re.DOTALL)
                         if json_match:
-                            data = json.loads(json_match.group())
-                            documents_to_create = data.get("documents", [])
-                        else:
-                            # Try to find any JSON object
-                            json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
-                            if json_match:
+                            try:
                                 data = json.loads(json_match.group())
                                 documents_to_create = data.get("documents", [])
+                            except json.JSONDecodeError:
+                                pass
+                        
                 except Exception as parse_error:
                     print(f"  ⚠️  Could not parse AI response as JSON: {parse_error}")
                     # Try to extract document type from text if JSON parsing fails
@@ -1180,7 +1246,13 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
             
             await self.db.flush()
             return created_files
-            
+        
+        except httpx.ReadTimeout:
+            print(f"⚠️  LLM timeout generating documents for employee {employee.id} (AI took too long). Skipping this cycle.")
+            return []
+        except httpx.TimeoutException:
+            print(f"⚠️  Connection timeout generating documents for employee {employee.id}. Skipping this cycle.")
+            return []
         except Exception as e:
             print(f"Error generating documents for employee {employee.id}: {e}")
             import traceback

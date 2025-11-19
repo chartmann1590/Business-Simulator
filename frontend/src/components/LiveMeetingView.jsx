@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
+import { formatTime as formatTimeTZ } from '../utils/timezone'
 
 function LiveMeetingView({ meeting, onClose, employees = [] }) {
   const [meetingData, setMeetingData] = useState(meeting)
@@ -222,11 +223,6 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
     }
   }
 
-  const formatTime = (timeString) => {
-    if (!timeString) return ''
-    const date = new Date(timeString)
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-  }
 
   const getAttendeeById = (attendeeId) => {
     return meetingData.attendees?.find(a => a.id === attendeeId)
@@ -281,7 +277,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
           <div>
             <h2 className="text-xl font-bold mb-1">{meetingData.title}</h2>
             <div className="flex items-center gap-4 text-sm text-gray-400">
-              <span>🕐 {formatTime(meetingData.start_time)}</span>
+              <span>🕐 {formatTimeTZ(meetingData.start_time)}</span>
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                 Live
@@ -468,7 +464,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
               {liveMessages.map((msg, index) => {
                 const attendee = getAttendeeById(msg.sender_id)
                 const attendeeName = attendee?.name || msg.sender_name || 'Unknown'
-                const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
+                const timestamp = msg.timestamp ? formatTimeTZ(msg.timestamp, true) : ''
                 
                 return (
                   <div key={index} className="text-sm animate-fade-in">
@@ -505,7 +501,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                         transcriptTime.setHours(parseInt(hours, 10))
                         transcriptTime.setMinutes(parseInt(minutes, 10))
                         transcriptTime.setSeconds(parseInt(seconds, 10))
-                        const staticTimestamp = transcriptTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        const staticTimestamp = formatTimeTZ(transcriptTime, true)
                         
                         return (
                           <div key={index} className="text-sm animate-fade-in">
