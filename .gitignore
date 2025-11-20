@@ -110,3 +110,7 @@ frontend/dist/
 frontend/build/
 frontend/.vite/
 
+# Claude files
+claude
+CLAUDE.md
+
