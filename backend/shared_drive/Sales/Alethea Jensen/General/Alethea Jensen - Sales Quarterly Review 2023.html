@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        /* 
+            Premium Excel Styling
+        */
+        body {
+            font-family: Arial;
+            padding-top: 0px;
+        }
+        
+        .grid-container {
+            border-collapse: collapse;
+        }
+        
+        .grid-row {
+            border-bottom: 1px solid #d0d0d0;
+        }
+        
+        .grid-cell {
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        td {
+            background: white;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        th.total {
+            background-color: #e7f3ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <table class="grid-container" style="border-collapse: collapse; width: 100%; height: 500px;">
+        <tr>
+            <th colspan="8">**Sales Performance Dashboard**</th>
+        </tr>
+        
+        <!-- HEADER ROW -->
+        <tr class="grid-row">
+            <th>**Revenue**</th>
+            <th>**Profit Margin (%)**</th>
+            <th>**Active Projects**</th>
+            <th>**Total Employees**</th>
+            <th>**Department Performance**</th>
+            <th>**KPIs**</th>
+        </tr>
+        
+        <!-- DATA ROWS -->
+        <tr class="grid-row">
+            <td>$848,324.28</td>
+            <td>42.67%</td>
+            <td>14</td>
+            <td>1195</td>
+            <td>Marketing: 64%, IT: 55%, HR: 53%,...</td>
+            <td>- Total Revenue Growth Rate: -3.21% yoy, -1.05% mth</td>
+        </tr>
+        
+        <tr class="grid-row">
+            <td>$70,675.89 (Transformation)</td>
+            <td>52.35%</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>- Digital Transformation Project ROI: 15.17%, Net Margin Improvement: -2.51%</td>
+        </tr>
+        
+        <!-- CALCULATED COLUMNS -->
+        <tr class="grid-row">
+            <th>**Total Revenue Breakdown**</th>
+            <th>**Profit by Department/Project**</th>
+            <th>**Active Project ROI Analysis**</th>
+            <th>**Department Performance Metrics**</th>
+            <th>**KPIs for Each Department**</th>
+        </tr>
+        
+        <!-- DATA ROWS -->
+        <tr class="grid-row">
+            <td>$848,324.28 (Total Revenue)</td>
+            <td>$70,675.89 (Transformation), $156,356.16 (Partnership),...</td>
+            <td>- Transformation Project ROI: 15.17%, Partnership: -10.42%,...</td>
+            <td>Marketing: 64%, IT: 55%, HR: 53%</td>
+            <td>Marketing KPIs: Revenue, Growth Rate, Employee Count...</td>
+        </tr>
+        
+        <!-- SUMMARY SECTION -->
+        <tr class="grid-row total">
+            <th colspan="4">**Summary**</th>
+            <th>**Department Performance Metrics**</th>
+            <th>**KPIs for Each Department**</th>
+        </tr>
+        
+        <tr class="grid-row">
+            <td colspan="2">$848,324.28 (Total Revenue)</td>
+            <td></td>
+            <td></td>
+            <td>Marketing: 64%, IT: 55%, HR: 53%</td>
+            <td>Marketing KPIs: Revenue, Growth Rate, Employee Count...</td>
+        </tr>
+        
+        <!-- FOOTER -->
+        <tr class="grid-row">
+            <th colspan="8">**Data Source: Company Financials; Last Updated: March 2023**</th>
+        </tr>
+    </table>
+
+</body>
+</html>

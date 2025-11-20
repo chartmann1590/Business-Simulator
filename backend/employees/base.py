@@ -96,9 +96,10 @@ class EmployeeAgent:
         """Execute a decision and create activity log."""
         from sqlalchemy import select
         
-        # First, check for unread messages and respond to questions/requests (high priority)
-        # 70% chance to check messages - employees should be responsive
-        if random.random() < 0.7:
+        # Note: Message checking is now handled by a background task that runs every 2 minutes
+        # This check during evaluation is kept as a fallback but at reduced frequency
+        # to avoid duplicate processing (background task is primary mechanism)
+        if random.random() < 0.3:  # 30% chance as fallback (increased for better responsiveness)
             await self._check_and_respond_to_messages(business_context)
         
         # Create decision record
@@ -128,9 +129,9 @@ class EmployeeAgent:
         self.db.add(activity)
         await self.db.flush()
         
-        # Generate communications more frequently (60% chance)
+        # Generate communications more frequently (85% chance)
         # Teams should always be communicating
-        if random.random() < 0.6:
+        if random.random() < 0.85:
             await self._generate_communication(decision, business_context)
         
         return activity
@@ -192,13 +193,13 @@ class EmployeeAgent:
         # Choose recipient with priority: project teammates > department teammates > others
         recipient = None
         if project_teammates:
-            # 80% chance to communicate with project teammate
-            if random.random() < 0.8:
+            # 95% chance to communicate with project teammate (increased for better team collaboration)
+            if random.random() < 0.95:
                 recipient = random.choice(project_teammates)
         
         if not recipient and department_teammates:
-            # 60% chance to communicate with department teammate
-            if random.random() < 0.6:
+            # 80% chance to communicate with department teammate (increased for better team collaboration)
+            if random.random() < 0.8:
                 recipient = random.choice(department_teammates)
         
         if not recipient and all_employees:
@@ -293,14 +294,16 @@ class EmployeeAgent:
         )
         self.db.add(chat)
         await self.db.flush()
+        # Note: Response will be handled by the background task (runs every 2 minutes) 
+        # or during the recipient's next decision cycle (30% chance fallback check)
     
     async def _check_and_respond_to_messages(self, business_context: Dict):
-        """Check for unread messages and respond to questions/requests."""
+        """Check for unread messages and respond to all messages."""
         from sqlalchemy import select, desc
         from datetime import datetime, timedelta
         
-        # Check for unread emails from the last 24 hours
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        # Check for unread emails from the last 48 hours (extended to catch all emails)
+        cutoff_time = datetime.utcnow() - timedelta(hours=48)
         result = await self.db.execute(
             select(Email)
             .where(
@@ -309,45 +312,133 @@ class EmployeeAgent:
                 Email.timestamp >= cutoff_time
             )
             .order_by(desc(Email.timestamp))
-            .limit(5)  # Check up to 5 most recent unread emails
+            .limit(100)  # Check up to 100 most recent unread emails to ensure all emails get responses
         )
         unread_emails = result.scalars().all()
         
-        # Check for recent chat messages (chats don't have read status, so check last 2 hours)
-        chat_cutoff = datetime.utcnow() - timedelta(hours=2)
+        # Check for recent chat messages (chats don't have read status, so check last 48 hours)
+        # Extended time window to catch all messages and increased limit to ensure all messages get responses
+        chat_cutoff = datetime.utcnow() - timedelta(hours=48)
         result = await self.db.execute(
             select(ChatMessage)
             .where(
                 ChatMessage.recipient_id == self.employee.id,
+                ChatMessage.sender_id.isnot(None),  # Only respond to messages from other employees, not from manager/user
                 ChatMessage.timestamp >= chat_cutoff
             )
             .order_by(desc(ChatMessage.timestamp))
-            .limit(3)  # Check up to 3 most recent chats
+            .limit(100)  # Check up to 100 most recent chats to ensure all messages get responses
         )
         recent_chats = result.scalars().all()
         
-        # Respond to emails that contain questions or requests
-        for email in unread_emails:
-            if await self._message_needs_response(email.subject + " " + email.body):
-                await self._respond_to_email(email, business_context)
-                email.read = True
+        if unread_emails or recent_chats:
+            print(f"📬 {self.employee.name} checking messages: {len(unread_emails)} unread emails, {len(recent_chats)} recent chats")
         
-        # Respond to chat messages that contain questions or requests
-        for chat in recent_chats:
-            # Check if we've already responded to this chat (check if we sent a message to the sender after receiving this)
+        emails_responded = 0
+        chats_responded = 0
+        
+        # Respond to ALL unread emails (not just those that need response)
+        # Process in reverse order (oldest first) to maintain conversation flow
+        for email in reversed(unread_emails):
+            # Get the thread_id for this conversation
+            thread_id = email.thread_id or generate_thread_id(self.employee.id, email.sender_id)
+            
+            # SIMPLIFIED: Check if we've already responded to this email
+            # Look for ANY response we sent to this person in this thread after receiving this email
+            # Use a 2-second buffer to avoid race conditions with very recent emails
+            time_buffer = email.timestamp + timedelta(seconds=2)
+            
             result = await self.db.execute(
-                select(ChatMessage)
+                select(Email)
                 .where(
-                    ChatMessage.sender_id == self.employee.id,
-                    ChatMessage.recipient_id == chat.sender_id,
-                    ChatMessage.timestamp > chat.timestamp
+                    Email.sender_id == self.employee.id,
+                    Email.recipient_id == email.sender_id,
+                    Email.thread_id == thread_id,
+                    Email.timestamp > time_buffer
                 )
                 .limit(1)
             )
             already_responded = result.scalar_one_or_none() is not None
             
-            if not already_responded and await self._message_needs_response(chat.message):
-                await self._respond_to_chat(chat, business_context)
+            # Respond to ALL emails that we haven't responded to yet
+            if not already_responded:
+                try:
+                    # Get sender name for logging
+                    sender_result = await self.db.execute(
+                        select(Employee).where(Employee.id == email.sender_id)
+                    )
+                    sender = sender_result.scalar_one_or_none()
+                    sender_name = sender.name if sender else f"Employee {email.sender_id}"
+                    
+                    print(f"📧 {self.employee.name} responding to email from {sender_name} (ID: {email.sender_id}, subject: {email.subject[:50]}...)")
+                    await self._respond_to_email(email, business_context)
+                    await self.db.flush()  # Ensure response is saved immediately
+                    email.read = True
+                    emails_responded += 1
+                    print(f"✅ {self.employee.name} successfully responded to email from {sender_name}")
+                except Exception as e:
+                    print(f"❌ Error responding to email from {email.sender_id} to {self.employee.name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            else:
+                # Mark as read even if we already responded
+                email.read = True
+                print(f"ℹ️  {self.employee.name} already responded to email from {email.sender_id}")
+        
+        # Respond to ALL chat messages (not just those that need response)
+        # Process in reverse order (oldest first) to maintain conversation flow
+        for chat in reversed(recent_chats):
+            # Skip if sender is None (messages from manager/user are handled separately)
+            if chat.sender_id is None:
+                continue
+                
+            # Get the thread_id for this conversation
+            thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
+            
+            # SIMPLIFIED: Check if we've already responded to this message
+            # Look for ANY response we sent to this person in this thread after receiving this message
+            # Use a 2-second buffer to avoid race conditions with very recent messages
+            time_buffer = chat.timestamp + timedelta(seconds=2)
+            
+            result = await self.db.execute(
+                select(ChatMessage)
+                .where(
+                    ChatMessage.sender_id == self.employee.id,
+                    ChatMessage.recipient_id == chat.sender_id,
+                    ChatMessage.thread_id == thread_id,
+                    ChatMessage.timestamp > time_buffer
+                )
+                .limit(1)
+            )
+            already_responded = result.scalar_one_or_none() is not None
+            
+            # Respond to ALL messages that we haven't responded to yet
+            if not already_responded:
+                try:
+                    # Get sender name for logging
+                    sender_result = await self.db.execute(
+                        select(Employee).where(Employee.id == chat.sender_id)
+                    )
+                    sender = sender_result.scalar_one_or_none()
+                    sender_name = sender.name if sender else f"Employee {chat.sender_id}"
+                    
+                    print(f"💬 {self.employee.name} responding to chat from {sender_name} (ID: {chat.sender_id}, message: {chat.message[:50]}...)")
+                    await self._respond_to_chat(chat, business_context)
+                    await self.db.flush()  # Ensure response is saved immediately
+                    chats_responded += 1
+                    print(f"✅ {self.employee.name} successfully responded to chat from {sender_name}")
+                except Exception as e:
+                    print(f"❌ Error responding to chat from {chat.sender_id} to {self.employee.name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            else:
+                print(f"ℹ️  {self.employee.name} already responded to chat from {chat.sender_id}")
+        
+        # Summary
+        if emails_responded > 0 or chats_responded > 0:
+            print(f"📊 {self.employee.name} responded to {emails_responded} email(s) and {chats_responded} chat(s)")
     
     async def _message_needs_response(self, message_text: str) -> bool:
         """Check if a message contains a question or request that needs a response."""
@@ -396,37 +487,46 @@ class EmployeeAgent:
                 )
                 project_context = result.scalar_one_or_none()
         
-        # Generate response using LLM
-        response = await self.llm_client.generate_email_response(
-            recipient_name=self.employee.name,
-            recipient_title=self.employee.title,
-            recipient_role=self.employee.role,
-            recipient_personality=self.employee.personality_traits or [],
-            sender_name=sender.name,
-            sender_title=sender.title,
-            original_subject=email.subject,
-            original_body=email.body,
-            project_context=project_context.name if project_context else None,
-            business_context=business_context
-        )
-        
-        if response:
-            # Use the same thread_id as the original email
-            thread_id = email.thread_id or generate_thread_id(self.employee.id, email.sender_id)
-            
-            # Create reply email
-            reply_subject = f"Re: {email.subject}" if not email.subject.startswith("Re:") else email.subject
-            
-            reply_email = Email(
-                sender_id=self.employee.id,
-                recipient_id=email.sender_id,
-                subject=reply_subject,
-                body=response,
-                read=False,
-                thread_id=thread_id
+        # Generate response using LLM - ALWAYS generate a response
+        try:
+            response = await self.llm_client.generate_email_response(
+                recipient_name=self.employee.name,
+                recipient_title=self.employee.title,
+                recipient_role=self.employee.role,
+                recipient_personality=self.employee.personality_traits or [],
+                sender_name=sender.name,
+                sender_title=sender.title,
+                original_subject=email.subject,
+                original_body=email.body,
+                project_context=project_context.name if project_context else None,
+                business_context=business_context
             )
-            self.db.add(reply_email)
-            await self.db.flush()
+            
+            # Ensure we always have a response - use fallback if LLM fails
+            if not response or len(response.strip()) == 0:
+                response = f"Hi {sender.name},\n\nThanks for reaching out. I'll review this and get back to you if needed.\n\nBest regards,\n{self.employee.name}"
+        except Exception as e:
+            # Even if LLM fails, create a fallback response
+            print(f"⚠️ Error generating email response for {self.employee.name}, using fallback: {e}")
+            response = f"Hi {sender.name},\n\nThanks for your email. I've received it and will review it shortly.\n\nBest regards,\n{self.employee.name}"
+        
+        # Use the same thread_id as the original email
+        thread_id = email.thread_id or generate_thread_id(self.employee.id, email.sender_id)
+        
+        # Create reply email - ALWAYS create a response
+        reply_subject = f"Re: {email.subject}" if not email.subject.startswith("Re:") else email.subject
+        
+        reply_email = Email(
+            sender_id=self.employee.id,
+            recipient_id=email.sender_id,
+            subject=reply_subject,
+            body=response,
+            read=False,
+            thread_id=thread_id
+        )
+        self.db.add(reply_email)
+        await self.db.flush()
+        print(f"✅ {self.employee.name} responded to {sender.name}'s email")
     
     async def _respond_to_chat(self, chat: ChatMessage, business_context: Dict):
         """Generate and send a response to a chat message."""
@@ -453,28 +553,46 @@ class EmployeeAgent:
                 )
                 project_context = result.scalar_one_or_none()
         
-        # Generate response using LLM
-        response = await self.llm_client.generate_chat_response(
-            recipient_name=self.employee.name,
-            recipient_title=self.employee.title,
-            recipient_role=self.employee.role,
-            recipient_personality=self.employee.personality_traits or [],
-            sender_name=sender.name,
-            sender_title=sender.title,
-            original_message=chat.message,
-            project_context=project_context.name if project_context else None,
-            business_context=business_context
-        )
-        
-        if response:
+        # Generate response using LLM - ALWAYS generate a response
+        try:
+            response = await self.llm_client.generate_chat_response(
+                recipient_name=self.employee.name,
+                recipient_title=self.employee.title,
+                recipient_role=self.employee.role,
+                recipient_personality=self.employee.personality_traits or [],
+                sender_name=sender.name,
+                sender_title=sender.title,
+                original_message=chat.message,
+                project_context=project_context.name if project_context else None,
+                business_context=business_context
+            )
+            
+            # Ensure we always have a response - use fallback if LLM fails
+            if not response or len(response.strip()) == 0:
+                response = f"Thanks for reaching out, {sender.name}! I'll get back to you on that."
+            
             # Use the same thread_id as the original chat
             thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
             
-            # Create reply chat
+            # Create reply chat - ALWAYS create a response
             reply_chat = ChatMessage(
                 sender_id=self.employee.id,
                 recipient_id=chat.sender_id,
                 message=response,
+                thread_id=thread_id
+            )
+            self.db.add(reply_chat)
+            await self.db.flush()
+            print(f"✅ {self.employee.name} responded to {sender.name}'s chat message")
+        except Exception as e:
+            # Even if LLM fails, create a fallback response
+            print(f"⚠️ Error generating response for {self.employee.name}, using fallback: {e}")
+            thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
+            fallback_response = f"Got it, {sender.name}! Thanks for the message."
+            reply_chat = ChatMessage(
+                sender_id=self.employee.id,
+                recipient_id=chat.sender_id,
+                message=fallback_response,
                 thread_id=thread_id
             )
             self.db.add(reply_chat)

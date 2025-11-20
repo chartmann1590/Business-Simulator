@@ -34,6 +34,7 @@ class Employee(Base):
     avatar_path = Column(String, nullable=True)
     current_room = Column(String, nullable=True)  # tracks which room employee is currently in
     home_room = Column(String, nullable=True)  # tracks employee's assigned home room
+    target_room = Column(String, nullable=True)  # tracks where employee is walking to (only set when activity_state is "walking")
     floor = Column(Integer, default=1)  # floor number (1 or 2)
     activity_state = Column(String, default="working")  # working, walking, meeting, break, training, etc.
     hired_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -487,4 +488,39 @@ class SharedDriveFileVersion(Base):
     
     file = relationship("SharedDriveFile", back_populates="versions")
     created_by = relationship("Employee", foreign_keys=[created_by_id])
+
+class TrainingSession(Base):
+    __tablename__ = "training_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    training_room = Column(String, nullable=False)  # Which training room they're in
+    training_topic = Column(String, nullable=False)  # What they're being trained on
+    training_material_id = Column(Integer, ForeignKey("training_materials.id"), nullable=True)  # Associated training material
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=True)  # Null if still in progress
+    duration_minutes = Column(Integer, nullable=True)  # Calculated duration in minutes
+    status = Column(String, default="in_progress")  # in_progress, completed, interrupted
+    training_metadata = Column(JSON, default=dict)  # Additional training data (progress, notes, etc.)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    training_material = relationship("TrainingMaterial", foreign_keys=[training_material_id])
+
+class TrainingMaterial(Base):
+    __tablename__ = "training_materials"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)  # Training material title
+    topic = Column(String, nullable=False)  # Training topic/category
+    content = Column(Text, nullable=False)  # AI-generated training content
+    description = Column(Text, nullable=True)  # Brief description
+    difficulty_level = Column(String, default="intermediate")  # beginner, intermediate, advanced
+    estimated_duration_minutes = Column(Integer, default=30)  # Estimated time to complete
+    department = Column(String, nullable=True)  # Department this training is for
+    created_by_ai = Column(Boolean, default=True)  # Whether this was AI-generated
+    usage_count = Column(Integer, default=0)  # How many times this material has been used
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+    font-family: 'Times New Roman', serif;
+    font-size: 12pt;
+    margin: 1in;
+    line-height: 1.5;
+    color: #000000;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+h1 {
+    text-align: center;
+    font-size: 18pt;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-decoration: underline;
+}
+
+h2 {
+    font-size: 14pt;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+p {
+    line-height: 1.5;
+    margin-bottom: 12pt;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    border: 1px solid #000000;
+    padding: 5px;
+    text-align: left;
+}
+
+th {
+    background-color: #f0f0f0;
+}
+
+ul, ol {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 10pt;
+}
+</style>
+</head>
+<body>
+
+<div>
+    <h1>Business Analysis Report</h1>
+
+    <table style="width:100%">
+        <tr>
+            <th colspan="2">Employee Information:</th>
+        </tr>
+        <tr>
+            <td>Name:</td>
+            <td>Aditya Patel</td>
+        </tr>
+        <tr>
+            <td>Title:</td>
+            <td>IT Manager</td>
+        </tr>
+        <tr>
+            <td>Role:</td>
+            <td>Manager</td>
+        </tr>
+        <tr>
+            <td>Department:</td>
+            <td>Engineering</td>
+        </tr>
+    </table>
+
+    <p style="text-align: right">Date: {{ today }}</p>
+    <h2 style="margin-top: 0">Current Project: API Infrastructure Upgrade</h2>
+
+    <ul style="list-style-type: none;">
+        <li>Project Name: API Infrastructure Upgrade
+            <br>Status: Active
+            <br>Budget: $100,000.00
+            <br>Revenue: $27,941.47
+            <br>Description: Upgrade backend infrastructure to support increased load and new features
+        </li>
+    </ul>
+
+    <h2 style="margin-top: 0">Current Task:</h2>
+
+    <p style="text-align: left">Description: Additional work on API Infrastructure Upgrade
+        <br>Status: In Progress
+    </p>
+
+    <h2 style="margin-top: 0">Business Metrics:</h2>
+
+    <table>
+        <tr>
+            <th>Total Revenue:</th>
+            <td>$812,495.28</td>
+        </tr>
+        <tr>
+            <th>Total Profit:</th>
+            <td>$326,141.03</td>
+        </tr>
+        <tr>
+            <th>Profit Margin:</th>
+            <td>40.14%</td>
+        </tr>
+        <tr>
+            <th>Total Expenses:</th>
+            <td>$486,354.24</td>
+        </tr>
+    </table>
+
+    <h2 style="margin-top: 0">Active Projects:</h2>
+
+    <ul style="list-style-type: none;">
+        <li>Digital Transformation Project:
+            <br>Budget: $196,119.03
+            <br>Status: Active
+        </li>
+        <li>Customer Experience Enhancement:
+            <br>Budget: $88,137.90
+            <br>Status: Active
+        </li>
+        <li>Product Innovation Program:
+            <br>Budget: $141,155.29
+            <br>Status: Active
+        </li>
+    </ul>
+
+    <h2 style="margin-top: 0">Department Distribution:</h2>
+
+    <table>
+        <tr>
+            <th>Department</th>
+            <th>Employee Count</th>
+        </tr>
+        <tr>
+            <td HR</td>
+            <td>59</td>
+        </tr>
+        <tr>
+            <td>Operations</td>
+            <td>50</td>
+        </tr>
+        <tr>
+            <td>Finance</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td>Design</td>
+            <td>60</td>
+        </tr>
+        <tr>
+            <td>Engineering</td>
+            <td>60</td>
+        </tr>
+    </table>
+
+    <h2 style="margin-top: 0">Critical Requirements:</h2>
+
+    <ul style="list-style-type: none;">
+        <li>Document Type:
+            <br> Managers/Executives: Strategic reports, quarterly reviews, business analysis
+            <br> Finance/Accounting: Financial reports, budget analysis, revenue breakdowns
+            <br> Sales/Marketing: Sales reports, campaign analysis, market research
+            <br> IT/Engineering: Technical reports, project status, system analysis
+            <br> HR: Employee reports, hiring analysis, performance reviews
+            <br> Operations: Operational reports, efficiency analysis, process documentation
+        </li>
+    </ul>
+
+    <p style="text-align: left">The report provides a comprehensive overview of the company's current projects, revenue, and employee distribution. The data highlights the need for strategic planning and resource allocation to achieve business goals.</p>
+
+    <h2 style="margin-top: 0">Conclusion:</h2>
+
+    <p style="text-align: left">In conclusion, the API Infrastructure Upgrade project is ongoing and requires additional resources. The company should consider implementing cost-saving measures to improve profit margins. Furthermore, the data suggests a need for strategic planning and resource allocation to achieve business goals.</p>
+
+    <table>
+        <tr>
+            <th>Author:</th>
+            <td>Aditya Patel</td>
+        </tr>
+        <tr>
+            <th>Date:</th>
+            <td>{{ today }}</td>
+        </tr>
+    </table>
+</div>

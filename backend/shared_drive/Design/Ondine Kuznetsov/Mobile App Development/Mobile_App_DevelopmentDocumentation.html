@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Financial Dashboard</title>
+	<style>
+		table {
+			border-collapse: collapse;
+		}
+		
+		th, td {
+			padding: 8px;
+			border: 1px solid #d0d0d0;
+			background: white;
+			text-align: left;
+			font-size: 11pt;
+			font-family: Arial;
+		}
+		
+		th {
+			background: #366092;
+			color: white;
+			font-weight: bold;
+		}
+		
+		tbody tr:nth-child(even) {
+			background-color: #f2f2f2;
+		}
+		
+		tbody tr:last-child td {
+			border-top: 2px solid #e7f3ff;
+			font-weight: bold;
+		}
+		
+		.total-row {
+			background-color: #e7f3ff;
+			border-bottom: 2px solid #d0d0d0;
+		}
+		
+		.green {
+			color: green;
+		}
+		
+		.red {
+			color: red;
+		}
+		
+		.blue {
+			color: blue;
+		}
+	</style>
+</head>
+<body>
+<table border="1" cellpadding="8" cellspacing="0">
+	<tr style="background-color: #366092;">
+		<td colspan="9">Financial Dashboard</td>
+	</tr>
+	<tr>
+		<th>Project Name</th>
+		<th>Department</th>
+		<th>Budget</th>
+		<th>Revenue</th>
+		<th>% of Total Revenue</th>
+		<th>Profit Margin</th>
+		<th>Growth Rate</th>
+		<th>Variance Analysis</th>
+	</tr>
+	<tr class="total-row">
+		<td colspan="8">Total:</td>
+	</tr>
+	<tr>
+		<td>Mobile App Development</td>
+		<td>IT</td>
+		<td>$150,000.00</td>
+		<td>$32,045.32</td>
+		<td class="green">1.80%</td>
+		<td class="blue">42.67%</td>
+		<td class="red">-5.40%</td>
+		<td>10.56% Variance</td>
+	</tr>
+	<tr>
+		<td>Digital Transformation Project</td>
+		<td>IT</td>
+		<td>$196,119.03</td>
+		<td>$70,675.89</td>
+		<td class="green">8.32%</td>
+		<td class="blue">36.06%</td>
+		<td class="red">-3.60%</td>
+		<td>11.12% Variance</td>
+	</tr>
+	<tr>
+		<td>Strategic Partnership Development</td>
+		<td>IT</td>
+		<td>$156,356.16</td>
+		<td>$17,080.48</td>
+		<td class="red">-0.20%</td>
+		<td class="blue">10.91%</td>
+		<td class="green">2.56%</td>
+		<td>-6.24% Variance</td>
+	</tr>
+	<tr>
+		<td>Customer Experience Enhancement 1</td>
+		<td>Design</td>
+		<td>$88,137.90</td>
+		<td>$10,036.51</td>
+		<td class="green">1.18%</td>
+		<td class="blue">11.38%</td>
+		<td class="red">-2.64%</td>
+		<td>9.63% Variance</td>
+	</tr>
+	<tr>
+		<td>Customer Experience Enhancement 2</td>
+		<td>Design</td>
+		<td>$115,778.81</td>
+		<td>$43,994.25</td>
+		<td class="green">5.20%</td>
+		<td class="blue">47.34%</td>
+		<td class="red">-1.72%</td>
+		<td>12.04% Variance</td>
+	</tr>
+	<tr>
+		<td>API Infrastructure Upgrade</td>
+		<td>IT</td>
+		<td>$100,000.00</td>
+		<td>$28,996.55</td>
+		<td class="green">3.42%</td>
+		<td class="blue">29.04%</td>
+		<td class="red">-10.80%</td>
+		<td>14.19% Variance</td>
+	</tr>
+	<tr>
+		<th>Department</th>
+		<th>Total Employees</th>
+		<th>Total Revenue</th>
+		<th>Total Profit</th>
+		<th>% of Total Revenue</th>
+		<th>% of Total Profit</th>
+	</tr>
+	<tr>
+		<td>Marketing</td>
+		<td>60</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Design</td>
+		<td>58</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>IT</td>
+		<td>54</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>HR</td>
+		<td>54</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Product</td>
+		<td>52</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Sales</td>
+		<td>47</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Operations</td>
+		<td>59</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Engineering</td>
+		<td>54</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Administration</td>
+		<td>61</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Executive</td>
+		<td>1</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<td>Finance</td>
+		<td>1</td>
+		<td>$342,419.21</td>
+		<td>$143,411.18</td>
+		<td class="green">40.51%</td>
+		<td class="blue">42.00%</td>
+	</tr>
+	<tr>
+		<th>Total Revenue</th>
+		<th>Total Profit</th>
+		<th>% of Total Revenue</th>
+		<th>% of Total Profit</th>
+	</tr>
+	<tr>
+		<td>$848,324.28</td>
+		<td>$361,970.04</td>
+		<td class="green">42.00%</td>
+		<td class="blue">42.50%</td>
+	</tr>
+</table>
+
+</body>
+</html>

@@ -11,9 +11,9 @@ Usage:
     python setup_postgresql.py
 
 Environment variables:
-    DATABASE_URL: PostgreSQL connection string (default: postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db)
+    DATABASE_URL: PostgreSQL connection string (required, or use individual POSTGRES_* variables)
     POSTGRES_USER: PostgreSQL superuser (default: postgres)
-    POSTGRES_PASSWORD: PostgreSQL password (default: 843e2c46eea146588dbac98162a3835f)
+    POSTGRES_PASSWORD: PostgreSQL password (required if DATABASE_URL not set)
     POSTGRES_HOST: PostgreSQL host (default: localhost)
     POSTGRES_PORT: PostgreSQL port (default: 5432)
     DB_NAME: Database name (default: office_db)
@@ -26,15 +26,20 @@ import subprocess
 
 # Configuration
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "843e2c46eea146588dbac98162a3835f")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "office_db")
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{DB_NAME}"
-)
+# DATABASE_URL takes precedence, otherwise construct from individual components
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if not POSTGRES_PASSWORD:
+        raise ValueError(
+            "Either DATABASE_URL or POSTGRES_PASSWORD must be set in environment variables. "
+            "Please set them in your .env file."
+        )
+    DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{DB_NAME}"
 
 async def check_postgresql_installed() -> bool:
     """Check if PostgreSQL is installed and accessible."""

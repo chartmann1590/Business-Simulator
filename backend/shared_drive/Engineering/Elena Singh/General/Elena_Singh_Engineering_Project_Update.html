@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            font-size: 18pt;
+            text-align: center;
+            margin-bottom: 0.5in;
+            border-bottom: 2px solid #666666;
+        }
+
+        /* HEADER */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 0.5in;
+            background-color: #f9f9f9;
+            border-bottom: 1px solid #ccc;
+            font-size: 12pt;
+        }
+
+        header .date {
+            font-weight: bold;
+            color: #666666;
+        }
+
+        header .employee-name {
+            margin-left: 0.5in;
+        }
+
+        header .department {
+            margin-right: 0.5in;
+        }
+
+        header .document-classification {
+            font-size: 10pt;
+            color: #999999;
+        }
+
+        /* EXECUTIVE SUMMARY */
+        section#ExecutiveSummary {
+            padding-top: 1in;
+            border-top: 2px solid #666666;
+            font-size: 14pt;
+            margin-bottom: 0.5in;
+        }
+
+        section#ExecutiveSummary h3 {
+            margin-top: 0;
+        }
+
+        /* MAIN SECTIONS */
+        section {
+            padding: 1in;
+            border-bottom: 2px solid #ccc;
+            font-size: 14pt;
+        }
+
+        section#EmployeeInformation, section#BusinessMetrics, section#ActiveProjects {
+            background-color: #f9f9f9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* DATA SECTIONS */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 0.5in;
+            text-align: left;
+        }
+
+        table th {
+            background-color: #f9f9f9;
+            font-weight: bold;
+        }
+
+        /* CONCLUSION */
+        section#Conclusion {
+            padding-top: 1in;
+            border-top: 2px solid #666666;
+            font-size: 14pt;
+            margin-bottom: 0.5in;
+        }
+
+        /* FOOTER */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 0.5in;
+            background-color: #f9f9f9;
+            border-top: 2px solid #ccc;
+            font-size: 12pt;
+        }
+
+        footer .page-number {
+            margin-right: 1in;
+        }
+
+        footer .document-version {
+            font-size: 10pt;
+            color: #999999;
+        }
+
+        footer .confidentiality-notice {
+            margin-left: 0.5in;
+        }
+    </style>
+</head>
+<body>
+
+<div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <h1>Strategic Report</h1>
+    <header>
+        <span class="date">2023-02-15</span>
+        <span class="employee-name">Elena Singh</span>
+        <span class="department">Engineering</span>
+        <span class="document-classification">Confidential</span>
+    </header>
+
+    <section id="ExecutiveSummary">
+        <h2>Executive Summary</h2>
+        <p>In this strategic report, we provide an overview of our current business performance and highlight key areas for improvement. Our revenue has increased by 15% QoQ, driven primarily by the success of our API Infrastructure Upgrade project.</p>
+    </section>
+
+    <section id="EmployeeInformation">
+        <h2>Employee Information</h2>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Title</th>
+                <th>Role</th>
+                <th>Department</th>
+            </tr>
+            <tr>
+                <td>Elena Singh</td>
+                <td>IT Manager</td>
+                <td>Manager</td>
+                <td>Engineering</td>
+            </tr>
+        </table>
+
+    </section>
+
+    <section id="BusinessMetrics">
+        <h2>Business Metrics</h2>
+        <table>
+            <tr>
+                <th>Category</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Total Revenue</td>
+                <td>$848,324.28</td>
+            </tr>
+            <tr>
+                <td>Total Profit</td>
+                <td>$361,970.04</td>
+            </tr>
+            <tr>
+                <td>Profit Margin</td>
+                <td>42.67%</td>
+            </tr>
+            <tr>
+                <td>Total Expenses</td>
+                <td>$486,354.24</td>
+            </tr>
+        </table>
+
+    </section>
+
+    <section id="ActiveProjects">
+        <h2>Active Projects</h2>
+        <table>
+            <tr>
+                <th>Project Name</th>
+                <th>Budget</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>Customer Portal Redesign</td>
+                <td>$75,000.00</td>
+                <td>Active</td>
+            </tr>
+            <tr>
+                <td>API Infrastructure Upgrade</td>
+                <td>$100,000.00</td>
+                <td>Active</td>
+            </tr>
+            <tr>
+                <td>Mobile App Development</td>
+                <td>$150,000.00</td>
+                <td>Active</td>
+            </tr>
+        </table>
+
+    </section>
+
+    <section id="DepartmentDistribution">
+        <h2>Department Distribution</h2>
+        <table>
+            <tr>
+                <th>Department</th>
+                <th>Employee Count</th>
+            </tr>
+            <tr>
+                <td>Product</td>
+                <td>50</td>
+            </tr>
+            <tr>
+                <td>HR</td>
+                <td>53</td>
+            </tr>
+            <tr>
+                <td>IT</td>
+                <td>51</td>
+            </tr>
+            <tr>
+                <td>Sales</td>
+                <td>46</td>
+            </tr>
+            <tr>
+                <td>Design</td>
+                <td>56</td>
+            </tr>
+        </table>
+
+    </section>
+
+    <section id="Conclusion">
+        <h2>Conclusion</h2>
+        <p>In conclusion, our business is performing well, driven by the success of our API Infrastructure Upgrade project. We recommend continuing to invest in this area and exploring new revenue streams.</p>
+    </section>
+
+    <footer>
+        <span class="page-number">Page 1</span>
+        <span class="document-version">Version 1.0</span>
+        <span class="confidentiality-notice">Confidential. Do not distribute without permission.</span>
+    </footer>
+
+</div>

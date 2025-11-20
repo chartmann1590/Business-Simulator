@@ -5,12 +5,14 @@ import os
 import random
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_FALLBACK_URL = os.getenv("OLLAMA_FALLBACK_URL", None)
 # Default to llama3.2 or gemma3, preferring llama3.2
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 class OllamaClient:
     def __init__(self):
         self.base_url = OLLAMA_BASE_URL
+        self.fallback_url = OLLAMA_FALLBACK_URL
         self.model = OLLAMA_MODEL
         self._client = None
     
@@ -24,6 +26,50 @@ class OllamaClient:
                 verify=False  # Disable SSL verification for localhost HTTP
             )
         return self._client
+    
+    async def _make_request_with_fallback(self, endpoint: str, json_data: Dict) -> httpx.Response:
+        """
+        Make an HTTP request to Ollama with automatic fallback to fallback URL if main URL fails.
+        
+        Args:
+            endpoint: API endpoint (e.g., "/api/generate")
+            json_data: JSON payload for the request
+            
+        Returns:
+            httpx.Response object
+            
+        Raises:
+            Exception: If both main and fallback URLs fail
+        """
+        client = await self._get_client()
+        
+        # Try main URL first
+        try:
+            response = await client.post(
+                f"{self.base_url}{endpoint}",
+                json=json_data
+            )
+            response.raise_for_status()
+            return response
+        except Exception as e:
+            # If main URL fails and we have a fallback URL, try it
+            if self.fallback_url:
+                print(f"⚠️  Main Ollama server ({self.base_url}) failed: {e}")
+                print(f"🔄 Attempting fallback to {self.fallback_url}")
+                try:
+                    response = await client.post(
+                        f"{self.fallback_url}{endpoint}",
+                        json=json_data
+                    )
+                    response.raise_for_status()
+                    print(f"✅ Successfully connected to fallback Ollama server")
+                    return response
+                except Exception as fallback_error:
+                    print(f"❌ Fallback Ollama server ({self.fallback_url}) also failed: {fallback_error}")
+                    raise fallback_error
+            else:
+                # No fallback URL configured, raise the original error
+                raise e
     
     async def generate_decision(
         self,
@@ -67,17 +113,15 @@ Respond in JSON format with:
 }}"""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json"
                 }
             )
-            response.raise_for_status()
             result = response.json()
             
             # Extract JSON from response
@@ -128,16 +172,14 @@ Respond in JSON format with:
 Provide a brief analysis (2-3 sentences) of the situation."""
         
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             return result.get("response", "Situation analysis unavailable")
         except Exception as e:
@@ -160,17 +202,15 @@ Provide a plan in JSON format:
 }}"""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json"
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "")
             
@@ -201,16 +241,14 @@ Provide a plan in JSON format:
     async def generate_response(self, prompt: str) -> str:
         """Generate a text response from a prompt."""
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             return result.get("response", "").strip()
         except Exception as e:
@@ -230,7 +268,7 @@ Provide a plan in JSON format:
         project_context: Optional[str] = None,
         business_context: Dict = None
     ) -> str:
-        """Generate an email response to a question or request."""
+        """Generate an email response to any type of email (questions, updates, information, etc.)."""
         personality_str = ", ".join(recipient_personality) if recipient_personality else "balanced"
         business_info = ""
         if business_context:
@@ -256,25 +294,26 @@ Subject: {original_subject}
 {original_body}
 
 Write a professional, helpful email response. The response should:
-1. Address the question or request directly
-2. Be appropriate for your role and personality
-3. Be concise but complete (2-4 sentences)
-4. Use a professional but friendly tone
-5. If you don't know something, offer to help find out or suggest next steps
+1. Always respond - acknowledge the email even if it's just an update or information sharing
+2. If there's a question or request, address it directly
+3. If it's an update or information, acknowledge it and add a brief relevant comment or follow-up
+4. Be appropriate for your role and personality
+5. Be concise but complete (2-4 sentences)
+6. Use a professional but friendly tone
+7. Keep the conversation going naturally - show engagement with the content
+8. If you don't know something, offer to help find out or suggest next steps
 
 Write only the email body (no subject line, no signature - just the message content)."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -333,25 +372,25 @@ Message from {sender_name}:
 {original_message}
 
 Write a brief, friendly chat response (1-3 sentences). The response should:
-1. Answer the question or address the request directly
-2. Match your personality (e.g., if you're analytical, be precise; if creative, be enthusiastic)
-3. Be conversational and appropriate for a chat message
-4. Reference your current work if relevant to the question
-5. If you can't help directly, offer to assist or find someone who can
+1. Always respond - acknowledge the message even if it's just an update or statement
+2. Answer any questions or address requests directly
+3. Match your personality (e.g., if you're analytical, be precise; if creative, be enthusiastic)
+4. Be conversational and appropriate for a chat message
+5. Reference your current work if relevant
+6. If it's just an update or statement, acknowledge it and add a brief relevant comment
+7. Keep the conversation going naturally
 
 Write only the response message, nothing else."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -452,16 +491,14 @@ Only include message1 and message2 as required. Add message3 and message4 only i
 Keep each message to 1-2 sentences maximum."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -571,17 +608,15 @@ Respond in JSON format with:
 Write only the JSON, nothing else."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json"
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -676,16 +711,14 @@ Write a brief, friendly chat message (1-3 sentences) to {recipient_name}. The me
 Write only the chat message, nothing else."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -793,16 +826,14 @@ Write as if you're thinking to yourself - be authentic to your personality and r
 Write only the thoughts, nothing else."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -920,16 +951,14 @@ EXAMPLES OF BAD NAMES (DO NOT GENERATE THESE):
 Generate the name now (ONLY the name, nothing else):"""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -999,16 +1028,14 @@ BAD (DO NOT USE): "I can't", "Here is John", "My name is Sarah"
 Generate the name now (ONLY the name):"""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             
@@ -1171,17 +1198,15 @@ Return a JSON object with this exact structure:
 Make the content realistic and relevant to their current task and project. Use actual data when available."""
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json"
                 }
             )
-            response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "").strip()
             

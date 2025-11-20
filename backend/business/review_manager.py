@@ -40,10 +40,10 @@ class ReviewManager:
         ]
         
         if not employees_to_review:
-            print("⚠️  No employees eligible for reviews found")
+            print("[!] No employees eligible for reviews found")
             return []
         
-        print(f"🔍 Checking {len(employees_to_review)} employees for reviews...")
+        print(f"[*] Checking {len(employees_to_review)} employees for reviews...")
         
         reviews_created = []
         overdue_count = 0
@@ -80,7 +80,7 @@ class ReviewManager:
                     needs_review = True
                     # Store name early to avoid lazy loading
                     employee_name_temp = employee.name
-                    print(f"  ⚠️  Employee {employee_name_temp} has no hire date - scheduling review anyway")
+                    print(f"  [!] Employee {employee_name_temp} has no hire date - scheduling review anyway")
             else:
                 # Check if last review was before cutoff
                 if last_review.review_date:
@@ -100,15 +100,15 @@ class ReviewManager:
                 employee_hierarchy = employee.hierarchy_level
                 
                 try:
-                    print(f"  📋 Generating review for {employee_name} (hired: {employee_hired_at}, role: {employee_role}, hierarchy: {employee_hierarchy})")
+                    print(f"  [*] Generating review for {employee_name} (hired: {employee_hired_at}, role: {employee_role}, hierarchy: {employee_hierarchy})")
                     review = await self._generate_review(employee)
                     if review:
                         reviews_created.append(review)
                         if is_overdue:
                             overdue_count += 1
-                        print(f"  ✅ Successfully created review for {employee_name}")
+                        print(f"  [+] Successfully created review for {employee_name}")
                     else:
-                        print(f"  ❌ Failed to create review for {employee_name} - no manager available or generation failed")
+                        print(f"  [-] Failed to create review for {employee_name} - no manager available or generation failed")
                 except Exception as e:
                     import traceback
                     from sqlalchemy.exc import OperationalError, PendingRollbackError
@@ -122,9 +122,9 @@ class ReviewManager:
                     
                     error_msg = str(e).lower()
                     if "database is locked" in error_msg or "locked" in error_msg:
-                        print(f"  ⚠️  Database locked while generating review for {employee_name}, will retry later")
+                        print(f"  [!] Database locked while generating review for {employee_name}, will retry later")
                     else:
-                        print(f"  ❌ Error generating review for {employee_name}: {e}")
+                        print(f"  [-] Error generating review for {employee_name}: {e}")
                         print(f"  Traceback: {traceback.format_exc()}")
         
         if reviews_created:
@@ -134,7 +134,7 @@ class ReviewManager:
                 
                 # Now commit
                 await safe_commit(self.db)
-                print(f"✅ Committed {len(reviews_created)} review(s) to database")
+                print(f"[+] Committed {len(reviews_created)} review(s) to database")
                 
                 # Verify reviews were actually saved by querying them back
                 for review in reviews_created:
@@ -144,13 +144,13 @@ class ReviewManager:
                     )
                     verified_review = verify_result.scalar_one_or_none()
                     if verified_review:
-                        print(f"  ✓ Verified Review ID {verified_review.id} for employee {verified_review.employee_id} - Date: {verified_review.review_date}, Rating: {verified_review.overall_rating}")
+                        print(f"  [+] Verified Review ID {verified_review.id} for employee {verified_review.employee_id} - Date: {verified_review.review_date}, Rating: {verified_review.overall_rating}")
                         print(f"    Comments: {len(verified_review.comments or '')} chars, Strengths: {len(verified_review.strengths or '')} chars")
                     else:
-                        print(f"  ❌ WARNING: Review ID {review.id} not found in database after commit!")
+                        print(f"  [-] WARNING: Review ID {review.id} not found in database after commit!")
                 
                 if overdue_count > 0:
-                    print(f"⚠️  Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
+                    print(f"[!] Created {overdue_count} overdue review(s) - reviews are being pushed to managers!")
                 
                 # ALWAYS update performance award after reviews are committed
                 # This ensures the award is transferred to the employee with the highest current rating
@@ -161,12 +161,12 @@ class ReviewManager:
                 print(f"  [AWARD] Award update completed and committed")
             except Exception as e:
                 import traceback
-                print(f"❌ Error committing reviews: {e}")
+                print(f"[-] Error committing reviews: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 await self.db.rollback()
         else:
             if checked_count > 0:
-                print(f"ℹ️  No reviews needed at this time (checked {checked_count} employees)")
+                print(f"[i] No reviews needed at this time (checked {checked_count} employees)")
         
         return reviews_created
     
@@ -187,7 +187,7 @@ class ReviewManager:
         managers = result.scalars().all()
         
         if not managers:
-            print(f"  ⚠️  No active managers found to review {employee_name}")
+            print(f"  [!] No active managers found to review {employee_name}")
             return None
         
         # Prefer manager in same department
@@ -287,6 +287,13 @@ class ReviewManager:
             }
         )
         self.db.add(activity)
+        await self.db.flush()
+        # Broadcast activity
+        try:
+            from business.activity_broadcaster import broadcast_activity
+            await broadcast_activity(activity, self.db, employee)
+        except:
+            pass  # Don't fail if broadcasting fails
         
         # Also create activity for the manager (they conducted the review)
         manager_activity = Activity(
@@ -300,6 +307,13 @@ class ReviewManager:
             }
         )
         self.db.add(manager_activity)
+        await self.db.flush()
+        # Broadcast activity
+        try:
+            from business.activity_broadcaster import broadcast_activity
+            await broadcast_activity(manager_activity, self.db, manager)
+        except:
+            pass  # Don't fail if broadcasting fails
         
         # Create notification for the employee
         from database.models import Notification
@@ -920,7 +934,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
         
         except Exception as e:
             import traceback
-            print(f"  ❌ [AWARD ERROR] Error updating performance award: {e}")
+            print(f"  [-] [AWARD ERROR] Error updating performance award: {e}")
             print(f"  Traceback: {traceback.format_exc()}")
             # Don't raise - allow the calling code to handle it, but log the error
             raise

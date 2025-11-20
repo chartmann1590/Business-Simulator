@@ -3,7 +3,9 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import OfficeLayout from '../components/OfficeLayout'
 import RoomDetailModal from '../components/RoomDetailModal'
 import EmployeeScreenModal from '../components/EmployeeScreenModal'
+import TrainingDetailModal from '../components/TrainingDetailModal'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 // Animated number component
 function AnimatedNumber({ value, duration = 500 }) {
@@ -88,6 +90,7 @@ function OfficeView() {
   const [birthdayParties, setBirthdayParties] = useState([])
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([])
   const [screenViewEmployee, setScreenViewEmployee] = useState(null)
+  const [trainingViewEmployee, setTrainingViewEmployee] = useState(null)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const audioContextRef = useRef(null)
@@ -215,12 +218,10 @@ function OfficeView() {
   }, [])
   
   const fetchOfficeLayout = useCallback(async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/office-layout')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
+      const result = await apiGet('/api/office-layout')
+      const data = result.data || {}
       setOfficeData(data)
       
       // Flatten employees from all rooms into a map for easy lookup
@@ -235,41 +236,38 @@ function OfficeView() {
         })
       }
       setEmployees(Array.from(employeesMap.values()))
-      
-      setLoading(false)
     } catch (error) {
       console.error('Error fetching office layout:', error)
+      setOfficeData({})
+      setEmployees([])
+    } finally {
       setLoading(false)
     }
   }, [])
 
   const fetchWeatherAndPets = useCallback(async () => {
     try {
-      const [weatherRes, petsRes, partiesRes, birthdaysRes] = await Promise.all([
-        fetch('/api/weather'),
-        fetch('/api/pets'),
-        fetch('/api/birthdays/parties'),
-        fetch('/api/birthdays/upcoming?days=90')
+      const [weatherResult, petsResult, partiesResult, birthdaysResult] = await Promise.all([
+        apiGet('/api/weather'),
+        apiGet('/api/pets'),
+        apiGet('/api/birthdays/parties'),
+        apiGet('/api/birthdays/upcoming?days=90')
       ])
       
-      if (weatherRes.ok) {
-        const weatherData = await weatherRes.json()
-        setWeather(weatherData)
+      if (weatherResult.ok && weatherResult.data) {
+        setWeather(weatherResult.data)
       }
       
-      if (petsRes.ok) {
-        const petsData = await petsRes.json()
-        setPets(petsData)
+      if (petsResult.ok && petsResult.data) {
+        setPets(Array.isArray(petsResult.data) ? petsResult.data : [])
       }
       
-      if (partiesRes.ok) {
-        const partiesData = await partiesRes.json()
-        setBirthdayParties(partiesData)
+      if (partiesResult.ok && partiesResult.data) {
+        setBirthdayParties(Array.isArray(partiesResult.data) ? partiesResult.data : [])
       }
       
-      if (birthdaysRes.ok) {
-        const birthdaysData = await birthdaysRes.json()
-        setUpcomingBirthdays(birthdaysData)
+      if (birthdaysResult.ok && birthdaysResult.data) {
+        setUpcomingBirthdays(Array.isArray(birthdaysResult.data) ? birthdaysResult.data : [])
       }
     } catch (error) {
       console.error('Error fetching weather/pets/parties/birthdays:', error)
@@ -358,9 +356,18 @@ function OfficeView() {
   }
   
   const handleEmployeeClick = (employee) => {
-    navigate(`/employees/${employee.id}`)
-    if (soundEnabled) {
-      playSound('click')
+    // If employee is in training, show training modal instead of navigating to profile
+    if (employee.activity_state === 'training' || 
+        (employee.current_room && employee.current_room.includes('training_room'))) {
+      setTrainingViewEmployee({ id: employee.id, name: employee.name })
+      if (soundEnabled) {
+        playSound('click')
+      }
+    } else {
+      navigate(`/employees/${employee.id}`)
+      if (soundEnabled) {
+        playSound('click')
+      }
     }
   }
 
@@ -681,6 +688,16 @@ function OfficeView() {
           employeeId={screenViewEmployee.id}
           isOpen={!!screenViewEmployee}
           onClose={handleCloseScreenView}
+        />
+      )}
+
+      {/* Training Detail Modal */}
+      {trainingViewEmployee && (
+        <TrainingDetailModal
+          employeeId={trainingViewEmployee.id}
+          employeeName={trainingViewEmployee.name}
+          isOpen={!!trainingViewEmployee}
+          onClose={() => setTrainingViewEmployee(null)}
         />
       )}
       

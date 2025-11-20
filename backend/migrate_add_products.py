@@ -7,11 +7,14 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 async def migrate_database():
     """Add products and product_team_members tables if they don't exist."""
-    # Get database URL from environment or use default
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
-    )
+    # Get database URL from environment
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError(
+            "DATABASE_URL environment variable is required. "
+            "Please set it in your .env file or environment variables. "
+            "Format: postgresql+asyncpg://user:password@host:port/database"
+        )
     
     # Create async engine
     engine = create_async_engine(database_url, echo=False)

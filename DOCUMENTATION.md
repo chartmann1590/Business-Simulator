@@ -291,6 +291,23 @@ Business logic managers:
 - Tracks recent files for employees
 - All document content is AI-generated using Ollama (no hardcoded content)
 
+**`training_manager.py`**:
+- Manages employee training sessions and tracks training progress
+- Automatically starts training sessions when employees enter training rooms
+- Uses AI to determine appropriate training topics based on employee role, department, and training history
+- Generates comprehensive training materials using LLM
+- Saves training materials to shared drive for easy access
+- Tracks training session duration, topics, and completion status
+- Automatically ends expired training sessions (30-minute limit)
+- Provides training summaries and statistics for employees
+
+**`activity_broadcaster.py`**:
+- Helper module for broadcasting activities via WebSocket
+- Provides centralized activity broadcasting functionality
+- Used by business managers to broadcast activities in real-time
+- Handles employee information fetching for activity broadcasts
+- Gracefully handles broadcast failures without affecting core functionality
+
 #### 5. `database/`
 Database layer:
 
@@ -298,6 +315,14 @@ Database layer:
 - Database connection setup
 - Async session management
 - Table initialization
+
+**`query_cache.py`**:
+- In-memory query result caching system
+- Reduces database load by caching frequently accessed query results
+- Configurable cache duration (default: 10 seconds)
+- Thread-safe cache operations with async locks
+- Cache invalidation and statistics tracking
+- Decorator-based caching for easy integration
 
 **`models.py`**: SQLAlchemy models
 - `Employee`: Employee data with room tracking
@@ -316,6 +341,8 @@ Database layer:
 - `Meeting`: Meeting records with schedules, attendees, agendas, and transcripts
 - `SharedDriveFile`: Shared drive document files with version control
 - `SharedDriveFileVersion`: Version history for shared drive files
+- `TrainingSession`: Employee training session records with topics, duration, and status
+- `TrainingMaterial`: AI-generated training materials with content and metadata
 
 #### 6. `api/`
 API endpoints:
@@ -363,6 +390,11 @@ API endpoints:
 - `/api/shared-drive/files/{file_id}/versions`: Get all versions of a file
 - `/api/shared-drive/files/{file_id}/versions/{version_number}`: Get specific version
 - `/api/shared-drive/generate` (POST): Generate new documents
+- `/api/training/employees/{employee_id}/summary`: Get training summary for an employee
+- `/api/training/sessions`: Get all training sessions (with optional filters)
+- `/api/training/materials`: Get all training materials
+- `/api/cache/invalidate` (POST): Invalidate query cache (optional pattern filter)
+- `/api/cache/stats`: Get cache statistics
 
 **`websocket.py`**: WebSocket handler
 - Manages WebSocket connections
@@ -2604,6 +2636,68 @@ The weather system tracks office weather conditions and their impact on office m
 2. **Mood Calculation**: Weather affects overall office mood
 3. **Productivity Impact**: Weather conditions can affect employee productivity
 
+## Training System
+
+The training system manages employee training sessions, automatically generates training materials, and tracks training progress across the organization.
+
+### Features
+
+- **Automatic Session Tracking**: Training sessions automatically start when employees enter training rooms
+- **AI-Powered Topic Selection**: Training topics are determined using LLM based on employee role, department, and training history
+- **Training Material Generation**: Comprehensive training materials are generated using LLM with structured content
+- **Shared Drive Integration**: Training materials are automatically saved to the shared drive for easy access
+- **Session Management**: Tracks training session duration, completion status, and automatically ends expired sessions (30-minute limit)
+- **Training Statistics**: Provides training summaries including total sessions, hours trained, and unique topics covered
+
+### How It Works
+
+1. **Session Start**: When an employee enters a training room, a training session is automatically created
+2. **Topic Determination**: The system uses AI to determine an appropriate training topic based on:
+   - Employee role and title
+   - Department
+   - Recent training history (avoids repeating recent topics)
+3. **Material Generation**: If training material doesn't exist for the topic, it's generated using LLM with:
+   - Overview and objectives
+   - Key concepts and principles
+   - Practical examples and applications
+   - Best practices
+   - Summary and next steps
+4. **Material Storage**: Training materials are saved to the shared drive in `Training/Department/Topic.html` format
+5. **Session Tracking**: Sessions track start time, end time, duration, and status (in_progress, completed, interrupted)
+6. **Session Completion**: Sessions automatically end when:
+   - Employee leaves the training room
+   - Session exceeds 30 minutes (expired sessions)
+7. **Training History**: All completed sessions are tracked for training statistics and progress monitoring
+
+### Database Structure
+
+**TrainingSession Table:**
+- Stores training session information (employee, room, topic, start/end time, duration, status)
+- Links to training materials and employees
+- Tracks session metadata and progress
+
+**TrainingMaterial Table:**
+- Stores training material content and metadata
+- Tracks usage count, difficulty level, and estimated duration
+- Links to shared drive files
+
+### Frontend Components
+
+- **TrainingDetailModal**: Modal component for viewing training details and statistics
+- Integrated into Employee Detail, Office View, and Dashboard pages
+
+### API Endpoints
+
+- `GET /api/training/employees/{employee_id}/summary` - Get training summary for an employee
+- `GET /api/training/sessions` - Get all training sessions (with optional filters)
+- `GET /api/training/materials` - Get all training materials
+
+### Configuration
+
+- **Session Duration Limit**: 30 minutes (configurable in `training_manager.py`)
+- **Training Room Detection**: Automatically detects when employees enter training rooms
+- **Material Generation**: Training materials are generated on-demand when needed
+
 ## Shared Drive System
 
 The shared drive system provides AI-powered document management with version control, allowing employees to create, view, and edit documents organized by department, employee, and project.
@@ -2731,6 +2825,49 @@ The system intelligently balances document types:
 - Prioritizes creating Word documents if employee has fewer Word docs
 - Ensures variety by selecting underrepresented document types
 - Prevents over-creation of any single document type (max 3 of same type before switching)
+
+## Query Cache System
+
+The query cache system provides in-memory caching of database query results to improve performance and reduce database load.
+
+### Features
+
+- **In-Memory Caching**: Fast access to frequently queried data
+- **Configurable Duration**: Cache duration can be customized per query (default: 10 seconds)
+- **Thread-Safe**: Async-safe cache operations with locks
+- **Cache Statistics**: Track cache hits, misses, and size
+- **Cache Invalidation**: Manual cache clearing with optional pattern matching
+- **Decorator-Based**: Easy integration with existing functions using `@cached_query` decorator
+
+### How It Works
+
+1. **Cache Key Generation**: Cache keys are generated from function name and arguments using MD5 hashing
+2. **Cache Lookup**: Before executing a query, the cache is checked for existing results
+3. **Cache Storage**: Query results are stored in memory with timestamp and duration
+4. **Cache Expiration**: Expired cache entries are automatically removed
+5. **Cache Invalidation**: Cache can be manually cleared by pattern or completely
+
+### Usage
+
+```python
+from database.query_cache import cached_query
+
+@cached_query(cache_duration=10)
+async def get_employees(db):
+    result = await db.execute(select(Employee))
+    return result.scalars().all()
+```
+
+### API Endpoints
+
+- `POST /api/cache/invalidate?pattern=employees` - Invalidate cache entries matching pattern
+- `GET /api/cache/stats` - Get cache statistics (size, hits, misses)
+
+### Configuration
+
+- **Default Cache Duration**: 10 seconds (configurable)
+- **Cache Storage**: In-memory dictionary
+- **Thread Safety**: Async locks for concurrent access
 
 ## Products System
 

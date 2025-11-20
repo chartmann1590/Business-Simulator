@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Global Styles */
+    table {
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+    th {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+      padding: 8px;
+    }
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    tr:nth-child(odd) {
+      background-color: inherit;
+    }
+    .totals-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    /* Finance/Accounting */
+    finance-row th {
+      text-align: left;
+    }
+    finance-row td.numbers {
+      text-align: right;
+    }
+    finance-row td.dates {
+      text-align: center;
+    }
+    finance-row .green {
+      color: green;
+    }
+    finance-row .red {
+      color: red;
+    }
+    
+    /* Sales/Marketing */
+    sales-marketing-row th {
+      text-align: left;
+    }
+    sales-marketing-row td.numbers {
+      text-align: right;
+    }
+    sales-marketing-row .green {
+      color: green;
+    }
+    sales-marketing-row .blue {
+      color: blue;
+    }
+    
+    /* Management */
+    management-row th {
+      text-align: left;
+    }
+    management-row td.numbers {
+      text-align: right;
+    }
+    management-row .green {
+      color: green;
+    }
+    management-row .blue {
+      color: blue;
+    }
+    
+    /* Operations */
+    operations-row th {
+      text-align: left;
+    }
+    operations-row td.numbers {
+      text-align: right;
+    }
+    operations-row .green {
+      color: green;
+    }
+    operations-row .red {
+      color: red;
+    }
+    
+    /* HR */
+    hr-row th {
+      text-align: left;
+    }
+    hr-row td.numbers {
+      text-align: right;
+    }
+    hr-row .green {
+      color: green;
+    }
+    hr-row .blue {
+      color: blue;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td></tr>
+    <tr>
+      <th colspan="2">Revenue &amp; Profit Analysis</th>
+      <th>Department/Project</th>
+      <th>Actuals</th>
+      <th>Variances</th>
+      <th>Total Values</th>
+    </tr>
+    <tr class="totals-row">
+      <td></td>
+      <td></td>
+      <td>Totals</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    
+    <!-- Revenue Analysis -->
+    <tr>
+      <th>Revenue by Department/Project</th>
+      <th class="numbers">Actuals</th>
+      <th class="red" style="background-color: #ff0000;">Variances (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr>
+      <td class="green">Product Innovation Program</td>
+      <td>$15,460.78</td>
+      <td class="red">$141,155.29 - $15,460.78 = $125,694.51</td>
+      <td>$141,155.29</td>
+    </tr>
+    
+    <!-- Profit Analysis -->
+    <tr>
+      <th>Profit by Department/Project</th>
+      <th class="numbers">Actuals</th>
+      <th class="red" style="background-color: #ff0000;">Variances (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr>
+      <td class="blue">Product Innovation Program</td>
+      <td>$361,970.04</td>
+      <td class="red">$141,155.29 - $0 = $141,155.29</td>
+      <td>$141,155.29</td>
+    </tr>
+    
+    <!-- Revenue by Department -->
+    <tr>
+      <th>Department/Project</th>
+      <th class="numbers">Actuals</th>
+      <th class="red" style="background-color: #ff0000;">Variances (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr>
+      <td class="blue">Marketing</td>
+      <td>$848,324.28</td>
+      <td class="red">$486,354.24 - $848,324.28 = -$361,990.04</td>
+      <td>$848,324.28</td>
+    </tr>
+    
+    <!-- Profit by Department -->
+    <tr>
+      <th>Department/Project</th>
+      <th class="numbers">Actuals</th>
+      <th class="red" style="background-color: #ff0000;">Variances (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr>
+      <td class="green">Finance</td>
+      <td>$361,970.04</td>
+      <td class="red">$486,354.24 - $361,970.04 = $124,384.20</td>
+      <td>$486,354.24</td>
+    </tr>
+  </table>
+  
+  <!-- Employee Cost Analysis -->
+  <table>
+    <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Employee Cost Analysis</td></tr>
+    <tr>
+      <th>Department/Project</th>
+      <th class="numbers">Number of Employees</th>
+      <th class="green">Cost per Employee ($)</th>
+      <th class="red" style="background-color: #ff0000;">Total Cost (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr class="totals-row">
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    
+    <!-- Marketing -->
+    <tr>
+      <td class="blue">Marketing</td>
+      <td>63</td>
+      <td>$123,456.78</td>
+      <td class="red">$486,354.24 - $123,456.78 = $362,897.46</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- Design -->
+    <tr>
+      <td class="blue">Design</td>
+      <td>56</td>
+      <td>$90,789.01</td>
+      <td class="red">$486,354.24 - $90,789.01 = $395,565.23</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- HR -->
+    <tr>
+      <td class="blue">HR</td>
+      <td>55</td>
+      <td>$108,456.78</td>
+      <td class="red">$486,354.24 - $108,456.78 = $377,897.46</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- Product -->
+    <tr>
+      <td class="blue">Product</td>
+      <td>50</td>
+      <td>$81,234.56</td>
+      <td class="red">$486,354.24 - $81,234.56 = $405,119.68</td>
+      <td>$486,354.24</td>
+    </tr>
+  </table>
+  
+  <!-- Project ROI Analysis -->
+  <table>
+    <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Project ROI Analysis</td></tr>
+    <tr>
+      <th>Project Name</th>
+      <th class="numbers">Actual Revenue ($)</th>
+      <th class="red" style="background-color: #ff0000;">Variances (Actual - Budget)</th>
+      <th class="numbers">Total Values ($)</th>
+    </tr>
+    <tr class="totals-row">
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    
+    <!-- Digital Transformation Project -->
+    <tr>
+      <td class="blue">Digital Transformation Project</td>
+      <td>$70,675.89</td>
+      <td class="red">$196,119.03 - $70,675.89 = $125,443.14</td>
+      <td>$196,119.03</td>
+    </tr>
+    
+    <!-- Strategic Partnership Development -->
+    <tr>
+      <td class="blue">Strategic Partnership Development</td>
+      <td>$17,080.48</td>
+      <td class="red">$156,356.16 - $17,080.48 = $139,275.68</td>
+      <td>$156,356.16</td>
+    </tr>
+    
+    <!-- Customer Experience Enhancement -->
+    <tr>
+      <td class="blue">Customer Experience Enhancement</td>
+      <td>$10,036.51</td>
+      <td class="red">$88,137.90 - $10,036.51 = $78,101.39</td>
+      <td>$88,137.90</td>
+    </tr>
+  </table>
+  
+  <!-- Department Performance -->
+  <table>
+    <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Department Performance</td></tr>
+    <tr>
+      <th>Department/Project</th>
+      <th class="numbers">Number of Employees</th>
+      <th class="green">Cost per Employee ($)</th>
+      <th class="red" style="background-color: #ff0000;">Total Cost (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr class="totals-row">
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    
+    <!-- Marketing -->
+    <tr>
+      <td class="blue">Marketing</td>
+      <td>63</td>
+      <td>$123,456.78</td>
+      <td class="red">$486,354.24 - $123,456.78 = $362,897.46</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- Design -->
+    <tr>
+      <td class="blue">Design</td>
+      <td>56</td>
+      <td>$90,789.01</td>
+      <td class="red">$486,354.24 - $90,789.01 = $395,565.23</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- HR -->
+    <tr>
+      <td class="blue">HR</td>
+      <td>55</td>
+      <td>$108,456.78</td>
+      <td class="red">$486,354.24 - $108,456.78 = $377,897.46</td>
+      <td>$486,354.24</td>
+    </tr>
+    
+    <!-- Product -->
+    <tr>
+      <td class="blue">Product</td>
+      <td>50</td>
+      <td>$81,234.56</td>
+      <td class="red">$486,354.24 - $81,234.56 = $405,119.68</td>
+      <td>$486,354.24</td>
+    </tr>
+  </table>
+  
+  <!-- Summary Section -->
+  <table>
+    <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Summary</td></tr>
+    <tr>
+      <th>Department/Project</th>
+      <th class="numbers">Number of Employees</th>
+      <th class="green">Cost per Employee ($)</th>
+      <th class="red" style="background-color: #ff0000;">Total Cost (Actual - Budget)</th>
+      <th class="numbers">Total Values</th>
+    </tr>
+    <tr class="totals-row">
+      <td></td>
+      <td>1000</td>
+      <td>$108,456.78</td>
+      <td class="red">$1,234,567.89 - $108,456.78 = $1,126,111.11</td>
+      <td>$1,234,567.89</td>
+    </tr>
+  </table>
+  
+  <!-- Footer -->
+  <p style="font-size: 10pt; padding-bottom: 12px;">Last Updated Date: [Insert Date]</p>
+  <p style="font-size: 10pt; padding-bottom: 12px;">Notes: Include assumptions and variances analysis</p>
+  </body>
+</html>

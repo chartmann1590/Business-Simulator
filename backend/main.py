@@ -1,5 +1,158 @@
 import sys
 import os
+from dotenv import load_dotenv
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import platform
+
+# Set up comprehensive logging BEFORE any other imports
+log_dir = Path(__file__).parent
+log_file = log_dir / "backend.log"
+
+# Windows-compatible rotating file handler that uses copy+truncate instead of rename
+class WindowsRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler that works on Windows by using copy+truncate instead of rename."""
+    
+    def doRollover(self):
+        """Override doRollover to use copy+truncate method on Windows."""
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        
+        # Use copy+truncate method which works on Windows even with open files
+        try:
+            if os.path.exists(self.baseFilename):
+                # Get file size
+                file_size = os.path.getsize(self.baseFilename)
+                
+                if file_size > 0:
+                    # Read the current log content
+                    with open(self.baseFilename, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Rotate backup files (delete oldest first)
+                    for i in range(self.backupCount, 0, -1):
+                        sfn = self.baseFilename + ("." + str(i) if i > 0 else "")
+                        dfn = self.baseFilename + "." + str(i + 1)
+                        if os.path.exists(sfn):
+                            if i == self.backupCount:
+                                # Delete oldest backup
+                                try:
+                                    os.remove(sfn)
+                                except (OSError, PermissionError):
+                                    pass
+                            else:
+                                # Rename to next number
+                                try:
+                                    if os.path.exists(dfn):
+                                        os.remove(dfn)
+                                    os.rename(sfn, dfn)
+                                except (OSError, PermissionError):
+                                    pass
+                    
+                    # Write current content to .1 file
+                    dfn = self.baseFilename + ".1"
+                    try:
+                        with open(dfn, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                    except (OSError, PermissionError):
+                        pass
+                    
+                    # Truncate the original file
+                    try:
+                        with open(self.baseFilename, 'w', encoding='utf-8') as f:
+                            f.write('')  # Clear the file
+                    except (OSError, PermissionError):
+                        pass
+        except (OSError, PermissionError, Exception):
+            # If rotation fails, just continue - don't crash
+            pass
+        
+        # Reopen the stream
+        if not self.stream:
+            self.stream = self._open()
+    
+    def emit(self, record):
+        """Override emit to catch any rotation errors."""
+        try:
+            return super().emit(record)
+        except (OSError, PermissionError):
+            # If rotation fails during emit, try to reopen stream
+            if not self.stream:
+                try:
+                    self.stream = self._open()
+                except (OSError, PermissionError):
+                    pass
+            # Don't re-raise - just skip this log entry if we can't write
+
+# Configure rotating file handler: 5MB max size, keep 10 files total (1 current + 9 backups)
+# Rotation behavior: When backend.log exceeds maxBytes, it rotates:
+#   1. Deletes backend.log.9 (oldest file) if it exists
+#   2. Renames backend.log.8 -> backend.log.9, .7 -> .8, ..., .1 -> .2
+#   3. Renames backend.log -> backend.log.1
+# This ensures exactly 10 files total (backend.log + backend.log.1 through .9)
+# and always deletes the oldest file first when rotating.
+max_bytes = 5 * 1024 * 1024  # 5 MB
+backup_count = 9  # 9 backup files + 1 current = 10 total files
+
+# Use Windows-compatible handler on Windows, standard handler on other platforms
+if platform.system() == 'Windows':
+    file_handler = WindowsRotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding='utf-8'
+    )
+else:
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding='utf-8'
+    )
+
+# Configure root logger to capture EVERYTHING
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        file_handler,
+        logging.StreamHandler(sys.stdout)
+    ],
+    force=True  # Override any existing configuration
+)
+
+# Set up loggers for all modules
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+logging.getLogger("fastapi").setLevel(logging.DEBUG)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.INFO)
+
+# Create a custom stream handler that writes to both file and console
+class DualStreamHandler(logging.StreamHandler):
+    def __init__(self, file_handler, console_handler):
+        super().__init__()
+        self.file_handler = file_handler
+        self.console_handler = console_handler
+    
+    def emit(self, record):
+        self.file_handler.emit(record)
+        self.console_handler.emit(record)
+
+# Note: All application code should use logger.info(), logger.error(), etc.
+# Print statements will still go to console but won't be in the log file.
+# To capture everything, use proper logging throughout the codebase.
+
+logger = logging.getLogger(__name__)
+logger.info(f"=== Backend starting - All logs will be written to {log_file} ===")
+
+# Load environment variables from .env file before any other imports
+# .env file is in the same directory as main.py (backend directory)
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(dotenv_path=env_path)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, WebSocket
@@ -17,6 +170,10 @@ from config import now as local_now
 
 # Create simulator instance (will be initialized in lifespan)
 simulator = OfficeSimulator()
+
+# Set global reference for activity broadcasting
+from business.activity_broadcaster import set_simulator_instance
+set_simulator_instance(simulator)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -272,5 +429,22 @@ async def root():
     return {"message": "Autonomous Office Simulation API"}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    logger.info("Starting uvicorn server...")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_config=None,
+        reload_excludes=[
+            "*.log",
+            "*.log.*",  # Rotated log files (backend.log.1, backend.log.2, etc.)
+            "*.db",
+            "*.db-shm",
+            "*.db-wal",
+            "__pycache__",
+            "*.pyc",
+            "*.pyo",
+        ]
+    )
 

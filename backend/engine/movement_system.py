@@ -1,7 +1,10 @@
 """Movement system for employees to move between rooms based on activities."""
 
 import random
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 from employees.room_assigner import (
     ROOM_OPEN_OFFICE, ROOM_CUBICLES, ROOM_CONFERENCE_ROOM,
     ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_TRAINING_ROOM,
@@ -807,6 +810,255 @@ def should_move_to_home_room(employee, activity_type: str) -> bool:
     return False
 
 
+async def fix_walking_employees_without_destination(db_session):
+    """Fix employees who are in walking state but don't have a target_room, and complete journeys for those who have arrived.
+    This function ensures EVERY walking employee has a target_room set."""
+    from sqlalchemy import select, and_, or_
+    from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+    from database.models import Employee
+    
+    fixed_count = 0
+    completed_count = 0
+    
+    # Get ALL walking employees first to see the full picture
+    all_walking_result = await db_session.execute(
+        select(Employee).where(
+            and_(
+                Employee.status == "active",
+                Employee.activity_state == "walking"
+            )
+        )
+    )
+    all_walking = all_walking_result.scalars().all()
+    logger.info(f"Found {len(all_walking)} employees in walking state")
+    
+    # First: Complete journeys for employees who have arrived at their destination
+    result = await db_session.execute(
+        select(Employee).where(
+            and_(
+                Employee.status == "active",
+                Employee.activity_state == "walking",
+                Employee.target_room.isnot(None),
+                Employee.target_room != "",
+                Employee.current_room == Employee.target_room
+            )
+        )
+    )
+    arrived_employees = result.scalars().all()
+    
+    for employee in arrived_employees:
+        # They've arrived - complete the journey
+        employee.activity_state = "working"
+        employee.target_room = None
+        completed_count += 1
+    
+    # Second: Fix employees walking without a target_room
+    result = await db_session.execute(
+        select(Employee).where(
+            and_(
+                Employee.status == "active",
+                Employee.activity_state == "walking",
+                or_(
+                    Employee.target_room.is_(None),
+                    Employee.target_room == ""
+                )
+            )
+        )
+    )
+    stuck_employees = result.scalars().all()
+    
+    for employee in stuck_employees:
+        # Generate a destination for them - be aggressive about finding one
+        target_room = None
+        
+        # First try: home room
+        if employee.home_room:
+            has_space = await check_room_has_space(employee.home_room, db_session, exclude_employee_id=employee.id)
+            if has_space:
+                target_room = employee.home_room
+        
+        # Second try: current room (if they have one, they're already there - complete journey)
+        if not target_room and employee.current_room:
+            # If they're already in a room, complete the journey
+            employee.activity_state = "working"
+            employee.target_room = None
+            fixed_count += 1
+            logger.info(f"Completed journey for {employee.name} (ID: {employee.id}) - already in {employee.current_room}")
+            continue
+        
+        # Third try: cubicles on their floor
+        if not target_room:
+            employee_floor = getattr(employee, 'floor', 1)
+            cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+            has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+            if has_space:
+                target_room = cubicles_room
+        
+        # Fourth try: open office on their floor
+        if not target_room:
+            employee_floor = getattr(employee, 'floor', 1)
+            open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+            has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+            if has_space:
+                target_room = open_office_room
+        
+        # Fifth try: try ANY floor's cubicles or open office
+        if not target_room:
+            for floor in [1, 2, 3, 4]:
+                if floor == 1:
+                    test_rooms = [ROOM_CUBICLES, ROOM_OPEN_OFFICE]
+                else:
+                    test_rooms = [
+                        f"{ROOM_CUBICLES}_floor{floor}",
+                        f"{ROOM_OPEN_OFFICE}_floor{floor}"
+                    ]
+                for test_room in test_rooms:
+                    has_space = await check_room_has_space(test_room, db_session, exclude_employee_id=employee.id)
+                    if has_space:
+                        target_room = test_room
+                        # Update their floor to match
+                        employee.floor = floor
+                        break
+                if target_room:
+                    break
+        
+        if target_room:
+            employee.target_room = target_room
+            # Don't move current_room yet - keep them walking to show destination
+            fixed_count += 1
+            logger.info(f"Assigned destination {target_room} to {employee.name} (ID: {employee.id})")
+        else:
+            # Last resort: if we can't find ANY room, set them to working in current room or home room
+            if employee.current_room:
+                employee.activity_state = "working"
+                employee.target_room = None
+                fixed_count += 1
+                logger.info(f"Completed journey for {employee.name} (ID: {employee.id}) - no available rooms, staying in {employee.current_room}")
+            elif employee.home_room:
+                employee.current_room = employee.home_room
+                employee.activity_state = "working"
+                employee.target_room = None
+                fixed_count += 1
+                logger.info(f"Set {employee.name} (ID: {employee.id}) to working in home room {employee.home_room}")
+            else:
+                # No room at all - assign them to open office floor 1
+                employee.current_room = ROOM_OPEN_OFFICE
+                employee.floor = 1
+                employee.activity_state = "working"
+                employee.target_room = None
+                fixed_count += 1
+                logger.info(f"Assigned {employee.name} (ID: {employee.id}) to {ROOM_OPEN_OFFICE} as last resort")
+    
+    # Third: Move employees who are walking to their destination (if they haven't arrived yet)
+    result = await db_session.execute(
+        select(Employee).where(
+            and_(
+                Employee.status == "active",
+                Employee.activity_state == "walking",
+                Employee.target_room.isnot(None),
+                Employee.target_room != "",
+                Employee.current_room != Employee.target_room
+            )
+        )
+    )
+    walking_employees = result.scalars().all()
+    
+    for employee in walking_employees:
+        # Check if destination still has space
+        has_space = await check_room_has_space(employee.target_room, db_session, exclude_employee_id=employee.id)
+        if has_space:
+            # Move them to destination and complete journey
+            # Track training sessions when entering/leaving training rooms
+            from business.training_manager import TrainingManager
+            training_manager = TrainingManager()
+            old_room = employee.current_room
+            new_room = employee.target_room
+            
+            # Check if entering or leaving a training room
+            is_training_room = (new_room and (
+                new_room == ROOM_TRAINING_ROOM or
+                new_room.startswith(f"{ROOM_TRAINING_ROOM}_floor")
+            ))
+            was_training_room = (old_room and (
+                old_room == ROOM_TRAINING_ROOM or
+                old_room.startswith(f"{ROOM_TRAINING_ROOM}_floor")
+            ))
+            
+            # End training session if leaving training room
+            if was_training_room and not is_training_room:
+                try:
+                    await training_manager.end_training_session(employee, db_session)
+                except Exception as e:
+                    logger.error(f"Error ending training session for {employee.name}: {e}")
+            
+            employee.current_room = employee.target_room
+            employee.activity_state = "working"
+            employee.target_room = None
+            
+            # Start training session if entering training room
+            if is_training_room and not was_training_room:
+                try:
+                    await training_manager.start_training_session(employee, new_room, db_session)
+                except Exception as e:
+                    logger.error(f"Error starting training session for {employee.name}: {e}")
+            completed_count += 1
+        else:
+            # Destination is full - find alternative
+            if employee.home_room:
+                has_space = await check_room_has_space(employee.home_room, db_session, exclude_employee_id=employee.id)
+                if has_space:
+                    employee.target_room = employee.home_room
+                    employee.current_room = employee.home_room
+                    employee.activity_state = "working"
+                    employee.target_room = None
+                    completed_count += 1
+    
+    # Final safety check: Find ANY remaining walking employees without target_room and fix them
+    final_check_result = await db_session.execute(
+        select(Employee).where(
+            and_(
+                Employee.status == "active",
+                Employee.activity_state == "walking",
+                or_(
+                    Employee.target_room.is_(None),
+                    Employee.target_room == ""
+                )
+            )
+        )
+    )
+    final_stuck = final_check_result.scalars().all()
+    
+    for employee in final_stuck:
+        # Emergency fix - assign to any available room
+        from employees.room_assigner import ROOM_OPEN_OFFICE, ROOM_CUBICLES
+        employee_floor = getattr(employee, 'floor', 1)
+        
+        # Try open office first
+        open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+        has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+        if has_space:
+            employee.target_room = open_office_room
+            fixed_count += 1
+        else:
+            # Try cubicles
+            cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+            has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+            if has_space:
+                employee.target_room = cubicles_room
+                fixed_count += 1
+            else:
+                # Last resort: just assign it anyway (they'll complete the journey)
+                employee.target_room = open_office_room
+                fixed_count += 1
+                logger.warning(f"Assigned {employee.name} (ID: {employee.id}) to {open_office_room} even though it may be full")
+    
+    if fixed_count > 0 or completed_count > 0:
+        await db_session.flush()
+        logger.info(f"Fixed {fixed_count} employees walking without destination, completed {completed_count} journeys")
+    
+    return fixed_count + completed_count
+
+
 async def update_employee_location(employee, target_room: Optional[str], activity_state: str, db_session):
     """
     Update employee's location and activity state.
@@ -868,39 +1120,160 @@ async def update_employee_location(employee, target_room: Optional[str], activit
                 await db_session.flush()
                 return  # Exit early - employee is waiting
         
+        # HARDENED CAPACITY CHECK: Double-check room has space before allowing movement
+        # This prevents any race conditions or edge cases that might allow over-capacity
+        final_check = await check_room_has_space(target_room, db_session, exclude_employee_id=employee.id)
+        if not final_check:
+            # Room became full between checks - try similar room or fallback
+            logger.warning(f"Room {target_room} became full during movement check for {employee.name} (ID: {employee.id}), finding alternative...")
+            alternative_room = await find_available_similar_room(target_room, db_session, exclude_employee_id=employee.id)
+            if alternative_room:
+                target_room = alternative_room
+                final_check = True
+            else:
+                # Try generic fallbacks
+                employee_floor = getattr(employee, 'floor', 1)
+                from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                if await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id):
+                    target_room = cubicles_room
+                    final_check = True
+                else:
+                    open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                    if await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id):
+                        target_room = open_office_room
+                        final_check = True
+                    else:
+                        # All rooms full - set to waiting
+                        employee.activity_state = "waiting"
+                        await db_session.flush()
+                        return
+        
         # Room has space - employee can move
         employee.activity_state = "walking"
+        # Set target_room to track where they're walking to - ALWAYS set it, NO EXCEPTIONS
+        if target_room:
+            employee.target_room = target_room
+        else:
+            # If no target_room provided but we're setting to walking, this should NEVER happen
+            # But if it does, generate a destination immediately
+            logger.error(f"CRITICAL: Employee {employee.name} (ID: {employee.id}) set to walking without target_room! Generating destination...")
+            # Try home room first
+            if employee.home_room:
+                employee.target_room = employee.home_room
+            elif employee.current_room:
+                employee.target_room = employee.current_room
+            else:
+                # Last resort: assign to open office on their floor
+                from employees.room_assigner import ROOM_OPEN_OFFICE
+                employee_floor = getattr(employee, 'floor', 1)
+                employee.target_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                logger.error(f"Assigned {employee.name} (ID: {employee.id}) to {employee.target_room} as emergency destination")
         
         # Update floor if moving to a room on a different floor
-        if target_room.endswith('_floor2'):
-            employee.floor = 2
-        elif target_room.endswith('_floor3'):
-            employee.floor = 3
-        elif target_room.endswith('_floor4'):
-            employee.floor = 4
-        elif not target_room.endswith('_floor2') and not target_room.endswith('_floor3') and not target_room.endswith('_floor4'):
-            # Moving to floor 1 room
-            if getattr(employee, 'floor', 1) in [2, 3, 4]:
-                employee.floor = 1
+        if target_room:
+            if target_room.endswith('_floor2'):
+                employee.floor = 2
+            elif target_room.endswith('_floor3'):
+                employee.floor = 3
+            elif target_room.endswith('_floor4'):
+                employee.floor = 4
+            elif not target_room.endswith('_floor2') and not target_room.endswith('_floor3') and not target_room.endswith('_floor4'):
+                # Moving to floor 1 room
+                if getattr(employee, 'floor', 1) in [2, 3, 4]:
+                    employee.floor = 1
         
-        # Note: We'll set the current_room after a delay to simulate walking
-        # For now, we'll set it immediately but the frontend can animate the transition
-        employee.current_room = target_room
+        # Keep current_room as is while walking - don't update it immediately
+        # This allows the frontend to show where they're going
+        # The current_room will be updated when they actually arrive (in a future tick)
+        # For now, keep them in their current room but mark them as walking to target_room
     else:
         # Employee is staying in place
+        # HARDENED CHECK: Verify current room is not over-capacity
+        if employee.current_room:
+            current_occupancy = await get_room_occupancy(employee.current_room, db_session)
+            current_capacity = get_room_capacity(employee.current_room)
+            if current_occupancy > current_capacity:
+                # Current room is over-capacity - must move immediately
+                logger.error(f"CRITICAL: Employee {employee.name} (ID: {employee.id}) is in over-capacity room {employee.current_room} ({current_occupancy}/{current_capacity}). Moving immediately!")
+                alternative_room = await find_available_similar_room(employee.current_room, db_session, exclude_employee_id=employee.id)
+                if alternative_room:
+                    employee.activity_state = "walking"
+                    employee.target_room = alternative_room
+                    # Update floor if needed
+                    if alternative_room.endswith('_floor2'):
+                        employee.floor = 2
+                    elif alternative_room.endswith('_floor3'):
+                        employee.floor = 3
+                    elif alternative_room.endswith('_floor4'):
+                        employee.floor = 4
+                    await db_session.flush()
+                    return
+                else:
+                    # No alternative found - try generic fallback
+                    employee_floor = getattr(employee, 'floor', 1)
+                    from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                    cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                    if await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id):
+                        employee.activity_state = "walking"
+                        employee.target_room = cubicles_room
+                        await db_session.flush()
+                        return
+        
         # If they were waiting, check if they can now enter their intended room
         if employee.activity_state == "waiting" and target_room:
             # Check if the room they were waiting for now has space
             has_space = await check_room_has_space(target_room, db_session, exclude_employee_id=employee.id)
             if has_space:
-                # Room now has space - allow entry
-                employee.current_room = target_room
-                employee.activity_state = activity_state
+                # Room now has space - allow entry (but verify capacity one more time)
+                final_occupancy = await get_room_occupancy(target_room, db_session)
+                final_capacity = get_room_capacity(target_room)
+                if final_occupancy < final_capacity:
+                    # Track training sessions when entering/leaving training rooms
+                    from business.training_manager import TrainingManager
+                    training_manager = TrainingManager()
+                    old_room = employee.current_room
+                    new_room = target_room
+                    
+                    # Check if entering or leaving a training room
+                    is_training_room = (new_room and (
+                        new_room == ROOM_TRAINING_ROOM or
+                        new_room.startswith(f"{ROOM_TRAINING_ROOM}_floor")
+                    ))
+                    was_training_room = (old_room and (
+                        old_room == ROOM_TRAINING_ROOM or
+                        old_room.startswith(f"{ROOM_TRAINING_ROOM}_floor")
+                    ))
+                    
+                    # End training session if leaving training room
+                    if was_training_room and not is_training_room:
+                        try:
+                            await training_manager.end_training_session(employee, db_session)
+                        except Exception as e:
+                            logger.error(f"Error ending training session for {employee.name}: {e}")
+                    
+                    employee.current_room = target_room
+                    employee.activity_state = activity_state
+                    # Clear target_room since they've arrived
+                    employee.target_room = None
+                    
+                    # Start training session if entering training room
+                    if is_training_room and not was_training_room:
+                        try:
+                            await training_manager.start_training_session(employee, new_room, db_session)
+                        except Exception as e:
+                            logger.error(f"Error starting training session for {employee.name}: {e}")
+                else:
+                    # Room became full - still waiting
+                    employee.activity_state = "waiting"
             else:
                 # Still waiting
                 employee.activity_state = "waiting"
         else:
-            # Normal stay in place
+            # Normal stay in place - clear target_room if they were walking
+            if employee.activity_state == "walking" and activity_state != "walking":
+                # They've arrived at their destination
+                employee.target_room = None
             employee.activity_state = activity_state
     
     await db_session.flush()
@@ -916,7 +1289,7 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
         activity_description: Description of activity
         db_session: Database session
     """
-    # Check if employee has been in training room too long (more than 1 hour since hire)
+    # Check if employee has been in training room too long (more than 30 minutes - training limit)
     from employees.room_assigner import ROOM_TRAINING_ROOM
     from datetime import datetime, timedelta
     current_room = getattr(employee, 'current_room', None)
@@ -936,7 +1309,51 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
             await db_session.flush()
             # Continue processing to check if training should be complete
         
-        # Check if they've been hired recently (within last hour = still in training)
+        # Check if training session has exceeded 30 minutes (primary check)
+        from database.models import TrainingSession
+        from sqlalchemy import select, and_
+        session_result = await db_session.execute(
+            select(TrainingSession).where(
+                and_(
+                    TrainingSession.employee_id == employee.id,
+                    TrainingSession.status == "in_progress"
+                )
+            )
+            .order_by(TrainingSession.start_time.desc())
+        )
+        training_session = session_result.scalar_one_or_none()
+        
+        if training_session and training_session.start_time:
+            # Check session duration
+            start_time_naive = training_session.start_time.replace(tzinfo=None) if training_session.start_time.tzinfo else training_session.start_time
+            time_in_training = datetime.utcnow() - start_time_naive
+            if time_in_training > timedelta(minutes=30):
+                # Training exceeded 30 minutes - end session and move employee out
+                training_session.end_time = datetime.utcnow()
+                training_session.status = "completed"
+                duration = training_session.end_time - start_time_naive
+                training_session.duration_minutes = int(duration.total_seconds() / 60)
+                
+                # Move to home room and start working
+                employee.activity_state = "working"
+                await update_employee_location(employee, employee.home_room, "working", db_session)
+                
+                # Create activity to log training completion
+                from database.models import Activity
+                activity = Activity(
+                    employee_id=employee.id,
+                    activity_type="training_completed",
+                    description=f"{employee.name} completed training (30 minute limit reached) and reported to work area ({employee.home_room})",
+                    activity_metadata={
+                        "training_duration_minutes": training_session.duration_minutes,
+                        "home_room": employee.home_room
+                    }
+                )
+                db_session.add(activity)
+                await db_session.flush()
+                return
+        
+        # Fallback: Check if they've been hired recently (for employees without session records)
         hired_at = getattr(employee, 'hired_at', None)
         if hired_at:
             try:
@@ -951,8 +1368,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                     hired_at_naive = hired_at
                 
                 time_since_hire = datetime.utcnow() - hired_at_naive
-                # If hired more than 1 hour ago and still in training room, move them out
-                if time_since_hire > timedelta(hours=1):
+                # If hired more than 30 minutes ago and still in training room, move them out
+                # (Training should never last more than 30 minutes)
+                if time_since_hire > timedelta(minutes=30):
                     # Training complete - move to home room and start working
                     employee.activity_state = "working"
                     await update_employee_location(employee, employee.home_room, "working", db_session)
@@ -1223,6 +1641,9 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
         # If still not moved and they're waiting, change state to working if they have a current room
         # This prevents infinite waiting - they should be working, not idle
         if not moved and employee.activity_state == "waiting" and employee.current_room:
+            # Clear target_room if they were walking
+            if getattr(employee, 'target_room', None):
+                employee.target_room = None
             employee.activity_state = "working"
             await db_session.flush()
         
@@ -1357,4 +1778,347 @@ async def process_employee_movement(employee, activity_type: str, activity_descr
                     return
             # Move to target room - capacity will be checked in update_employee_location
             await update_employee_location(employee, target_room, activity_state, db_session)
+
+
+def find_similar_rooms(room_id: str) -> list:
+    """
+    Find similar rooms that can be used as alternatives for a given room.
+    Groups rooms by type (office space, meeting rooms, break areas, etc.)
+    
+    Args:
+        room_id: Room identifier
+        
+    Returns:
+        list: List of similar room identifiers that can serve as alternatives
+    """
+    from employees.room_assigner import (
+        ROOM_OPEN_OFFICE, ROOM_CUBICLES, ROOM_CONFERENCE_ROOM,
+        ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_TRAINING_ROOM,
+        ROOM_STORAGE, ROOM_IT_ROOM, ROOM_MANAGER_OFFICE,
+        ROOM_RECEPTION, ROOM_EXECUTIVE_SUITE, ROOM_HR_ROOM,
+        ROOM_SALES_ROOM, ROOM_INNOVATION_LAB, ROOM_HOTDESK,
+        ROOM_FOCUS_PODS, ROOM_COLLAB_LOUNGE, ROOM_WAR_ROOM,
+        ROOM_DESIGN_STUDIO, ROOM_HR_WELLNESS, ROOM_THEATER,
+        ROOM_HUDDLE, ROOM_CORNER_EXEC
+    )
+    
+    # Extract base room type and floor
+    base_room = room_id.replace('_floor2', '').replace('_floor3', '').replace('_floor4', '').replace('_floor4_2', '').replace('_floor4_3', '').replace('_floor4_4', '').replace('_floor4_5', '')
+    
+    # Determine floor
+    floor = 1
+    if '_floor2' in room_id:
+        floor = 2
+    elif '_floor3' in room_id:
+        floor = 3
+    elif '_floor4' in room_id:
+        floor = 4
+    
+    similar_rooms = []
+    
+    # Office space group (open office, cubicles, hotdesk)
+    if base_room in [ROOM_OPEN_OFFICE, ROOM_CUBICLES, ROOM_HOTDESK]:
+        if floor == 1:
+            similar_rooms = [ROOM_OPEN_OFFICE, ROOM_CUBICLES]
+        elif floor == 2:
+            similar_rooms = [f"{ROOM_OPEN_OFFICE}_floor2", f"{ROOM_CUBICLES}_floor2"]
+        elif floor == 3:
+            similar_rooms = [f"{ROOM_OPEN_OFFICE}_floor3", f"{ROOM_CUBICLES}_floor3", f"{ROOM_HOTDESK}_floor3"]
+        elif floor == 4:
+            similar_rooms = [
+                f"{ROOM_CUBICLES}_floor4", f"{ROOM_CUBICLES}_floor4_2", 
+                f"{ROOM_CUBICLES}_floor4_3", f"{ROOM_CUBICLES}_floor4_4", 
+                f"{ROOM_CUBICLES}_floor4_5"
+            ]
+        # Also include other floors' office spaces
+        for f in [1, 2, 3, 4]:
+            if f != floor:
+                if f == 1:
+                    similar_rooms.extend([ROOM_OPEN_OFFICE, ROOM_CUBICLES])
+                elif f == 2:
+                    similar_rooms.extend([f"{ROOM_OPEN_OFFICE}_floor2", f"{ROOM_CUBICLES}_floor2"])
+                elif f == 3:
+                    similar_rooms.extend([f"{ROOM_OPEN_OFFICE}_floor3", f"{ROOM_CUBICLES}_floor3", f"{ROOM_HOTDESK}_floor3"])
+                elif f == 4:
+                    similar_rooms.extend([
+                        f"{ROOM_CUBICLES}_floor4", f"{ROOM_CUBICLES}_floor4_2", 
+                        f"{ROOM_CUBICLES}_floor4_3", f"{ROOM_CUBICLES}_floor4_4", 
+                        f"{ROOM_CUBICLES}_floor4_5"
+                    ])
+    
+    # Meeting rooms group (conference, huddle, war room, theater)
+    elif base_room in [ROOM_CONFERENCE_ROOM, ROOM_HUDDLE, ROOM_WAR_ROOM, ROOM_THEATER]:
+        if floor == 1:
+            similar_rooms = [ROOM_CONFERENCE_ROOM]
+        elif floor == 2:
+            similar_rooms = [f"{ROOM_CONFERENCE_ROOM}_floor2"]
+        elif floor == 3:
+            similar_rooms = [f"{ROOM_CONFERENCE_ROOM}_floor3", f"{ROOM_HUDDLE}_floor3", f"{ROOM_WAR_ROOM}_floor3", f"{ROOM_THEATER}_floor3"]
+        # Include other floors' meeting rooms
+        similar_rooms.extend([ROOM_CONFERENCE_ROOM, f"{ROOM_CONFERENCE_ROOM}_floor2", f"{ROOM_HUDDLE}_floor3", f"{ROOM_WAR_ROOM}_floor3", f"{ROOM_THEATER}_floor3"])
+    
+    # Break/relaxation areas (breakroom, lounge, HR wellness)
+    elif base_room in [ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_HR_WELLNESS]:
+        if floor == 1:
+            similar_rooms = [ROOM_BREAKROOM, ROOM_LOUNGE]
+        elif floor == 2:
+            similar_rooms = [f"{ROOM_BREAKROOM}_floor2", f"{ROOM_LOUNGE}_floor2"]
+        elif floor == 3:
+            similar_rooms = [f"{ROOM_BREAKROOM}_floor3", f"{ROOM_LOUNGE}_floor3", f"{ROOM_HR_WELLNESS}_floor3"]
+        # Include other floors' break areas
+        similar_rooms.extend([ROOM_BREAKROOM, ROOM_LOUNGE, f"{ROOM_BREAKROOM}_floor2", f"{ROOM_LOUNGE}_floor2", f"{ROOM_BREAKROOM}_floor3", f"{ROOM_LOUNGE}_floor3", f"{ROOM_HR_WELLNESS}_floor3"])
+    
+    # Training rooms
+    elif base_room == ROOM_TRAINING_ROOM:
+        similar_rooms = [
+            ROOM_TRAINING_ROOM,
+            f"{ROOM_TRAINING_ROOM}_floor2",
+            f"{ROOM_TRAINING_ROOM}_floor4",
+            f"{ROOM_TRAINING_ROOM}_floor4_2",
+            f"{ROOM_TRAINING_ROOM}_floor4_3",
+            f"{ROOM_TRAINING_ROOM}_floor4_4",
+            f"{ROOM_TRAINING_ROOM}_floor4_5"
+        ]
+    
+    # Specialized work areas (IT, Storage, Reception) - these are more restrictive
+    elif base_room in [ROOM_IT_ROOM, ROOM_STORAGE, ROOM_RECEPTION]:
+        # For these, only include same type on different floors
+        if base_room == ROOM_IT_ROOM:
+            similar_rooms = [ROOM_IT_ROOM, f"{ROOM_IT_ROOM}_floor2"]
+        elif base_room == ROOM_STORAGE:
+            similar_rooms = [ROOM_STORAGE, f"{ROOM_STORAGE}_floor2"]
+        elif base_room == ROOM_RECEPTION:
+            similar_rooms = [ROOM_RECEPTION]  # Reception usually only on floor 1
+    
+    # Executive/Manager offices
+    elif base_room in [ROOM_MANAGER_OFFICE, ROOM_EXECUTIVE_SUITE, ROOM_CORNER_EXEC]:
+        if floor == 1:
+            similar_rooms = [ROOM_MANAGER_OFFICE]
+        elif floor == 2:
+            similar_rooms = [f"{ROOM_EXECUTIVE_SUITE}_floor2", ROOM_MANAGER_OFFICE]
+        elif floor == 3:
+            similar_rooms = [f"{ROOM_CORNER_EXEC}_floor3", ROOM_MANAGER_OFFICE]
+        similar_rooms.extend([ROOM_MANAGER_OFFICE, f"{ROOM_EXECUTIVE_SUITE}_floor2", f"{ROOM_CORNER_EXEC}_floor3"])
+    
+    # Collaboration spaces
+    elif base_room in [ROOM_COLLAB_LOUNGE]:
+        similar_rooms = [f"{ROOM_COLLAB_LOUNGE}_floor3", ROOM_CONFERENCE_ROOM, f"{ROOM_CONFERENCE_ROOM}_floor2"]
+    
+    # Design/Innovation spaces
+    elif base_room in [ROOM_DESIGN_STUDIO, ROOM_INNOVATION_LAB, ROOM_FOCUS_PODS]:
+        similar_rooms = [f"{ROOM_DESIGN_STUDIO}_floor3", f"{ROOM_INNOVATION_LAB}_floor3", f"{ROOM_FOCUS_PODS}_floor3"]
+    
+    # Department-specific rooms (HR, Sales)
+    elif base_room in [ROOM_HR_ROOM, ROOM_SALES_ROOM]:
+        if base_room == ROOM_HR_ROOM:
+            similar_rooms = [f"{ROOM_HR_ROOM}_floor2", ROOM_MANAGER_OFFICE]
+        elif base_room == ROOM_SALES_ROOM:
+            similar_rooms = [f"{ROOM_SALES_ROOM}_floor2", ROOM_CONFERENCE_ROOM, f"{ROOM_CONFERENCE_ROOM}_floor2"]
+    
+    # Remove the original room from the list
+    if room_id in similar_rooms:
+        similar_rooms.remove(room_id)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_rooms = []
+    for room in similar_rooms:
+        if room not in seen:
+            seen.add(room)
+            unique_rooms.append(room)
+    
+    return unique_rooms
+
+
+async def find_available_similar_room(room_id: str, db_session, exclude_employee_id: int = None) -> Optional[str]:
+    """
+    Find an available similar room that can serve as an alternative.
+    Prioritizes rooms with the most available space.
+    
+    Args:
+        room_id: Original room identifier
+        db_session: Database session
+        exclude_employee_id: Optional employee ID to exclude from count
+        
+    Returns:
+        Optional[str]: Available similar room ID, or None if all are full
+    """
+    similar_rooms = find_similar_rooms(room_id)
+    
+    if not similar_rooms:
+        return None
+    
+    best_room = None
+    most_space = -1
+    
+    for alt_room_id in similar_rooms:
+        has_space = await check_room_has_space(alt_room_id, db_session, exclude_employee_id)
+        if has_space:
+            # Calculate available space
+            capacity = get_room_capacity(alt_room_id)
+            occupancy = await get_room_occupancy(alt_room_id, db_session)
+            available_space = capacity - occupancy
+            
+            if available_space > most_space:
+                most_space = available_space
+                best_room = alt_room_id
+    
+    return best_room
+
+
+async def enforce_room_capacity(db_session) -> dict:
+    """
+    Detect and fix all over-capacity rooms by redistributing employees to similar rooms.
+    Makes employees physically walk to less crowded rooms.
+    
+    Args:
+        db_session: Database session
+        
+    Returns:
+        dict: Statistics about the fix operation
+    """
+    from database.models import Employee
+    from sqlalchemy import select, func
+    import random
+    
+    stats = {
+        "over_capacity_rooms": 0,
+        "employees_redistributed": 0,
+        "rooms_fixed": []
+    }
+    
+    # Get all unique rooms that have employees
+    result = await db_session.execute(
+        select(Employee.current_room, func.count(Employee.id).label('count'))
+        .where(Employee.status == "active", Employee.current_room.isnot(None))
+        .group_by(Employee.current_room)
+    )
+    room_occupancies = result.all()
+    
+    # Check each room for over-capacity
+    over_capacity_rooms = []
+    for room_id, occupancy in room_occupancies:
+        capacity = get_room_capacity(room_id)
+        if occupancy > capacity:
+            over_capacity = occupancy - capacity
+            over_capacity_rooms.append({
+                "room_id": room_id,
+                "capacity": capacity,
+                "occupancy": occupancy,
+                "over_by": over_capacity
+            })
+    
+    if not over_capacity_rooms:
+        return stats
+    
+    stats["over_capacity_rooms"] = len(over_capacity_rooms)
+    
+    # Fix each over-capacity room
+    for room_info in over_capacity_rooms:
+        room_id = room_info["room_id"]
+        over_by = room_info["over_by"]
+        
+        # Get all employees in this over-capacity room
+        result = await db_session.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.current_room == room_id
+            )
+        )
+        employees_in_room = result.scalars().all()
+        
+        # Shuffle to randomly select who gets moved
+        random.shuffle(employees_in_room)
+        
+        # Move the excess employees to similar rooms
+        moved_count = 0
+        for employee in employees_in_room[:over_by]:
+            # Find an available similar room
+            alternative_room = await find_available_similar_room(room_id, db_session, exclude_employee_id=employee.id)
+            
+            if alternative_room:
+                # Make employee walk to the alternative room
+                employee.activity_state = "walking"
+                employee.target_room = alternative_room
+                # Update floor if moving to different floor
+                if alternative_room.endswith('_floor2'):
+                    employee.floor = 2
+                elif alternative_room.endswith('_floor3'):
+                    employee.floor = 3
+                elif alternative_room.endswith('_floor4'):
+                    employee.floor = 4
+                elif not alternative_room.endswith('_floor2') and not alternative_room.endswith('_floor3') and not alternative_room.endswith('_floor4'):
+                    if getattr(employee, 'floor', 1) in [2, 3, 4]:
+                        employee.floor = 1
+                
+                moved_count += 1
+                stats["employees_redistributed"] += 1
+                logger.info(f"Moving {employee.name} (ID: {employee.id}) from over-capacity room {room_id} to {alternative_room}")
+            else:
+                # No similar room available - try generic fallback rooms
+                employee_floor = getattr(employee, 'floor', 1)
+                
+                # Try cubicles on their floor
+                from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                cubicles_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                has_space = await check_room_has_space(cubicles_room, db_session, exclude_employee_id=employee.id)
+                
+                if has_space:
+                    employee.activity_state = "walking"
+                    employee.target_room = cubicles_room
+                    moved_count += 1
+                    stats["employees_redistributed"] += 1
+                    logger.info(f"Moving {employee.name} (ID: {employee.id}) from over-capacity room {room_id} to fallback {cubicles_room}")
+                else:
+                    # Try open office
+                    open_office_room = f"{ROOM_OPEN_OFFICE}_floor{employee_floor}" if employee_floor > 1 else ROOM_OPEN_OFFICE
+                    has_space = await check_room_has_space(open_office_room, db_session, exclude_employee_id=employee.id)
+                    
+                    if has_space:
+                        employee.activity_state = "walking"
+                        employee.target_room = open_office_room
+                        moved_count += 1
+                        stats["employees_redistributed"] += 1
+                        logger.info(f"Moving {employee.name} (ID: {employee.id}) from over-capacity room {room_id} to fallback {open_office_room}")
+                    else:
+                        # Last resort: try any floor's cubicles or open office
+                        found_fallback = False
+                        for floor in [1, 2, 3, 4]:
+                            if floor == 1:
+                                test_rooms = [ROOM_CUBICLES, ROOM_OPEN_OFFICE]
+                            else:
+                                test_rooms = [
+                                    f"{ROOM_CUBICLES}_floor{floor}",
+                                    f"{ROOM_OPEN_OFFICE}_floor{floor}"
+                                ]
+                            
+                            for test_room in test_rooms:
+                                has_space = await check_room_has_space(test_room, db_session, exclude_employee_id=employee.id)
+                                if has_space:
+                                    employee.activity_state = "walking"
+                                    employee.target_room = test_room
+                                    employee.floor = floor
+                                    moved_count += 1
+                                    stats["employees_redistributed"] += 1
+                                    logger.info(f"Moving {employee.name} (ID: {employee.id}) from over-capacity room {room_id} to emergency fallback {test_room}")
+                                    found_fallback = True
+                                    break
+                            
+                            if found_fallback:
+                                break
+        
+        if moved_count > 0:
+            stats["rooms_fixed"].append({
+                "room_id": room_id,
+                "moved": moved_count,
+                "over_by": over_by
+            })
+            logger.warning(f"Fixed over-capacity room {room_id}: moved {moved_count} employees (was {room_info['occupancy']}/{room_info['capacity']})")
+    
+    await db_session.flush()
+    
+    if stats["employees_redistributed"] > 0:
+        logger.warning(f"Capacity enforcement: Fixed {stats['over_capacity_rooms']} over-capacity rooms, redistributed {stats['employees_redistributed']} employees")
+    
+    return stats
 

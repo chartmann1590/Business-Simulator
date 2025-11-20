@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Context Report</title>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            font-family: 'Times New Roman', serif;
+            text-decoration: underline;
+            margin-bottom: 0.5in;
+        }
+
+        /* HEADER */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .header h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 0;
+        }
+
+        /* EXECUTIVE SUMMARY */
+        p {
+            line-height: 1.5;
+            margin-bottom: 0.5in;
+        }
+        p span {
+            color: #0000ff; /* blue */
+        }
+
+        /* MAIN SECTIONS */
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 0.5in;
+        }
+
+        /* DATA SECTIONS */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #000000;
+            padding: 0.25in;
+            text-align: left;
+        }
+
+        /* CONCLUSION */
+        p:last-child {
+            margin-bottom: 1in;
+        }
+
+        /* FOOTER */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 1in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .footer p {
+            font-size: 10pt;
+            color: #666666; /* gray */
+        }
+    </style>
+</head>
+<body>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1>Business Context Report</h1>
+        <div class="header">
+            <p style="font-size: 10pt;">Date: 2023-02-20</p>
+            <p style="font-size: 10pt;">Employee Name: Diana Ivanov</p>
+            <p style="font-size: 10pt;">Department: HR</p>
+            <p style="font-size: 10pt;">Document Classification: Confidential</p>
+        </div>
+        <h2>Executive Summary</h2>
+        <p>The company's total revenue increased by 15% QoQ, with a total of $848,324.28. Our profit margin stands at 42.67%, and our active projects are valued at $196,119.03 for the Digital Transformation Project and $115,778.81 for the Customer Experience Enhancement project.</p>
+        <p style="font-size: 10pt;">We have a total of 1100 employees across various departments, with the HR department having 52 employees. Our operations are efficiently managed by 60 employees, while our finance team is responsible for 1 employee.</p>
+        <h2>Business Metrics</h2>
+        <table border="1">
+            <tr>
+                <th>Category</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Total Revenue</td>
+                <td>$848,324.28</td>
+            </tr>
+            <tr>
+                <td>Total Profit</td>
+                <td>$361,970.04</td>
+            </tr>
+            <tr>
+                <td>Profit Margin</td>
+                <td>42.67%</td>
+            </tr>
+            <tr>
+                <td>Total Expenses</td>
+                <td>$486,354.24</td>
+            </tr>
+        </table>
+        <h2>Active Projects</h2>
+        <p style="font-size: 10pt;">Our active projects are valued at $196,119.03 for the Digital Transformation Project and $115,778.81 for the Customer Experience Enhancement project.</p>
+        <ul style="list-style-type: decimal;">
+            <li>1. Digital Transformation Project ($196,119.03)</li>
+            <li>2. Customer Experience Enhancement ($88,137.90) (active status)</li>
+            <li>3. Customer Experience Enhancement ($115,778.81) (active status)</li>
+        </ul>
+        <h2>Department Distribution</h2>
+        <table border="1">
+            <tr>
+                <th>Department</th>
+                <th>Employee Count</th>
+            </tr>
+            <tr>
+                <td>Product</td>
+                <td>49 employees</td>
+            </tr>
+            <tr>
+                <td>Finance</td>
+                <td>1 employee</td>
+            </tr>
+            <tr>
+                <td>Operations</td>
+                <td>60 employees</td>
+            </tr>
+            <tr>
+                <td>HR</td>
+                <td>52 employees</td>
+            </tr>
+            <tr>
+                <td>IT</td>
+                <td>48 employees</td>
+            </tr>
+        </table>
+        <h2>Conclusion and Recommendations</h2>
+        <p style="font-size: 10pt;">Based on the data provided, we recommend increasing our investment in employee training programs to enhance efficiency. We also suggest optimizing our resource allocation for project management and ensuring effective communication across departments.</p>
+        <div class="footer">
+            <p style="font-size: 10pt;">Page 1 of 5</p>
+            <p style="font-size: 10pt;">Document Version: 2023-02-20</p>
+            <p style="font-size: 10pt;">Confidentiality Notice: This document contains confidential information. Distribution is restricted to authorized personnel.</p>
+        </div>
+    </div>
+</body>
+</html>

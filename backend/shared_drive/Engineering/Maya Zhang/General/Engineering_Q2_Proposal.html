@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-top: -10px;
+            text-decoration: underline;
+        }
+        
+        header {
+            position: fixed;
+            top: 10mm;
+            left: 0.5in;
+            width: calc(100% - 2in);
+            padding: 5mm;
+            background-color: #ffffff;
+            border-bottom: 1px solid #cccccc;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .date {
+            font-size: 14pt;
+            color: #666666;
+            margin-left: 10mm;
+        }
+        
+        .name {
+            font-size: 14pt;
+            color: #444444;
+            margin-left: 20mm;
+        }
+        
+        .department {
+            font-size: 12pt;
+            color: #333333;
+            margin-left: 25mm;
+        }
+        
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: -10px;
+        }
+        
+        section {
+            padding: 10mm;
+            border-bottom: 1px solid #cccccc;
+        }
+        
+        p {
+            line-height: 1.5;
+            margin-bottom: 12pt;
+        }
+        
+        table {
+            width: calc(100% - 2in);
+            border-collapse: collapse;
+            margin-top: 10mm;
+        }
+        
+        th, td {
+            padding: 5mm;
+            border: 1px solid #cccccc;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #f0f0f0;
+            color: #333333;
+        }
+        
+        ol, ul {
+            list-style-type: decimal;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>Engineering Department Report
+            <span style="text-decoration: underline;"><u>Quarterly Review</u></span>
+        </h1>
+        <header class="header">
+            <p class="date">March 15, 2024</p>
+            <p class="name">Maya Zhang</p>
+            <p class="department">Engineering Department</p>
+            <p>Confidential Report</p>
+        </header>
+        <h2>Executive Summary</h2>
+        <section>
+            <p>The Engineering Department has achieved significant revenue growth, with a 15% increase in total revenue compared to the same quarter last year. This growth is attributed to the successful completion of several projects, including the Customer Portal Redesign and API Infrastructure Upgrade.</p>
+            <p>Our profit margin has also seen an uptick, standing at 42.67%. However, we recognize that this increase is partially due to a one-time expense related to the project upgrades.</p>
+            <p>Despite these challenges, our team remains committed to delivering high-quality projects and driving growth for the company.</p>
+        </section>
+        <h2>Business Metrics</h2>
+        <section>
+            <table>
+                <tr>
+                    <th>Total Revenue</th>
+                    <td>$848,324.28</td>
+                </tr>
+                <tr>
+                    <th>Total Profit</th>
+                    <td>$361,970.04</td>
+                </tr>
+                <tr>
+                    <th>Profit Margin</th>
+                    <td>42.67%</td>
+                </tr>
+            </table>
+        </section>
+        <h2>Active Projects</h2>
+        <section>
+            <ol>
+                <li>Customer Portal Redesign: $75,000.00 budget, active status</li>
+                <li>API Infrastructure Upgrade: $100,000.00 budget, active status</li>
+                <li>Mobile App Development: $150,000.00 budget, active status</li>
+            </ol>
+        </section>
+        <h2>Department Distribution</h2>
+        <section>
+            <table>
+                <tr>
+                    <th>Product</th>
+                    <td>46 employees</td>
+                </tr>
+                <tr>
+                    <th>HR</th>
+                    <td>56 employees</td>
+                </tr>
+                <tr>
+                    <th>Finance</th>
+                    <td>1 employee</td>
+                </tr>
+                <tr>
+                    <th>Operations</th>
+                    <td>55 employees</td>
+                </tr>
+                <tr>
+                    <th>IT</th>
+                    <td>55 employees</td>
+                </tr>
+            </table>
+        </section>
+        <h2>Critical Requirements</h2>
+        <section>
+            <p>As the IT Manager, it is essential to stay up-to-date on the latest technological advancements and trends in the industry. Additionally, effective communication and collaboration with other departments are crucial for driving growth and success.</p>
+            <ol style="list-style-type: decimal;">
+                <li>Regularly review and update project status with the engineering team</li>
+                <li>Attend quarterly sales meetings to discuss revenue growth and market trends</li>
+                <li>Collaborate with HR to develop effective employee training programs</li>
+            </ol>
+        </section>
+        <h2>Conclusion</h2>
+        <section>
+            <p>In conclusion, the Engineering Department has made significant strides in driving growth and revenue for the company. However, it is essential to continue monitoring project status and collaborating with other departments to drive further success.</p>
+        </section>
+    </div>
+
+    <!-- Page Numbers -->
+    <div style="position: fixed; bottom: 0; width: calc(100% - 2in); text-align: center;">
+        <p>Page [X]</p>
+    </div>
+
+    <!-- Confidentiality Notice -->
+    <footer>
+        <p style="font-size: 12pt;">Confidential Report. Distribution limited to authorized personnel only.</p>
+        <p style="font-size: 12pt;">Document Version: 1.0</p>
+        <p style="font-size: 12pt;">Date Created: March 15, 2024</p>
+    </footer>
+
+    <!-- Document Version -->
+    <div style="position: fixed; bottom: 10mm; right: -20mm;">
+        <p>Document Version: 1.0</p>
+    </div>
+
+    <!-- Confidentiality Notice -->
+    <div style="position: fixed; bottom: 10mm; left: -20mm;">
+        <p style="font-size: 12pt;">Confidential Report. Distribution limited to authorized personnel only.</p>
+    </div>

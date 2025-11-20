@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 function Products() {
   const [products, setProducts] = useState([])
@@ -12,17 +13,14 @@ function Products() {
   }, [])
 
   const fetchProducts = async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/products')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      setProducts(Array.isArray(data) ? data : [])
-      setLoading(false)
+      const result = await apiGet('/api/products')
+      setProducts(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching products:', error)
       setProducts([])
+    } finally {
       setLoading(false)
     }
   }

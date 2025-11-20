@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  font-family: 'Times New Roman', serif;
+  font-size: 12pt;
+  margin: 1in;
+  line-height: 1.5;
+  color: #000000;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+h1 {
+  text-align: center;
+  font-size: 18pt;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-decoration: underline;
+}
+
+h2 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+p {
+  line-height: 1.5;
+  margin-bottom: 12pt;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #000000;
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #f0f0f0;
+}
+</style>
+</head>
+<body>
+
+<div style="text-align: center; margin-bottom: 20pt;">
+<h1>Business Context Report</h1>
+</div>
+
+<div style="margin-bottom: 10pt;">
+<p><strong>Date:</strong> March 15, 2023<br>
+<strong>Name:</strong> Kevin Thompson<br>
+<strong>Department:</strong> Product<br>
+<strong>Document Classification:</strong> Confidential</p>
+</div>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Executive Summary</h2>
+
+<p>The purpose of this report is to provide a comprehensive overview of the business context, including current projects, employee information, and key performance metrics. The report aims to inform strategic decisions and drive business growth.</p>
+<p>As we move forward, it is essential to prioritize cost optimization and efficiency while driving revenue growth through strategic initiatives. The following sections will provide a detailed analysis of our current projects, departments, and key performance indicators.</p>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Current Projects</h2>
+
+<table>
+  <tr>
+    <th>Project Name</th>
+    <th>Status</th>
+    <th>Budget</th>
+    <th>Revenue</th>
+  </tr>
+  <tr>
+    <td>Customer Experience Enhancement</td>
+    <td>Active</td>
+    <td>$88,137.90</td>
+    <td>$10,036.51</td>
+  </tr>
+  <tr>
+    <td>Digital Transformation Project</td>
+    <td>Active</td>
+    <td>$196,119.03</td>
+    <td>(No revenue reported)</td>
+  </tr>
+  <tr>
+    <td>Market Expansion Initiative</td>
+    <td>Active</td>
+    <td>$81,262.34</td>
+    <td>(No revenue reported)</td>
+  </tr>
+</table>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Employee Information</h2>
+
+<p>The Product department has 54 employees, while HR has 56 employees and Finance has 1 employee. Operations has 55 employees and IT has 58 employees.</p>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Business Metrics</h2>
+
+<table>
+  <tr>
+    <th>Metric</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td>Total Revenue</td>
+    <td>$834,302.72</td>
+  </tr>
+  <tr>
+    <td>Total Profit</td>
+    <td>$347,948.48</td>
+  </tr>
+  <tr>
+    <td>Profit Margin</td>
+    <td>41.71%</td>
+  </tr>
+  <tr>
+    <td>Total Expenses</td>
+    <td>$486,354.24</td>
+  </tr>
+  <tr>
+    <td>Active Projects</td>
+    <td>13</td>
+  </tr>
+  <tr>
+    <td>Total Employees</td>
+    <td>924</td>
+  </tr>
+</table>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Critical Requirements</h2>
+
+<p><strong>1. Project Management:</strong> Effective project management is critical to driving revenue growth and cost optimization. The following requirements should be met:</p>
+<ul>
+<li>Regular project status updates</li>
+<li>Agile methodologies for iterative development</li>
+<li>Clear communication with stakeholders</li>
+</ul>
+
+<p><strong>2. Cost Optimization:</strong> To drive efficiency, we must identify areas of cost optimization and implement measures to reduce expenses while driving revenue growth. The following requirements should be met:</p>
+<ul>
+<li>Regular budget analysis</li>
+<li>Cost-benefit analysis for all initiatives</li>
+<li>Implementation of lean principles for process improvements</li>
+</ul>
+
+<p><strong>3. Employee Development:</strong> To drive business growth, we must prioritize employee development and ensure that our employees have the necessary skills to excel in their roles. The following requirements should be met:</p>
+<ul>
+<li>Regular performance reviews</li>
+<li>Training and development programs for all employees</li>
+<li>Clear career paths and opportunities for advancement</li>
+</ul>
+
+<h2 style="margin-top: 20px; margin-bottom: 10px;">Conclusion</h2>
+
+<p>The purpose of this report is to provide a comprehensive overview of the business context, including current projects, employee information, and key performance metrics. The report aims to inform strategic decisions and drive business growth. By meeting the critical requirements outlined above, we can drive revenue growth, cost optimization, and employee development.</p>
+
+<div style="margin-top: 20px; page-break-before: always;"></div>
+<footer style="text-align: center; margin-bottom: 20pt;">
+<p>&copy; 2023 Business Context Report</p>
+<p>Confidentiality Notice: This document is confidential and should not be shared with unauthorized parties.</p>
+<p>Page <span id="pageNumber">1</span> of <span id="totalPages"></span></footer>
+
+<script>
+document.getElementById("pageNumber").innerHTML = 1;
+var totalPages = Math.ceil(document.body.innerHTML.length / 10000);
+document.getElementById("totalPages").innerHTML = totalPages;
+
+// Add event listener to the page for when it loads
+window.addEventListener('load', function() {
+  var currentParagraph = document.activeElement;
+  if (currentParagraph) {
+    currentParagraph.style.fontFamily = 'Times New Roman, serif';
+    currentParagraph.style.fontSize = '12pt';
+  }
+});
+</script>
+
+</body>
+</html>

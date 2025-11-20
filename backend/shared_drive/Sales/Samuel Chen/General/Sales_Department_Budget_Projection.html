@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  /* Spreadsheets type */
+  .finance { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0; }
+  .sales { background-color: #FF9800; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0; }
+  .management { background-color: #2196F3; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0; }
+  .operations { background-color: #03A9F4; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0; }
+  .hr { background-color: #FFC107; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0; }
+
+ /* Premium Excel styling */
+  table {
+    border-collapse: collapse;
+  }
+
+  th, td {
+    border: 1px solid #d0d0d0;
+  }
+  
+  .grid-row {
+    background-color: white;
+  }
+  
+  .total-row {
+    background-color: #e7f3ff;
+    font-weight: bold;
+    border-top: 2px solid #e7f3ff;
+  }
+
+ /* Data requirements */
+  table tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+  
+  .currency { color: black; font-size: 14pt; }
+  
+  /* Color coding */
+  .green { background-color: #C6EFCE; }
+  .red { background-color: #FF3737; }
+  .blue { background-color: #4567B7; }
+</style>
+</head>
+<body>
+<table border="0" cellpadding="8" cellspacing="0">
+    <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+        <td colspan="10">**Quarterly Financial Dashboard**</td>
+    </tr>
+
+    <tr class="header-row">
+      <th>Business Metrics</th>
+      <th>Total Revenue ($)</th>
+      <th>Total Profit ($)</th>
+      <th>Total Expenses ($)</th>
+      <th>Profit Margin (%)</th>
+      <th>Active Projects</th>
+      <th>Total Employees</th>
+    </tr>
+
+    <tr class="grid-row">
+      <td colspan="7">Digital Transformation Project: Budget $196,119.03, Revenue $70,675.89 ($0.36% of Total Revenue)</td>
+      <td>$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>$486,354.24</td>
+      <td>42.67%</td>
+      <td>15</td>
+      <td>1257</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td colspan="7">Strategic Partnership Development: Budget $156,356.16, Revenue $17,080.48 ($0.02% of Total Revenue)</td>
+      <td>$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>$486,354.24</td>
+      <td>42.67%</td>
+      <td>15</td>
+      <td>1257</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td colspan="7">Customer Experience Enhancement: Budget $88,137.90, Revenue $10,036.51 ($0.01% of Total Revenue)</td>
+      <td>$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>$486,354.24</td>
+      <td>42.67%</td>
+      <td>15</td>
+      <td>1257</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td colspan="7">Customer Experience Enhancement: Budget $115,778.81, Revenue $43,994.25 ($0.05% of Total Revenue)</td>
+      <td>$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>$486,354.24</td>
+      <td>42.67%</td>
+      <td>15</td>
+      <td>1257</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td colspan="7">Product Innovation Program: Budget $147,567.09, Revenue $0.00 ($0.00% of Total Revenue)</td>
+      <td>$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>$486,354.24</td>
+      <td>42.67%</td>
+      <td>15</td>
+      <td>1257</td>
+    </tr>
+
+    <tr class="total-row">
+      <td colspan="7">**Total Revenue:** $848,324.28
+        **Total Profit:** $361,970.04
+        **Total Expenses:** $486,354.24
+        **Profit Margin:** 42.67%
+        **Active Projects:** 15
+        **Total Employees:** 1257</td>
+    </tr>
+
+    <tr class="grid-row">
+      <th style="font-weight: bold;">Sales/Marketing Performance</th>
+      <th>Total Revenue ($)</th>
+      <th>Conversion Rate (%)</th>
+      <th>Total Employees</th>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #FF9800; color: white;">Sales</td>
+      <td>$848,324.28</td>
+      <td>(2.50% of Total Revenue)</td>
+      <td>48</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #C6EFCE; color: black;">Marketing</td>
+      <td>$848,324.28</td>
+      <td>(2.50% of Total Revenue)</td>
+      <td>63</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #FFC107; color: white;">Conversion Rate:</td>
+      <td>(1.75% of Total Sales)</td>
+      <td></td>
+      <td></td>
+    </tr>
+
+    <tr class="total-row">
+      <th style="font-weight: bold;">**Sales/Marketing Performance:** $848,324.28
+        **Conversion Rate:** (2.50% of Total Revenue)
+        **Total Employees:** 111</td>
+    </tr>
+
+    <tr class="grid-row">
+      <th style="background-color: #4CAF50; color: white;">Operations Efficiency Metrics</th>
+      <th>Total Resources Used</th>
+      <th>Total Costs ($)</th>
+      <th>Cost-to-Sales Ratio (%)</th>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #03A9F4; color: white;">Total Resources Used:</td>
+      <td>$0</td>
+      <td>$0.00</td>
+      <td></td>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #4567B7; color: white;">Cost-to-Sales Ratio:</td>
+      <td></td>
+      <td></td>
+      <td>(0.00% of Total Sales)</td>
+    </tr>
+
+    <tr class="total-row">
+      <th style="font-weight: bold;">**Operations Efficiency Metrics:** 
+        **Total Resources Used:** $0
+        **Cost-to-Sales Ratio:** (0.00% of Total Revenue)
+        **Total Costs:** $486,354.24</td>
+    </tr>
+
+    <tr class="grid-row">
+      <th style="background-color: #C6EFCE; color: black;">Employee Cost Analysis</th>
+      <th>Total Employee Salaries ($)</th>
+      <th>Total Benefits ($)</th>
+      <th>Total Taxes ($)</th>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #FFC107; color: white;">Total Employee Salaries:</td>
+      <td>$0.00</td>
+      <td>$0.00</td>
+      <td>$0.00</td>
+    </tr>
+
+    <tr class="grid-row">
+      <td style="background-color: #4567B7; color: white;">Total Benefits:</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+
+    <tr class="total-row">
+      <th style="font-weight: bold;">**Employee Cost Analysis:** 
+        **Total Employee Salaries:** $0.00
+        **Total Benefits:** $0.00
+        **Total Taxes:** $0.00</td>
+    </tr>
+
+</table>

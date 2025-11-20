@@ -3,6 +3,7 @@ import MeetingDetail from './MeetingDetail'
 import LiveMeetingView from './LiveMeetingView'
 import BirthdayDetail from './BirthdayDetail'
 import { formatTime, formatDateWithWeekday, formatDateLong, formatTimestamp } from '../utils/timezone'
+import { apiGet } from '../utils/api'
 
 function CalendarView({ employees = [] }) {
   const [meetings, setMeetings] = useState([])
@@ -27,11 +28,8 @@ function CalendarView({ employees = [] }) {
 
   const fetchMeetings = async () => {
     try {
-      const response = await fetch('/api/meetings')
-      if (response.ok) {
-        const data = await response.json()
-        setMeetings(data || [])
-      }
+      const result = await apiGet('/api/meetings')
+      setMeetings(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching meetings:', error)
       setMeetings([])
@@ -43,11 +41,8 @@ function CalendarView({ employees = [] }) {
   const fetchBirthdays = async () => {
     try {
       // Fetch birthdays for the next 365 days to cover a full year
-      const response = await fetch('/api/birthdays/upcoming?days=365')
-      if (response.ok) {
-        const data = await response.json()
-        setBirthdays(data || [])
-      }
+      const result = await apiGet('/api/birthdays/upcoming?days=365')
+      setBirthdays(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching birthdays:', error)
       setBirthdays([])
@@ -57,11 +52,8 @@ function CalendarView({ employees = [] }) {
   const fetchHolidays = async () => {
     try {
       // Fetch holidays for the next 365 days to cover a full year
-      const response = await fetch('/api/holidays/upcoming?days=365')
-      if (response.ok) {
-        const data = await response.json()
-        setHolidays(data || [])
-      }
+      const result = await apiGet('/api/holidays/upcoming?days=365')
+      setHolidays(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching holidays:', error)
       setHolidays([])

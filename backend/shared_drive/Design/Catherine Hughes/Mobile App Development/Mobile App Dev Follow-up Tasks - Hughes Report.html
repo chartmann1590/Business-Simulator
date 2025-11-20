@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* 
+         * Global Styles
+         */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 
+         * Table Styles
+         */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        .header-row {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+        }
+
+        .data-row {
+            background-color: white;
+            border-top: 1px solid #f2f2f2;
+        }
+
+        .totals-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+    </style>
+</head>
+<body>
+
+    <table>
+        <!-- TITLE ROW -->
+        <tr>
+            <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+        </tr>
+
+        <!-- HEADER ROW -->
+        <tr class="header-row">
+            <th>Category</th>
+            <th>Total Revenue</th>
+            <th>Total Profit</th>
+            <th>Total Expenses</th>
+            <th>Profit Margin%</th>
+            <th>Active Projects</th>
+            <th>Total Employees</th>
+        </tr>
+
+        <!-- DATA ROWS -->
+        <tr class="data-row">
+            <td>Catherine Hughes, HR Manager, Design</td>
+            <td>$848,324.28</td>
+            <td>$361,970.04</td>
+            <td>$486,354.24</td>
+            <td>42.67%</td>
+            <td>14</td>
+            <td>1152</td>
+        </tr>
+
+        <tr class="data-row">
+            <td></td>
+            <td>$32,045.32 (Mobile App Development)</td>
+            <td>$17,080.48 (Strategic Partnership Development)</td>
+            <td>$88,137.90 (Customer Experience Enhancement)</td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <!-- CALCULATED COLUMNS -->
+        <tr class="totals-row">
+            <th></th>
+            <th style="text-align: right; padding-right: 20px;">$848,324.28</th>
+            <th style="text-align: right; padding-right: 20px;">$361,970.04</th>
+            <th style="text-align: right; padding-right: 20px;">$486,354.24</th>
+            <th style="text-align: right; padding-right: 20px;"></th>
+        </tr>
+
+        <!-- SUMMARY SECTION -->
+        <tr class="totals-row">
+            <th></th>
+            <th style="text-align: right; padding-right: 20px;">$848,324.28</th>
+            <th style="text-align: right; padding-right: 20px;">$361,970.04</th>
+            <th style="text-align: right; padding-right: 20px;">$486,354.24</th>
+            <th style="text-align: right; padding-right: 20px;"></th>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr class="data-row">
+            <td>Data Source: Actual Business Data</td>
+            <td>Last Updated: 2023-12-31</td>
+            <td>Notes: Financial Dashboard created by Financial Analyst</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+
+    </table>
+
+</body>
+</html>

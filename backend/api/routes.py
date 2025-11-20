@@ -3,16 +3,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_, case
 from sqlalchemy.orm import selectinload
 from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion, TrainingSession, TrainingMaterial
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
+from database.query_cache import cached_query, clear_cache
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from config import now as local_now, TIMEZONE_NAME
+import logging
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Cache invalidation helper
+async def invalidate_cache(pattern: str = None):
+    """Invalidate backend cache entries matching a pattern."""
+    try:
+        await clear_cache(pattern)
+        logger.debug(f"Cache invalidated for pattern: {pattern or 'all'}")
+    except Exception as e:
+        logger.warning(f"Error invalidating cache: {e}", exc_info=True)
 
 class SendChatRequest(BaseModel):
     employee_id: int
@@ -34,6 +48,17 @@ class CreateReviewRequest(BaseModel):
 @router.get("/employees")
 async def get_employees(db: AsyncSession = Depends(get_db)):
     """Get all employees with termination reasons if applicable."""
+    try:
+        return await _fetch_employees_data(db)
+    except Exception as e:
+        import traceback
+        print(f"Error in get_employees: {e}")
+        print(traceback.format_exc())
+        return []
+
+@cached_query(cache_duration=15)  # Cache for 15 seconds
+async def _fetch_employees_data(db: AsyncSession):
+    """Internal function to fetch employees data."""
     from database.models import Activity, EmployeeReview
     
     result = await db.execute(select(Employee).order_by(Employee.hierarchy_level, Employee.name))
@@ -343,6 +368,7 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "avatar_path": emp.avatar_path if hasattr(emp, 'avatar_path') else None,
         "current_room": emp.current_room if hasattr(emp, 'current_room') else None,
         "home_room": emp.home_room if hasattr(emp, 'home_room') else None,
+        "target_room": emp.target_room if hasattr(emp, 'target_room') else None,
         "activity_state": emp.activity_state if hasattr(emp, 'activity_state') else "idle",
         "hired_at": emp.hired_at.isoformat() if hasattr(emp, 'hired_at') and emp.hired_at else None,
         "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
@@ -886,6 +912,10 @@ async def create_employee_review(employee_id: int, review_data: CreateReviewRequ
     await review_manager._update_performance_award()
     await db.commit()
     
+    # Invalidate caches after data is committed
+    await invalidate_cache("_fetch_employees_data")
+    await invalidate_cache("_fetch_dashboard_data")
+    
     return {
         "id": review.id,
         "employee_id": review.employee_id,
@@ -1180,56 +1210,59 @@ Write the message in a natural, conversational tone that matches your personalit
             "generated_at": local_now().isoformat()
         }
 
+@cached_query(cache_duration=15)  # Cache for 15 seconds
+async def _fetch_projects_data(db: AsyncSession):
+    """Internal function to fetch projects data."""
+    result = await db.execute(select(Project).order_by(desc(Project.created_at)))
+    projects = result.scalars().all()
+    
+    project_manager = ProjectManager(db)
+    
+    project_list = []
+    for proj in projects:
+        try:
+            # If project is completed, it should always show 100% progress
+            if proj.status == "completed":
+                progress = 100.0
+            else:
+                progress = await project_manager.calculate_project_progress(proj.id)
+            is_stalled = await project_manager.is_project_stalled(proj.id)
+        except Exception as e:
+            logger.error(f"Error calculating progress for project {proj.id}: {e}", exc_info=True)
+            # If completed, still show 100%, otherwise 0%
+            progress = 100.0 if proj.status == "completed" else 0.0
+            is_stalled = False
+        
+        # Safely get last_activity_at if it exists
+        last_activity = None
+        if hasattr(proj, 'last_activity_at') and proj.last_activity_at:
+            last_activity = proj.last_activity_at.isoformat() if hasattr(proj.last_activity_at, 'isoformat') else str(proj.last_activity_at)
+        
+        project_list.append({
+            "id": proj.id,
+            "name": proj.name,
+            "description": proj.description,
+            "status": proj.status,
+            "priority": proj.priority,
+            "budget": proj.budget,
+            "revenue": proj.revenue,
+            "deadline": proj.deadline.isoformat() if proj.deadline else None,
+            "created_at": proj.created_at.isoformat() if proj.created_at else None,
+            "completed_at": proj.completed_at.isoformat() if hasattr(proj, 'completed_at') and proj.completed_at else None,
+            "last_activity_at": last_activity,
+            "progress": progress,
+            "is_stalled": is_stalled
+        })
+    
+    return project_list
+
 @router.get("/projects")
 async def get_projects(db: AsyncSession = Depends(get_db)):
     """Get all projects."""
     try:
-        result = await db.execute(select(Project).order_by(desc(Project.created_at)))
-        projects = result.scalars().all()
-        
-        project_manager = ProjectManager(db)
-        
-        project_list = []
-        for proj in projects:
-            try:
-                # If project is completed, it should always show 100% progress
-                if proj.status == "completed":
-                    progress = 100.0
-                else:
-                    progress = await project_manager.calculate_project_progress(proj.id)
-                is_stalled = await project_manager.is_project_stalled(proj.id)
-            except Exception as e:
-                print(f"Error calculating progress for project {proj.id}: {e}")
-                # If completed, still show 100%, otherwise 0%
-                progress = 100.0 if proj.status == "completed" else 0.0
-                is_stalled = False
-            
-            # Safely get last_activity_at if it exists
-            last_activity = None
-            if hasattr(proj, 'last_activity_at') and proj.last_activity_at:
-                last_activity = proj.last_activity_at.isoformat() if hasattr(proj.last_activity_at, 'isoformat') else str(proj.last_activity_at)
-            
-            project_list.append({
-                "id": proj.id,
-                "name": proj.name,
-                "description": proj.description,
-                "status": proj.status,
-                "priority": proj.priority,
-                "budget": proj.budget,
-                "revenue": proj.revenue,
-                "deadline": proj.deadline.isoformat() if proj.deadline else None,
-                "created_at": proj.created_at.isoformat() if proj.created_at else None,
-                "completed_at": proj.completed_at.isoformat() if hasattr(proj, 'completed_at') and proj.completed_at else None,
-                "last_activity_at": last_activity,
-                "progress": progress,
-                "is_stalled": is_stalled
-            })
-        
-        return project_list
+        return await _fetch_projects_data(db)
     except Exception as e:
-        print(f"Error fetching projects: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error fetching projects: {e}", exc_info=True)
         return []
 
 @router.get("/projects/{project_id}")
@@ -1575,55 +1608,58 @@ async def sync_products_from_reviews(db: AsyncSession):
         await db.rollback()
         return 0
 
+@cached_query(cache_duration=20)  # Cache for 20 seconds
+async def _fetch_products_data(db: AsyncSession):
+    """Internal function to fetch products data."""
+    # Sync products from reviews before fetching
+    await sync_products_from_reviews(db)
+    
+    # Optimized query: Get all products with aggregated data in a single query
+    # This eliminates N+1 queries by using LEFT JOINs and aggregations
+    result = await db.execute(
+        select(
+            Product,
+            func.count(CustomerReview.id).label('review_count'),
+            func.coalesce(func.avg(CustomerReview.rating), 0.0).label('avg_rating'),
+            func.coalesce(func.sum(Project.revenue), 0.0).label('total_sales'),
+            func.count(func.distinct(ProductTeamMember.id)).label('team_count')
+        )
+        .outerjoin(CustomerReview, Product.id == CustomerReview.product_id)
+        .outerjoin(Project, Product.id == Project.product_id)
+        .outerjoin(ProductTeamMember, Product.id == ProductTeamMember.product_id)
+        .group_by(Product.id)
+        .order_by(desc(Product.created_at))
+    )
+    
+    rows = result.all()
+    
+    product_list = []
+    for product, review_count, avg_rating, total_sales, team_count in rows:
+        product_list.append({
+            "id": product.id,
+            "name": product.name,
+            "description": product.description,
+            "category": product.category,
+            "status": product.status,
+            "price": product.price,
+            "launch_date": product.launch_date.isoformat() if product.launch_date else None,
+            "created_at": product.created_at.isoformat() if product.created_at else None,
+            "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+            "review_count": int(review_count) if review_count else 0,
+            "average_rating": round(float(avg_rating), 1) if avg_rating else 0.0,
+            "total_sales": float(total_sales) if total_sales else 0.0,
+            "team_count": int(team_count) if team_count else 0
+        })
+    
+    return product_list
+
 @router.get("/products")
 async def get_products(db: AsyncSession = Depends(get_db)):
     """Get all products. Automatically syncs products from reviews."""
     try:
-        # Sync products from reviews before fetching
-        await sync_products_from_reviews(db)
-        
-        # Optimized query: Get all products with aggregated data in a single query
-        # This eliminates N+1 queries by using LEFT JOINs and aggregations
-        result = await db.execute(
-            select(
-                Product,
-                func.count(CustomerReview.id).label('review_count'),
-                func.coalesce(func.avg(CustomerReview.rating), 0.0).label('avg_rating'),
-                func.coalesce(func.sum(Project.revenue), 0.0).label('total_sales'),
-                func.count(func.distinct(ProductTeamMember.id)).label('team_count')
-            )
-            .outerjoin(CustomerReview, Product.id == CustomerReview.product_id)
-            .outerjoin(Project, Product.id == Project.product_id)
-            .outerjoin(ProductTeamMember, Product.id == ProductTeamMember.product_id)
-            .group_by(Product.id)
-            .order_by(desc(Product.created_at))
-        )
-        
-        rows = result.all()
-        
-        product_list = []
-        for product, review_count, avg_rating, total_sales, team_count in rows:
-            product_list.append({
-                "id": product.id,
-                "name": product.name,
-                "description": product.description,
-                "category": product.category,
-                "status": product.status,
-                "price": product.price,
-                "launch_date": product.launch_date.isoformat() if product.launch_date else None,
-                "created_at": product.created_at.isoformat() if product.created_at else None,
-                "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-                "review_count": int(review_count) if review_count else 0,
-                "average_rating": round(float(avg_rating), 1) if avg_rating else 0.0,
-                "total_sales": float(total_sales) if total_sales else 0.0,
-                "team_count": int(team_count) if team_count else 0
-            })
-        
-        return product_list
+        return await _fetch_products_data(db)
     except Exception as e:
-        print(f"Error fetching products: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error fetching products: {e}", exc_info=True)
         return []
 
 @router.post("/products/sync-from-reviews")
@@ -1631,15 +1667,17 @@ async def sync_products_from_reviews_endpoint(db: AsyncSession = Depends(get_db)
     """Manually trigger sync of products from reviews."""
     try:
         count = await sync_products_from_reviews(db)
+        await db.commit()
+        # Invalidate products cache after sync
+        await invalidate_cache("_fetch_products_data")
         return {
             "success": True,
             "message": f"Synced products from reviews: {count} products created/updated",
             "count": count
         }
     except Exception as e:
-        print(f"Error in sync endpoint: {e}")
-        import traceback
-        traceback.print_exc()
+        await db.rollback()
+        logger.error(f"Error in sync endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error syncing products: {str(e)}")
 
 @router.get("/products/{product_id}")
@@ -1890,35 +1928,177 @@ async def get_metrics(db: AsyncSession = Depends(get_db)):
 
 @router.get("/dashboard")
 async def get_dashboard(db: AsyncSession = Depends(get_db)):
+    """Get dashboard data with caching."""
+    try:
+        # Test database connection first
+        try:
+            await db.execute(select(Employee).limit(1))
+        except Exception as db_error:
+            logger.error(f"Database connection error in dashboard: {db_error}", exc_info=True)
+            # Return default values if DB is not accessible
+            return {
+                "revenue": 0.0,
+                "profit": 0.0,
+                "expenses": 0.0,
+                "active_projects": 0,
+                "employee_count": 0,
+                "recent_activities": [],
+                "goals": [],
+                "goal_progress": {},
+                "company_overview": {
+                    "business_name": "TechFlow Solutions",
+                    "mission": "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.",
+                    "industry": "Technology & Software Development",
+                    "founded": "2024",
+                    "location": "San Francisco, CA",
+                    "ceo": "Not Assigned",
+                    "total_projects": 0,
+                    "completed_projects": 0,
+                    "active_projects_count": 0,
+                    "total_project_revenue": 0.0,
+                    "average_project_budget": 0.0,
+                    "departments": {},
+                    "role_distribution": {},
+                    "products_services": []
+                },
+                "leadership_insights": {
+                    "leadership_team": [],
+                    "recent_decisions": [],
+                    "recent_activities": [],
+                    "metrics": {
+                        "total_leadership_count": 0,
+                        "ceo_count": 0,
+                        "manager_count": 0,
+                        "strategic_decisions_count": 0,
+                        "projects_led_by_leadership": 0
+                    }
+                }
+            }
+        
+        return await _fetch_dashboard_data(db)
+    except Exception as e:
+        logger.error(f"Error in dashboard endpoint: {e}", exc_info=True)
+        # Return default values instead of crashing
+        return {
+            "revenue": 0.0,
+            "profit": 0.0,
+            "expenses": 0.0,
+            "active_projects": 0,
+            "employee_count": 0,
+            "recent_activities": [],
+            "goals": [],
+            "goal_progress": {},
+            "company_overview": {
+                "business_name": "TechFlow Solutions",
+                "mission": "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.",
+                "industry": "Technology & Software Development",
+                "founded": "2024",
+                "location": "San Francisco, CA",
+                "ceo": "Not Assigned",
+                "total_projects": 0,
+                "completed_projects": 0,
+                "active_projects_count": 0,
+                "total_project_revenue": 0.0,
+                "average_project_budget": 0.0,
+                "departments": {},
+                "role_distribution": {},
+                "products_services": []
+            },
+            "leadership_insights": {
+                "leadership_team": [],
+                "recent_decisions": [],
+                "recent_activities": [],
+                "metrics": {
+                    "total_leadership_count": 0,
+                    "ceo_count": 0,
+                    "manager_count": 0,
+                    "strategic_decisions_count": 0,
+                    "projects_led_by_leadership": 0
+                }
+            }
+        }
+
+@cached_query(cache_duration=10)  # Cache for 10 seconds (dashboard updates frequently)
+async def _fetch_dashboard_data(db: AsyncSession):
     """Get dashboard data."""
     try:
-        financial_manager = FinancialManager(db)
-        project_manager = ProjectManager(db)
-        goal_system = GoalSystem(db)
+        # Safely import and initialize managers
+        try:
+            financial_manager = FinancialManager(db)
+        except Exception as e:
+            print(f"Error creating FinancialManager: {e}")
+            financial_manager = None
         
-        revenue = await financial_manager.get_total_revenue()
-        profit = await financial_manager.get_profit()
-        expenses = await financial_manager.get_total_expenses()
+        try:
+            project_manager = ProjectManager(db)
+        except Exception as e:
+            print(f"Error creating ProjectManager: {e}")
+            project_manager = None
         
-        active_projects = await project_manager.get_active_projects()
+        try:
+            goal_system = GoalSystem(db)
+        except Exception as e:
+            print(f"Error creating GoalSystem: {e}")
+            goal_system = None
+        
+        try:
+            revenue = await financial_manager.get_total_revenue() if financial_manager else 0.0
+        except:
+            revenue = 0.0
+        
+        try:
+            profit = await financial_manager.get_profit() if financial_manager else 0.0
+        except:
+            profit = 0.0
+        
+        try:
+            expenses = await financial_manager.get_total_expenses() if financial_manager else 0.0
+        except:
+            expenses = 0.0
+        
+        try:
+            active_projects = await project_manager.get_active_projects() if project_manager else []
+            # Ensure it's a list
+            if not isinstance(active_projects, list):
+                active_projects = []
+        except Exception as e:
+            logger.error(f"Error getting active projects: {e}", exc_info=True)
+            active_projects = []
         
         # Get only active employees (not terminated)
-        result = await db.execute(
-            select(Employee).where(Employee.status == "active")
-        )
-        active_employees = result.scalars().all()
+        try:
+            result = await db.execute(
+                select(Employee).where(Employee.status == "active")
+            )
+            active_employees = result.scalars().all()
+        except:
+            active_employees = []
         
         # Get recent activities
-        result = await db.execute(
-            select(Activity)
-            .order_by(desc(Activity.timestamp))
-            .limit(20)
-        )
-        recent_activities = result.scalars().all()
+        try:
+            result = await db.execute(
+                select(Activity)
+                .order_by(desc(Activity.timestamp))
+                .limit(20)
+            )
+            recent_activities = result.scalars().all()
+        except:
+            recent_activities = []
         
-        goals = await goal_system.get_business_goals()
-        goals_with_keys = await goal_system.get_business_goals_with_keys()
-        goal_progress_raw = await goal_system.evaluate_goals()
+        try:
+            if goal_system:
+                goals = await goal_system.get_business_goals()
+                goals_with_keys = await goal_system.get_business_goals_with_keys()
+                goal_progress_raw = await goal_system.evaluate_goals()
+            else:
+                goals = []
+                goals_with_keys = []
+                goal_progress_raw = {}
+        except Exception as e:
+            logger.error(f"Error getting goals: {e}", exc_info=True)
+            goals = []
+            goals_with_keys = []
+            goal_progress_raw = {}
         
         # Map goal_progress to match goals order (for frontend compatibility)
         goal_progress = {}
@@ -1927,9 +2107,12 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             goal_progress[goal_key] = goal_progress_raw.get(goal_key, False)
         
         # Get business settings
-        result = await db.execute(select(BusinessSettings))
-        business_settings = result.scalars().all()
-        settings_dict = {setting.setting_key: setting.setting_value for setting in business_settings}
+        try:
+            result = await db.execute(select(BusinessSettings))
+            business_settings = result.scalars().all()
+            settings_dict = {setting.setting_key: setting.setting_value for setting in business_settings}
+        except:
+            settings_dict = {}
         
         business_name = settings_dict.get("business_name", "TechFlow Solutions")
         business_mission = settings_dict.get("business_mission", "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.")
@@ -1938,8 +2121,11 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         business_location = settings_dict.get("business_location", "San Francisco, CA")
         
         # Get all projects for company overview
-        result = await db.execute(select(Project).order_by(desc(Project.created_at)))
-        all_projects = result.scalars().all()
+        try:
+            result = await db.execute(select(Project).order_by(desc(Project.created_at)))
+            all_projects = result.scalars().all()
+        except:
+            all_projects = []
         
         # Calculate project statistics
         completed_projects = [p for p in all_projects if p.status == "completed"]
@@ -1956,11 +2142,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             role_distribution[role] = role_distribution.get(role, 0) + 1
         
         # Get CEO for company leadership info
-        result = await db.execute(
-            select(Employee).where(Employee.role == "CEO", Employee.status == "active")
-        )
-        ceo = result.scalar_one_or_none()
-        ceo_name = ceo.name if ceo else "Not Assigned"
+        try:
+            result = await db.execute(
+                select(Employee).where(Employee.role == "CEO", Employee.status == "active")
+            )
+            ceo = result.scalar_one_or_none()
+            ceo_name = ceo.name if ceo else "Not Assigned"
+        except:
+            ceo_name = "Not Assigned"
         
         # Calculate average project budget
         projects_with_budget = [p for p in all_projects if p.budget and p.budget > 0]
@@ -1968,20 +2157,23 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         
         # Get leadership team (CEO, C-level executives, and Managers)
         leadership_roles = ["CEO", "CTO", "COO", "CFO", "Manager"]
-        leadership_employees = [emp for emp in active_employees if emp.role in leadership_roles or emp.hierarchy_level <= 2]
+        leadership_employees = [emp for emp in active_employees if emp.role in leadership_roles or (hasattr(emp, 'hierarchy_level') and emp.hierarchy_level <= 2)]
         
         # Get recent leadership decisions
         leadership_employee_ids = [emp.id for emp in leadership_employees]
         leadership_decisions = []
         if leadership_employee_ids:
-            # Get decisions from Decision table
-            result = await db.execute(
-                select(Decision)
-                .where(Decision.employee_id.in_(leadership_employee_ids))
-                .order_by(desc(Decision.timestamp))
-                .limit(10)
-            )
-            decisions = result.scalars().all()
+            try:
+                # Get decisions from Decision table
+                result = await db.execute(
+                    select(Decision)
+                    .where(Decision.employee_id.in_(leadership_employee_ids))
+                    .order_by(desc(Decision.timestamp))
+                    .limit(10)
+                )
+                decisions = result.scalars().all()
+            except:
+                decisions = []
             leadership_decisions = [
                 {
                     "id": d.id,
@@ -1997,16 +2189,19 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             ]
             
             # Also get strategic decisions from Activities table
-            result = await db.execute(
-                select(Activity)
-                .where(
-                    Activity.employee_id.in_(leadership_employee_ids),
-                    Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+            try:
+                result = await db.execute(
+                    select(Activity)
+                    .where(
+                        Activity.employee_id.in_(leadership_employee_ids),
+                        Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+                    )
+                    .order_by(desc(Activity.timestamp))
+                    .limit(10)
                 )
-                .order_by(desc(Activity.timestamp))
-                .limit(10)
-            )
-            strategic_activities = result.scalars().all()
+                strategic_activities = result.scalars().all()
+            except:
+                strategic_activities = []
             for act in strategic_activities:
                 # Extract decision type from activity metadata or activity_type
                 decision_type = "strategic"
@@ -2033,13 +2228,16 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         # Get recent leadership activities
         leadership_activities = []
         if leadership_employee_ids:
-            result = await db.execute(
-                select(Activity)
-                .where(Activity.employee_id.in_(leadership_employee_ids))
-                .order_by(desc(Activity.timestamp))
-                .limit(15)
-            )
-            activities = result.scalars().all()
+            try:
+                result = await db.execute(
+                    select(Activity)
+                    .where(Activity.employee_id.in_(leadership_employee_ids))
+                    .order_by(desc(Activity.timestamp))
+                    .limit(15)
+                )
+                activities = result.scalars().all()
+            except:
+                activities = []
             leadership_activities = [
                 {
                     "id": act.id,
@@ -2056,77 +2254,84 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         # Calculate leadership metrics
         # Get projects with leadership involvement
         leadership_employee_ids_set = set(leadership_employee_ids)
-        result = await db.execute(
-            select(Task).where(Task.employee_id.in_(leadership_employee_ids_set))
-        )
-        leadership_tasks = result.scalars().all()
-        projects_with_leadership = set(task.project_id for task in leadership_tasks if task.project_id)
+        try:
+            result = await db.execute(
+                select(Task).where(Task.employee_id.in_(leadership_employee_ids_set))
+            )
+            leadership_tasks = result.scalars().all()
+            projects_with_leadership = set(task.project_id for task in leadership_tasks if task.project_id)
+        except:
+            projects_with_leadership = set()
         
         # Count strategic decisions (from both Decision table and Activity table)
-        # Count from Decision table
-        result = await db.execute(
-            select(Decision)
-            .where(
-                Decision.employee_id.in_(leadership_employee_ids),
-                Decision.decision_type == "strategic"
+        strategic_count = 0
+        try:
+            # Count from Decision table
+            result = await db.execute(
+                select(Decision)
+                .where(
+                    Decision.employee_id.in_(leadership_employee_ids),
+                    Decision.decision_type == "strategic"
+                )
             )
-        )
-        strategic_decisions_from_table = result.scalars().all()
-        
-        # Count from Activity table
-        result = await db.execute(
-            select(Activity)
-            .where(
-                Activity.employee_id.in_(leadership_employee_ids),
-                Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+            strategic_decisions_from_table = result.scalars().all()
+            
+            # Count from Activity table
+            result = await db.execute(
+                select(Activity)
+                .where(
+                    Activity.employee_id.in_(leadership_employee_ids),
+                    Activity.activity_type.in_(["strategic_decision", "strategic_operational_decision"])
+                )
             )
-        )
-        strategic_activities = result.scalars().all()
-        
-        strategic_count = len(strategic_decisions_from_table) + len(strategic_activities)
+            strategic_activities = result.scalars().all()
+            
+            strategic_count = len(strategic_decisions_from_table) + len(strategic_activities)
+        except:
+            pass
         
         # Get employee review statistics
-        # Completed reviews: reviews with all fields filled (comments, strengths, areas_for_improvement)
-        # Check for both not None and not empty strings
-        from sqlalchemy import and_, or_
-        result = await db.execute(
-            select(EmployeeReview)
-            .where(
-                and_(
-                    EmployeeReview.comments.isnot(None),
-                    EmployeeReview.comments != '',
-                    EmployeeReview.strengths.isnot(None),
-                    EmployeeReview.strengths != '',
-                    EmployeeReview.areas_for_improvement.isnot(None),
-                    EmployeeReview.areas_for_improvement != ''
+        completed_reviews_count = 0
+        in_progress_reviews_count = 0
+        try:
+            # Completed reviews: reviews with all fields filled (comments, strengths, areas_for_improvement)
+            # Check for both not None and not empty strings
+            from sqlalchemy import and_, or_
+            result = await db.execute(
+                select(EmployeeReview)
+                .where(
+                    and_(
+                        EmployeeReview.comments.isnot(None),
+                        EmployeeReview.comments != '',
+                        EmployeeReview.strengths.isnot(None),
+                        EmployeeReview.strengths != '',
+                        EmployeeReview.areas_for_improvement.isnot(None),
+                        EmployeeReview.areas_for_improvement != ''
+                    )
                 )
             )
-        )
-        completed_reviews = result.scalars().all()
-        completed_reviews_count = len(completed_reviews)
-        
-        # In progress reviews: reviews that exist but are missing some optional fields
-        # Or reviews that have empty strings
-        result = await db.execute(
-            select(EmployeeReview)
-            .where(
-                or_(
-                    EmployeeReview.comments.is_(None),
-                    EmployeeReview.comments == '',
-                    EmployeeReview.strengths.is_(None),
-                    EmployeeReview.strengths == '',
-                    EmployeeReview.areas_for_improvement.is_(None),
-                    EmployeeReview.areas_for_improvement == ''
+            completed_reviews = result.scalars().all()
+            completed_reviews_count = len(completed_reviews)
+            
+            # In progress reviews: reviews that exist but are missing some optional fields
+            # Or reviews that have empty strings
+            result = await db.execute(
+                select(EmployeeReview)
+                .where(
+                    or_(
+                        EmployeeReview.comments.is_(None),
+                        EmployeeReview.comments == '',
+                        EmployeeReview.strengths.is_(None),
+                        EmployeeReview.strengths == '',
+                        EmployeeReview.areas_for_improvement.is_(None),
+                        EmployeeReview.areas_for_improvement == ''
+                    )
                 )
             )
-        )
-        in_progress_reviews = result.scalars().all()
-        in_progress_reviews_count = len(in_progress_reviews)
-        
-        # Also get total review count for debugging
-        total_reviews_result = await db.execute(select(func.count(EmployeeReview.id)))
-        total_reviews_count = total_reviews_result.scalar() or 0
-        print(f"📊 Review Statistics: Total={total_reviews_count}, Completed={completed_reviews_count}, In Progress={in_progress_reviews_count}")
+            in_progress_reviews = result.scalars().all()
+            in_progress_reviews_count = len(in_progress_reviews)
+        except:
+            pass
         
         leadership_metrics = {
             "total_leadership_count": len(leadership_employees),
@@ -2145,21 +2350,109 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         now = local_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
+        # Cache for employee lookups to avoid duplicate queries
+        employee_cache = {emp.id: emp for emp in active_employees}
+        
+        # Helper function to get employee, querying database if needed
+        async def get_employee(employee_id: int) -> Optional[Employee]:
+            if not employee_id:
+                return None
+            if employee_id in employee_cache:
+                return employee_cache[employee_id]
+            # Query database if not in cache
+            try:
+                result = await db.execute(select(Employee).where(Employee.id == employee_id))
+                emp = result.scalar_one_or_none()
+                if emp:
+                    employee_cache[employee_id] = emp
+                    return emp
+            except:
+                pass
+            return None
+        
+        # Helper function to get employee name
+        async def get_employee_name(employee_id: int) -> str:
+            emp = await get_employee(employee_id)
+            if emp:
+                return emp.name
+            return f"Employee #{employee_id}" if employee_id else "System"
+        
+        # Helper function to get default breakroom based on floor
+        def get_default_breakroom(floor: int) -> str:
+            if floor == 2:
+                return "breakroom_floor2"
+            elif floor >= 3:
+                return "breakroom_floor2"  # Default to floor 2 breakroom
+            return "breakroom"
+        
         # Get employees currently on break
-        employees_on_break = [
-            {
-                "id": emp.id,
-                "name": emp.name,
-                "title": emp.title,
-                "department": emp.department,
-                "current_room": emp.current_room or "Unknown",
-                "floor": emp.floor,
-                "activity_state": emp.activity_state,
-                "last_coffee_break": emp.last_coffee_break.isoformat() if emp.last_coffee_break else None
-            }
-            for emp in active_employees
-            if emp.activity_state == "break" or (emp.current_room and "breakroom" in emp.current_room.lower())
-        ]
+        employees_on_break = []
+        for emp in active_employees:
+            if emp.activity_state == "break" or (emp.current_room and "breakroom" in emp.current_room.lower()):
+                # Determine if they're actually on break or just passing through
+                is_actually_on_break = emp.activity_state == "break"
+                
+                # Find when they entered the breakroom
+                # First, try to find the most recent activity where they entered a breakroom
+                breakroom_entry_time = None
+                
+                # Query for most recent activity that shows them entering breakroom
+                # First, try to find activities with breakroom as target_room in metadata
+                entry_result = await db.execute(
+                    select(Activity)
+                    .where(
+                        Activity.employee_id == emp.id,
+                        or_(
+                            Activity.activity_type == "coffee_break",
+                            Activity.activity_type == "break"
+                        )
+                    )
+                    .order_by(desc(Activity.timestamp))
+                    .limit(10)  # Get recent break activities to check metadata
+                )
+                entry_activities = entry_result.scalars().all()
+                
+                # Check each activity to see if it's for a breakroom entry
+                for entry_activity in entry_activities:
+                    metadata = entry_activity.activity_metadata or {}
+                    target_room = metadata.get("target_room", "")
+                    description = entry_activity.description or ""
+                    
+                    # Check if this activity is for entering a breakroom
+                    if ("breakroom" in target_room.lower() or 
+                        "breakroom" in description.lower() or
+                        entry_activity.activity_type in ["coffee_break", "break"]):
+                        breakroom_entry_time = entry_activity.timestamp
+                        break
+                
+                # If no entry activity found, use last_coffee_break if available
+                if not breakroom_entry_time and emp.last_coffee_break:
+                    breakroom_entry_time = emp.last_coffee_break
+                
+                # If still no time found, query for most recent activity in general (as fallback)
+                if not breakroom_entry_time:
+                    recent_result = await db.execute(
+                        select(Activity)
+                        .where(Activity.employee_id == emp.id)
+                        .order_by(desc(Activity.timestamp))
+                        .limit(1)
+                    )
+                    recent_activity = recent_result.scalar_one_or_none()
+                    if recent_activity:
+                        breakroom_entry_time = recent_activity.timestamp
+                
+                employees_on_break.append({
+                    "id": emp.id,
+                    "name": emp.name,
+                    "title": emp.title,
+                    "department": emp.department,
+                    "current_room": emp.current_room or emp.home_room or get_default_breakroom(emp.floor or 1),
+                    "floor": emp.floor,
+                    "activity_state": emp.activity_state,
+                    "last_coffee_break": emp.last_coffee_break.isoformat() if emp.last_coffee_break else None,
+                    "breakroom_entry_time": breakroom_entry_time.isoformat() if breakroom_entry_time else None,
+                    "is_actually_on_break": is_actually_on_break
+                })
         
         # Get break activities for today (including break returns)
         result = await db.execute(
@@ -2193,10 +2486,12 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 metadata = act.activity_metadata if act.activity_metadata and isinstance(act.activity_metadata, dict) else {}
                 is_manager_abuse = metadata.get("is_manager", False) or metadata.get("enforcement_type") == "manager_break_enforcement"
                 
+                employee_name = await get_employee_name(act.employee_id)
+                
                 return_data = {
                     "id": act.id,
                     "employee_id": act.employee_id,
-                    "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
+                    "employee_name": employee_name,
                     "manager_name": metadata.get("manager_name", "System") if not is_manager_abuse else "System (Manager Abuse)",
                     "manager_id": metadata.get("manager_id") if not is_manager_abuse else None,
                     "description": act.description,
@@ -2213,10 +2508,11 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         for act in denied_breaks:
             metadata = act.activity_metadata if act.activity_metadata and isinstance(act.activity_metadata, dict) else {}
             if metadata.get("is_manager", False):
+                employee_name = await get_employee_name(act.employee_id)
                 break_denials.append({
                     "id": act.id,
                     "employee_id": act.employee_id,
-                    "employee_name": next((emp.name for emp in active_employees if emp.id == act.employee_id), "Unknown"),
+                    "employee_name": employee_name,
                     "reason": metadata.get("reason", "Break abuse detected"),
                     "timestamp": act.timestamp.isoformat() if act.timestamp else None
                 })
@@ -2229,17 +2525,29 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 continue
             
             if emp_id not in employee_break_history:
+                employee_name = await get_employee_name(emp_id)
                 employee_break_history[emp_id] = {
                     "employee_id": emp_id,
-                    "employee_name": next((emp.name for emp in active_employees if emp.id == emp_id), "Unknown"),
+                    "employee_name": employee_name,
                     "breaks": [],
                     "total_break_count": 0,
                     "total_break_time_minutes": 0
                 }
             
-            break_room = "Unknown"
+            # Get break room from metadata, or derive from employee data
+            break_room = None
             if break_activity.activity_metadata and isinstance(break_activity.activity_metadata, dict):
-                break_room = break_activity.activity_metadata.get("target_room", "Unknown")
+                break_room = break_activity.activity_metadata.get("target_room")
+            
+            # If no room in metadata, try to get from employee's current room or use default
+            if not break_room:
+                emp = employee_cache.get(emp_id)
+                if not emp:
+                    emp = await get_employee(emp_id)
+                if emp:
+                    break_room = emp.current_room or emp.home_room or get_default_breakroom(emp.floor or 1)
+                else:
+                    break_room = get_default_breakroom(1)
             
             employee_break_history[emp_id]["breaks"].append({
                 "id": break_activity.id,
@@ -2262,7 +2570,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "revenue": revenue or 0.0,
             "profit": profit or 0.0,
             "expenses": expenses or 0.0,
-            "active_projects": len(active_projects),
+            "active_projects": len(active_projects) if isinstance(active_projects, list) else (active_projects if isinstance(active_projects, int) else 0),
             "employee_count": len(active_employees),
             "recent_activities": [
                 {
@@ -2286,7 +2594,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "ceo": ceo_name,
                 "total_projects": total_projects,
                 "completed_projects": len(completed_projects),
-                "active_projects_count": len(active_projects),
+                "active_projects_count": len(active_projects) if isinstance(active_projects, list) else (active_projects if isinstance(active_projects, int) else 0),
                 "total_project_revenue": total_project_revenue,
                 "average_project_budget": avg_project_budget,
                 "departments": departments,
@@ -2341,11 +2649,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"Error in dashboard endpoint: {e}")
+        print(f"Error in _fetch_dashboard_data: {e}")
         print(error_details)
-        # Return default values instead of crashing
+        # Return default values on any error
         return {
-            "business_name": "TechFlow Solutions",
             "revenue": 0.0,
             "profit": 0.0,
             "expenses": 0.0,
@@ -2381,18 +2688,6 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "strategic_decisions_count": 0,
                     "projects_led_by_leadership": 0
                 }
-            },
-            "break_tracking": {
-                "employees_on_break": [],
-                "break_history": [],
-                "break_returns": [],
-                "manager_abuse_incidents": [],
-                "break_denials": [],
-                "total_on_break": 0,
-                "total_breaks_today": 0,
-                "total_returns_today": 0,
-                "total_manager_abuse_today": 0,
-                "total_break_denials_today": 0
             }
         }
 
@@ -2741,6 +3036,215 @@ async def get_employee_meetings(employee_id: int, db: AsyncSession = Depends(get
         traceback.print_exc()
         return []
 
+@router.get("/employees/{employee_id}/training")
+async def get_employee_training(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get training summary and history for a specific employee."""
+    try:
+        from business.training_manager import TrainingManager
+        
+        # Verify employee exists
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id)
+        )
+        employee = result.scalar_one_or_none()
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        
+        training_manager = TrainingManager()
+        summary = await training_manager.get_employee_training_summary(employee_id, db)
+        
+        return summary
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching employee training: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching employee training: {str(e)}")
+
+@router.get("/training/sessions")
+async def get_all_training_sessions(
+    limit: int = 50,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all training sessions with optional filtering."""
+    try:
+        query = select(TrainingSession).options(selectinload(TrainingSession.employee))
+        
+        if status:
+            query = query.where(TrainingSession.status == status)
+        
+        query = query.order_by(desc(TrainingSession.start_time)).limit(limit)
+        
+        result = await db.execute(query)
+        sessions = result.scalars().all()
+        
+        return [
+            {
+                "id": s.id,
+                "employee_id": s.employee_id,
+                "employee_name": s.employee.name if s.employee else "Unknown",
+                "training_room": s.training_room,
+                "training_topic": s.training_topic,
+                "training_material_id": s.training_material_id,
+                "duration_minutes": s.duration_minutes,
+                "status": s.status,
+                "start_time": s.start_time.isoformat() if s.start_time else None,
+                "end_time": s.end_time.isoformat() if s.end_time else None,
+            }
+            for s in sessions
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching training sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching training sessions: {str(e)}")
+
+@router.get("/training/overview")
+async def get_training_overview(db: AsyncSession = Depends(get_db)):
+    """Get overall training statistics and overview."""
+    try:
+        # Get total sessions
+        total_sessions_result = await db.execute(
+            select(func.count(TrainingSession.id))
+            .where(TrainingSession.status == "completed")
+        )
+        total_sessions = total_sessions_result.scalar_one() or 0
+        
+        # Get total training time
+        total_time_result = await db.execute(
+            select(func.sum(TrainingSession.duration_minutes))
+            .where(TrainingSession.status == "completed")
+        )
+        total_minutes = total_time_result.scalar_one() or 0
+        
+        # Get active sessions
+        active_sessions_result = await db.execute(
+            select(func.count(TrainingSession.id))
+            .where(TrainingSession.status == "in_progress")
+        )
+        active_sessions = active_sessions_result.scalar_one() or 0
+        
+        # Get unique employees trained
+        unique_employees_result = await db.execute(
+            select(func.count(func.distinct(TrainingSession.employee_id)))
+            .where(TrainingSession.status == "completed")
+        )
+        unique_employees = unique_employees_result.scalar_one() or 0
+        
+        # Get top training topics
+        top_topics_result = await db.execute(
+            select(
+                TrainingSession.training_topic,
+                func.count(TrainingSession.id).label('count')
+            )
+            .where(TrainingSession.status == "completed")
+            .group_by(TrainingSession.training_topic)
+            .order_by(desc('count'))
+            .limit(10)
+        )
+        top_topics = [
+            {"topic": row.training_topic, "count": row.count}
+            for row in top_topics_result.all()
+        ]
+        
+        # Get employees currently in training
+        current_training_result = await db.execute(
+            select(TrainingSession, Employee)
+            .join(Employee, TrainingSession.employee_id == Employee.id)
+            .where(TrainingSession.status == "in_progress")
+        )
+        current_training = [
+            {
+                "employee_id": s.employee_id,
+                "employee_name": emp.name,
+                "topic": s.training_topic,
+                "room": s.training_room,
+                "training_material_id": s.training_material_id,
+                "start_time": s.start_time.isoformat() if s.start_time else None,
+            }
+            for s, emp in current_training_result.all()
+        ]
+        
+        return {
+            "total_sessions": total_sessions,
+            "total_minutes": total_minutes,
+            "total_hours": round(total_minutes / 60, 1),
+            "active_sessions": active_sessions,
+            "unique_employees_trained": unique_employees,
+            "top_topics": top_topics,
+            "current_training": current_training,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching training overview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching training overview: {str(e)}")
+
+@router.get("/training/materials")
+async def get_training_materials(
+    topic: Optional[str] = None,
+    department: Optional[str] = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get training materials with optional filtering."""
+    try:
+        query = select(TrainingMaterial)
+        
+        if topic:
+            query = query.where(TrainingMaterial.topic.ilike(f"%{topic}%"))
+        if department:
+            query = query.where(TrainingMaterial.department == department)
+        
+        query = query.order_by(desc(TrainingMaterial.usage_count)).limit(limit)
+        
+        result = await db.execute(query)
+        materials = result.scalars().all()
+        
+        return [
+            {
+                "id": m.id,
+                "title": m.title,
+                "topic": m.topic,
+                "description": m.description,
+                "difficulty_level": m.difficulty_level,
+                "estimated_duration_minutes": m.estimated_duration_minutes,
+                "department": m.department,
+                "usage_count": m.usage_count,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in materials
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching training materials: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching training materials: {str(e)}")
+
+@router.get("/training/materials/{material_id}")
+async def get_training_material(material_id: int, db: AsyncSession = Depends(get_db)):
+    """Get full training material content by ID."""
+    try:
+        result = await db.execute(
+            select(TrainingMaterial).where(TrainingMaterial.id == material_id)
+        )
+        material = result.scalar_one_or_none()
+        
+        if not material:
+            raise HTTPException(status_code=404, detail="Training material not found")
+        
+        return {
+            "id": material.id,
+            "title": material.title,
+            "topic": material.topic,
+            "content": material.content,
+            "description": material.description,
+            "difficulty_level": material.difficulty_level,
+            "estimated_duration_minutes": material.estimated_duration_minutes,
+            "department": material.department,
+            "usage_count": material.usage_count,
+            "created_at": material.created_at.isoformat() if material.created_at else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching training material: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching training material: {str(e)}")
+
 @router.get("/emails")
 async def get_all_emails(limit: int = 100, db: AsyncSession = Depends(get_db)):
     """Get all emails (Outlook view)."""
@@ -2788,8 +3292,12 @@ async def get_all_chats(limit: int = 200, db: AsyncSession = Depends(get_db)):
         chats = result.scalars().all()
         
         # Get employee names
-        result = await db.execute(select(Employee))
-        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        try:
+            result = await db.execute(select(Employee))
+            all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+        except Exception as e:
+            print(f"Error fetching employees for chats: {e}")
+            all_employees = {}
         
         return [
             {
@@ -2935,6 +3443,88 @@ async def send_chat_message(request: SendChatRequest, db: AsyncSession = Depends
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error sending chat message: {str(e)}")
+
+@router.post("/chats/check-and-respond")
+async def trigger_message_response_check(db: AsyncSession = Depends(get_db)):
+    """Manually trigger message response check for all employees (for testing)."""
+    try:
+        from employees.roles import create_employee_agent
+        from engine.office_simulator import get_business_context
+        from sqlalchemy import select
+        
+        # Get all active employees
+        result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        employees = result.scalars().all()
+        
+        if not employees:
+            return {
+                "success": True,
+                "message": "No active employees to check messages for",
+                "employees_processed": 0,
+                "responses_sent": 0
+            }
+        
+        # Get business context
+        business_context = await get_business_context(db)
+        
+        # Import OllamaClient
+        from llm.ollama_client import OllamaClient
+        llm_client = OllamaClient()
+        
+        responses_count = 0
+        errors = []
+        
+        for employee in employees:
+            try:
+                # Create employee agent
+                agent = create_employee_agent(employee, db, llm_client)
+                
+                # Check and respond to messages
+                await agent._check_and_respond_to_messages(business_context)
+                
+                responses_count += 1
+            except Exception as e:
+                error_msg = f"Error checking messages for {employee.name} (ID: {employee.id}): {str(e)}"
+                errors.append(error_msg)
+                print(f"❌ {error_msg}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Message response check completed for {responses_count} employee(s)",
+            "employees_processed": responses_count,
+            "total_employees": len(employees),
+            "errors": errors if errors else None
+        }
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Error in message response check endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error checking messages: {str(e)}")
+
+@router.post("/employees/fix-walking")
+async def fix_walking_employees(db: AsyncSession = Depends(get_db)):
+    """Fix all employees stuck in walking state without destinations."""
+    try:
+        from engine.movement_system import fix_walking_employees_without_destination
+        fixed_count = await fix_walking_employees_without_destination(db)
+        await db.commit()
+        return {
+            "success": True,
+            "fixed_count": fixed_count,
+            "message": f"Fixed {fixed_count} employees walking without destinations"
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error fixing walking employees: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fixing walking employees: {str(e)}")
 
 @router.post("/employees/fix-waiting")
 async def fix_waiting_employees(db: AsyncSession = Depends(get_db)):
@@ -3547,6 +4137,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             # Safely get room fields (they might not exist in old database)
             current_room = getattr(employee, 'current_room', None)
             home_room = getattr(employee, 'home_room', None)
+            target_room = getattr(employee, 'target_room', None)
             activity_state = getattr(employee, 'activity_state', 'working')
             floor = getattr(employee, 'floor', 1)  # Default to floor 1 if not set
             
@@ -3623,6 +4214,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                     "status": employee.status,
                     "current_room": current_room,
                     "home_room": home_room,
+                    "target_room": target_room,
                     "floor": floor,
                     "activity_state": activity_state,
                     "avatar_path": employee.avatar_path if hasattr(employee, 'avatar_path') else None,
@@ -3651,6 +4243,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                     title = (employee.title or "").lower()
                     home_room = getattr(employee, 'home_room', None)
                     current_room = getattr(employee, 'current_room', None)
+                    target_room = getattr(employee, 'target_room', None)
                     floor = getattr(employee, 'floor', 1)
                     
                     # Check if employee is a receptionist and should be in this room
@@ -3672,6 +4265,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                                     "status": employee.status,
                                     "current_room": current_room,
                                     "home_room": home_room,
+                                    "target_room": target_room,
                                     "floor": floor,
                                     "activity_state": getattr(employee, 'activity_state', 'idle'),
                                     "avatar_path": employee.avatar_path if hasattr(employee, 'avatar_path') else None,
@@ -3689,6 +4283,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                     title = (employee.title or "").lower()
                     home_room = getattr(employee, 'home_room', None)
                     current_room = getattr(employee, 'current_room', None)
+                    target_room = getattr(employee, 'target_room', None)
                     floor = getattr(employee, 'floor', 1)
                     
                     # Check if employee is storage staff and should be in this room
@@ -3711,6 +4306,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                                     "status": employee.status,
                                     "current_room": current_room,
                                     "home_room": home_room,
+                                    "target_room": target_room,
                                     "floor": floor,
                                     "activity_state": getattr(employee, 'activity_state', 'idle'),
                                     "avatar_path": employee.avatar_path if hasattr(employee, 'avatar_path') else None,
@@ -4225,32 +4821,43 @@ async def get_notifications(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all notifications, optionally filtered to unread only. Supports pagination."""
-    # Cap limit at 250 total (5 pages of 50)
-    max_limit = 250
-    if limit > max_limit:
-        limit = max_limit
-    
-    query = select(Notification).order_by(desc(Notification.created_at))
-    
-    if unread_only:
-        query = query.where(Notification.read == False)
-    
-    # Apply pagination
-    query = query.offset(offset).limit(limit)
-    
-    result = await db.execute(query)
-    notifications = result.scalars().all()
-    
-    # Get total count for pagination info
-    count_query = select(func.count(Notification.id))
-    if unread_only:
-        count_query = count_query.where(Notification.read == False)
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
+    try:
+        # Cap limit at 250 total (5 pages of 50)
+        max_limit = 250
+        if limit > max_limit:
+            limit = max_limit
+        
+        query = select(Notification).order_by(desc(Notification.created_at))
+        
+        if unread_only:
+            query = query.where(Notification.read == False)
+        
+        # Apply pagination
+        query = query.offset(offset).limit(limit)
+        
+        result = await db.execute(query)
+        notifications = result.scalars().all()
+        
+        # Get total count for pagination info
+        count_query = select(func.count(Notification.id))
+        if unread_only:
+            count_query = count_query.where(Notification.read == False)
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar() or 0
+    except Exception as e:
+        import traceback
+        print(f"Error in get_notifications: {e}")
+        print(traceback.format_exc())
+        notifications = []
+        total_count = 0
     
     # Get employee names
-    result = await db.execute(select(Employee))
-    all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    try:
+        result = await db.execute(select(Employee))
+        all_employees = {emp.id: emp.name for emp in result.scalars().all()}
+    except Exception as e:
+        print(f"Error fetching employees for notifications: {e}")
+        all_employees = {}
     
     return {
         "notifications": [
@@ -4276,11 +4883,17 @@ async def get_notifications(
 @router.get("/notifications/unread-count")
 async def get_unread_notification_count(db: AsyncSession = Depends(get_db)):
     """Get count of unread notifications."""
-    result = await db.execute(
-        select(func.count(Notification.id)).where(Notification.read == False)
-    )
-    count = result.scalar() or 0
-    return {"count": count}
+    try:
+        result = await db.execute(
+            select(func.count(Notification.id)).where(Notification.read == False)
+        )
+        count = result.scalar() or 0
+        return {"count": count}
+    except Exception as e:
+        import traceback
+        print(f"Error in get_unread_notification_count: {e}")
+        print(traceback.format_exc())
+        return {"count": 0}
 
 @router.post("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: int, db: AsyncSession = Depends(get_db)):
@@ -4584,6 +5197,9 @@ async def generate_meetings(db: AsyncSession = Depends(get_db)):
         from business.meeting_manager import MeetingManager
         manager = MeetingManager(db)
         meetings_created = await manager.generate_meetings()
+        await db.commit()
+        # Invalidate dashboard cache since meetings affect dashboard
+        await invalidate_cache("_fetch_dashboard_data")
         return {
             "success": True,
             "message": f"Generated {meetings_created} meetings",
@@ -4954,6 +5570,9 @@ async def delete_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
         
         await db.delete(meeting)
         await db.commit()
+        
+        # Invalidate dashboard cache since meetings affect dashboard
+        await invalidate_cache("_fetch_dashboard_data")
         
         return {
             "success": True,
@@ -5869,6 +6488,13 @@ async def log_pet_care(
         }
     )
     db.add(activity)
+    await db.flush()
+    # Broadcast activity
+    try:
+        from business.activity_broadcaster import broadcast_activity
+        await broadcast_activity(activity, db, employee)
+    except:
+        pass  # Don't fail if broadcasting fails
     
     await db.commit()
     await db.refresh(care_log)
@@ -6195,25 +6821,69 @@ async def upvote_suggestion(suggestion_id: int, db: AsyncSession = Depends(get_d
     await manager.upvote_suggestion(suggestion_id)
     return {"success": True, "message": "Suggestion upvoted"}
 
+# Database health check endpoint
+@router.get("/db/health")
+async def db_health_check(db: AsyncSession = Depends(get_db)):
+    """Check if database is working and return basic stats."""
+    try:
+        from sqlalchemy import text
+        
+        # Test basic query
+        result = await db.execute(text("SELECT COUNT(*) as count FROM employees"))
+        employee_count = result.scalar()
+        
+        result = await db.execute(text("SELECT COUNT(*) as count FROM projects"))
+        project_count = result.scalar()
+        
+        result = await db.execute(text("SELECT COUNT(*) as count FROM shared_drive_files"))
+        file_count = result.scalar()
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "stats": {
+                "employees": employee_count,
+                "projects": project_count,
+                "files": file_count
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
 # Shared Drive API Endpoints
-@router.get("/shared-drive/structure")
-async def get_shared_drive_structure(db: AsyncSession = Depends(get_db)):
-    """Get hierarchical file structure."""
+@cached_query(cache_duration=30)  # Cache for 30 seconds (shared drive changes less frequently)
+async def _fetch_shared_drive_structure(db: AsyncSession):
+    """Internal function to fetch shared drive structure."""
     from business.shared_drive_manager import SharedDriveManager
     manager = SharedDriveManager(db)
     structure = await manager.get_file_structure()
-    return structure
+    # Ensure we always return a dict, never None
+    return structure if structure is not None else {}
 
-@router.get("/shared-drive/files")
-async def get_shared_drive_files(
+@router.get("/shared-drive/structure")
+async def get_shared_drive_structure(db: AsyncSession = Depends(get_db)):
+    """Get hierarchical file structure."""
+    try:
+        return await _fetch_shared_drive_structure(db)
+    except Exception as e:
+        logger.error(f"Error in get_shared_drive_structure: {e}", exc_info=True)
+        # Return empty structure - frontend will use cache if available
+        return {}
+
+@cached_query(cache_duration=30)  # Cache for 30 seconds
+async def _fetch_shared_drive_files(
+    db: AsyncSession,
     department: str = None,
     employee_id: int = None,
     project_id: int = None,
     file_type: str = None,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_db)
+    limit: int = 100
 ):
-    """Get all files with optional filters."""
+    """Internal function to fetch shared drive files."""
     query = select(SharedDriveFile).options(
         selectinload(SharedDriveFile.employee),
         selectinload(SharedDriveFile.project),
@@ -6254,6 +6924,23 @@ async def get_shared_drive_files(
         }
         for f in files
     ]
+
+@router.get("/shared-drive/files")
+async def get_shared_drive_files(
+    department: str = None,
+    employee_id: int = None,
+    project_id: int = None,
+    file_type: str = None,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all files with optional filters."""
+    try:
+        return await _fetch_shared_drive_files(db, department, employee_id, project_id, file_type, limit)
+    except Exception as e:
+        logger.error(f"Error in get_shared_drive_files: {e}", exc_info=True)
+        # Return empty list - frontend will use cache if available
+        return []
 
 @router.get("/shared-drive/files/{file_id}")
 async def get_shared_drive_file(file_id: int, db: AsyncSession = Depends(get_db)):
@@ -6453,7 +7140,13 @@ async def generate_shared_drive_documents(
 @router.get("/config/timezone")
 async def get_timezone_config():
     """Get the configured timezone for the application."""
-    return {
-        "timezone": TIMEZONE_NAME
-    }
+    try:
+        return {
+            "timezone": TIMEZONE_NAME
+        }
+    except Exception as e:
+        print(f"Error in get_timezone_config: {e}")
+        return {
+            "timezone": "America/New_York"
+        }
 

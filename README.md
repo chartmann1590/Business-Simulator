@@ -274,22 +274,32 @@ The web interface provides several views:
   - Voting and manager feedback system
 - **Weather System**: Office weather tracking
   - Weather conditions affecting office mood
-- **Shared Drive System**: AI-powered document management
+  - **Shared Drive System**: AI-powered document management
   - AI-generated documents (Word, Spreadsheet, PowerPoint)
   - Version control for all documents
   - Organized by department/employee/project
   - Document viewing and editing interface
   - Recent files tracking
+  - **Training System**: Employee training session tracking
+  - Automatic training session management
+  - AI-generated training materials
+  - Training progress and statistics
+  - Integration with shared drive
+  - **Query Cache System**: Performance optimization
+  - In-memory query result caching
+  - Reduced database load
+  - Faster response times
 
 All views update in real-time as the simulation runs via WebSocket.
 
 ## Architecture
 
 - **Backend**: FastAPI with async SQLAlchemy
-- **Database**: PostgreSQL 12+ (optimized with indexes and connection pooling)
+- **Database**: PostgreSQL 12+ (optimized with indexes, connection pooling, and query caching)
 - **LLM**: Ollama API client
 - **Frontend**: React with Vite and Tailwind CSS
 - **Real-time**: WebSocket for live updates
+- **Caching**: In-memory query result caching for improved performance
 
 ## Troubleshooting
 

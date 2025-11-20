@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {font-family: Arial, sans-serif;}
+th, td {border: 1px solid #d0d0d0; padding: 8px; font-size: 11pt;}
+th {background-color: #366092; color: white; font-weight: bold;}
+td {background-color: #f2f2f2; border-top: 1px solid #d0d0d0;}
+th:empty::after, td:empty::after {content: "";}
+th:first-child, th:last-child {text-align: center;}
+th:nth-child(2), th:nth-child(3) {text-align: right;}
+td:first-child {text-align: left;}
+th td {min-width: 200px; max-width: 250px;}
+
+/* Color coding */
+th:contains("Total") {background-color: #e7f3ff; border-bottom: 2px solid #d0d0d0;}
+th:contains("Revenue") {background-color: #c9efce; border-right: 2px solid #d0d0d0;}
+th:contains("Profit") {background-color: #ccffcc; border-top: 2px solid #d0d0d0;}
+
+/* Conditional formatting */
+td {font-family: Arial, sans-serif;}
+td:nth-child(1) {color: green; font-weight: bold;}
+td:nth-child(5) {color: red; font-weight: bold;}
+td:nth-child(7) {color: blue;}
+</style>
+</head>
+<body>
+
+<table border-collapse="collapse" style="width: 100%; max-width: 1200px;">
+  <tr><th colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</th></tr>
+  <tr>
+    <th style="background-color: #366092; color: white; font-weight: bold;" colspan="5">Revenue &amp; Expense</th>
+    <th style="background-color: #366092; color: white; font-weight: bold;">Profit Margins</th>
+    <th style="background-color: #366092; color: white; font-weight: bold;">Active Projects</th>
+  </tr>
+
+  <tr><th>Department/Project</th><th style="text-align: right">Budget</th><th style="text-align: right">Revenue</th><th style="text-align: right">Profit</th><th style="text-align: right">Margin (%)</th><th style="text-align: right">Active Projects</th></tr>
+
+  <tr>
+    <td>Customer Portal Redesign</td>
+    <td style="background-color: #f2f2f2;">$75,000.00</td>
+    <td style="background-color: #c9efce;">$25,831.02</td>
+    <td style="background-color: #ccffcc;">$361,970.04</td>
+    <td style="background-color: #e7f3ff;">42.67%</td>
+    <td>1</td>
+  </tr>
+
+  <tr>
+    <td>Digital Transformation Project</td>
+    <td style="background-color: #f2f2f2;">$196,119.03</td>
+    <td style="background-color: #c9efce;">$70,675.89</td>
+    <td style="background-color: #ccffcc;">$126,443.14</td>
+    <td style="background-color: #e7f3ff;">65.63%</td>
+    <td>1</td>
+  </tr>
+
+  <!-- Add more data as needed -->
+
+  <tr>
+    <th>Total</th>
+    <th>$848,324.28</th>
+    <th>$361,970.04</th>
+    <th style="background-color: #e7f3ff;">42.67%</th>
+    <th>14</th>
+  </tr>
+
+  <tr><td colspan="8" style="text-align: center; font-size: 12pt; color: white; background-color: #366092;">Summary</td></tr>
+
+  <!-- Add more summary data as needed -->
+
+  <tr><td style="background-color: #e7f3ff;" colspan="8">Total Revenue: $848,324.28<br>Profit: $361,970.04<br>Profit Margin: 42.67%</td></tr>
+</table>
+
+</body>
+</html>

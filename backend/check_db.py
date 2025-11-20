@@ -9,10 +9,11 @@ async def check_database():
     print("Checking database...")
     
     # Check database connection
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
-    )
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        print("✗ Error: DATABASE_URL environment variable is required")
+        print("Please set it in your .env file or environment variables.")
+        return
     print(f"Database URL: {database_url.split('@')[0]}@***")
     
     # Try to initialize

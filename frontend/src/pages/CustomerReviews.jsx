@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiGet } from '../utils/api'
 import {
   BarChart,
   Bar,
@@ -30,25 +31,23 @@ function CustomerReviews() {
   }, [])
 
   const fetchData = async () => {
+    setLoading(true)
     try {
-      const [reviewsRes, statsRes, projectsRes] = await Promise.all([
-        fetch('/api/customer-reviews?limit=1000'),
-        fetch('/api/customer-reviews/stats'),
-        fetch('/api/projects')
+      const [reviewsResult, statsResult, projectsResult] = await Promise.all([
+        apiGet('/api/customer-reviews?limit=1000'),
+        apiGet('/api/customer-reviews/stats'),
+        apiGet('/api/projects')
       ])
       
-      const reviewsData = reviewsRes.ok ? await reviewsRes.json() : []
-      const statsData = statsRes.ok ? await statsRes.json() : null
-      const projectsData = projectsRes.ok ? await projectsRes.json() : []
-      
-      setReviews(reviewsData || [])
-      setStats(statsData)
-      setProjects(projectsData || [])
-      setLoading(false)
+      setReviews(Array.isArray(reviewsResult.data) ? reviewsResult.data : [])
+      setStats(statsResult.data || null)
+      setProjects(Array.isArray(projectsResult.data) ? projectsResult.data : [])
     } catch (error) {
       console.error('Error fetching customer reviews:', error)
       setReviews([])
       setStats(null)
+      setProjects([])
+    } finally {
       setLoading(false)
     }
   }
@@ -262,7 +261,7 @@ function CustomerReviews() {
             <p className="text-gray-500 text-lg mb-2">No customer reviews found</p>
             <p className="text-gray-400 text-sm">
               {reviews.length === 0 
-                ? 'Reviews will appear here once projects are completed and reviews are generated'
+                ? 'Reviews are automatically generated for completed projects. They will appear here once generated.'
                 : 'Try adjusting your filters'}
             </p>
           </div>

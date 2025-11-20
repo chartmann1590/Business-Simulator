@@ -1,6 +1,19 @@
 import { useEffect, useRef } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
 
+// Helper function to format room names for display
+function formatRoomName(roomName) {
+  if (!roomName) return 'Unknown'
+  return roomName
+    .replace(/_/g, ' ')
+    .replace(/\s*floor\d+\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, onScreenView }) {
   const isWalking = employee.activity_state === 'walking'
   const activityState = employee.activity_state || 'idle'
@@ -36,6 +49,8 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, 
         return '☕'
       case 'walking':
         return '🚶'
+      case 'training':
+        return '📚'
       default:
         return null
     }
@@ -57,7 +72,7 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, 
         transition: 'left 0.5s ease-in-out, top 0.5s ease-in-out'
       }}
       onClick={() => onEmployeeClick && onEmployeeClick(employee)}
-      title={`${employee.name} - ${employee.title}\n${activityState}`}
+      title={`${employee.name} - ${employee.title}\n${activityState}${isWalking && employee.target_room ? `\nWalking to: ${formatRoomName(employee.target_room)}` : ''}`}
     >
       <div className="relative">
         <img
@@ -73,6 +88,12 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, 
         {activityIcon && (
           <div className="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-md text-xs animate-pulse">
             {activityIcon}
+          </div>
+        )}
+        {/* Walking destination badge - visible when walking */}
+        {isWalking && employee.target_room && (
+          <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white text-[10px] font-semibold px-2 py-1 rounded-full shadow-lg whitespace-nowrap z-30 border-2 border-yellow-600">
+            🚶 → {formatRoomName(employee.target_room)}
           </div>
         )}
         {/* Screen View Button - Only show when working */}
@@ -97,6 +118,11 @@ function EmployeeAvatar({ employee, position = { x: 0, y: 0 }, onEmployeeClick, 
             <div className="font-semibold">{employee.name}</div>
             <div className="text-gray-300">{employee.title}</div>
             <div className="text-gray-400 capitalize">{activityState}</div>
+            {isWalking && employee.target_room && (
+              <div className="text-yellow-400 mt-1">
+                Walking to: {formatRoomName(employee.target_room)}
+              </div>
+            )}
             {activityState === 'working' && employee.status === 'active' && (
               <div className="text-blue-400 mt-1">Click screen icon to view</div>
             )}

@@ -3,6 +3,7 @@ import ChatView from '../components/ChatView'
 import EmailView from '../components/EmailView'
 import CalendarView from '../components/CalendarView'
 import SharedDriveView from '../components/SharedDriveView'
+import { apiGet } from '../utils/api'
 
 function Communications() {
   // Check for tab in URL params or default to 'teams'
@@ -32,32 +33,38 @@ function Communications() {
   }, [activeTab])
 
   const fetchData = async () => {
+    setLoading(true)
     try {
-      const [emailsRes, chatsRes, employeesRes] = await Promise.all([
-        fetch('/api/emails?limit=100'),
-        fetch('/api/chats?limit=200'),
-        fetch('/api/employees')
+      const [emailsResult, chatsResult, employeesResult] = await Promise.all([
+        apiGet('/api/emails?limit=100'),
+        apiGet('/api/chats?limit=200'),
+        apiGet('/api/employees')
       ])
       
-      const emailsData = emailsRes.ok ? await emailsRes.json() : []
-      const chatsData = chatsRes.ok ? await chatsRes.json() : []
-      const employeesData = employeesRes.ok ? await employeesRes.json() : []
-      
-      setEmails(emailsData || [])
-      setChats(chatsData || [])
-      setEmployees(employeesData || [])
-      setLoading(false)
+      // ALWAYS set data - use whatever we got (fresh or cached)
+      setEmails(Array.isArray(emailsResult.data) ? emailsResult.data : [])
+      setChats(Array.isArray(chatsResult.data) ? chatsResult.data : [])
+      setEmployees(Array.isArray(employeesResult.data) ? employeesResult.data : [])
     } catch (error) {
       console.error('Error fetching communications:', error)
+      // Even on error, data might be in cache, so components will show it
       setEmails([])
       setChats([])
       setEmployees([])
+    } finally {
       setLoading(false)
     }
   }
 
   if (loading) {
-    return <div className="text-center py-12">Loading communications...</div>
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading communications...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

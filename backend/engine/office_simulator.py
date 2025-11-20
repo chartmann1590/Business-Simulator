@@ -14,6 +14,10 @@ from typing import Set
 from datetime import datetime, timedelta
 import random
 from config import now as local_now, get_midnight_tomorrow
+import logging
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 async def get_business_context(db: AsyncSession) -> dict:
     """Get current business context for decision making (standalone function)."""
@@ -151,7 +155,7 @@ class OfficeSimulator:
                 
                 if fixed_count > 0:
                     await db.commit()
-                    print(f"🔥 FIXED {fixed_count} IDLE EMPLOYEES - They are now WORKING!")
+                    print(f"[!] FIXED {fixed_count} IDLE EMPLOYEES - They are now WORKING!")
                     
         except Exception as e:
             print(f"Error fixing idle employees: {e}")
@@ -342,15 +346,111 @@ class OfficeSimulator:
                 # Always commit to ensure changes are saved
                 if fixed_count > 0:
                     await db.commit()
-                    print(f"✅ Processed {processed_count} waiting employees, fixed {fixed_count}")
+                    print(f"[+] Processed {processed_count} waiting employees, fixed {fixed_count}")
                 else:
                     # Even if no fixes, commit to ensure any state changes are saved
                     await db.commit()
                     if processed_count > 0:
-                        print(f"ℹ️ Processed {processed_count} waiting employees (none needed fixing)")
+                        print(f"[i] Processed {processed_count} waiting employees (none needed fixing)")
                     
         except Exception as e:
             print(f"Error processing waiting employees: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def ensure_training_sessions(self, db):
+        """Ensure all employees in training rooms have active training sessions, and move out those who've been there too long."""
+        try:
+            from business.training_manager import TrainingManager
+            from employees.room_assigner import ROOM_TRAINING_ROOM
+            from sqlalchemy import select, and_
+            from database.models import Employee, TrainingSession
+            from datetime import datetime, timedelta
+            from engine.movement_system import update_employee_location
+            
+            training_manager = TrainingManager()
+            
+            # Find all employees currently in training rooms
+            # Check for all possible training room variations
+            from sqlalchemy import or_
+            training_room_conditions = [
+                Employee.current_room == ROOM_TRAINING_ROOM,
+                Employee.current_room.like(f"{ROOM_TRAINING_ROOM}_floor%"),
+                Employee.current_room.like(f"{ROOM_TRAINING_ROOM}_floor4%"),
+            ]
+            result = await db.execute(
+                select(Employee).where(
+                    and_(
+                        Employee.status == "active",
+                        or_(*training_room_conditions)
+                    )
+                )
+            )
+            employees_in_training = result.scalars().all()
+            
+            for employee in employees_in_training:
+                # Check if they have an active training session
+                session_result = await db.execute(
+                    select(TrainingSession).where(
+                        and_(
+                            TrainingSession.employee_id == employee.id,
+                            TrainingSession.status == "in_progress"
+                        )
+                    )
+                    .order_by(TrainingSession.start_time.desc())
+                )
+                existing_session = session_result.scalar_one_or_none()
+                
+                # Check if employee has been in training room for more than 30 minutes
+                should_move_out = False
+                if existing_session and existing_session.start_time:
+                    time_in_training = datetime.now() - existing_session.start_time
+                    if time_in_training > timedelta(minutes=30):
+                        # Training session exceeded 30 minutes - end it and move employee out
+                        existing_session.end_time = datetime.now()
+                        existing_session.status = "completed"
+                        duration = existing_session.end_time - existing_session.start_time
+                        existing_session.duration_minutes = int(duration.total_seconds() / 60)
+                        should_move_out = True
+                elif not existing_session:
+                    # No session but in training room - check if they've been there too long
+                    # Use hired_at as a fallback, but prefer to create a session first
+                    # For now, create a session and let the 30-minute check handle it next tick
+                    if employee.current_room:
+                        try:
+                            await training_manager.start_training_session(
+                                employee,
+                                employee.current_room,
+                                db
+                            )
+                            await db.flush()
+                        except Exception as e:
+                            print(f"Error creating training session for {employee.name}: {e}")
+                            # If we can't create a session, check hired_at as fallback
+                            if hasattr(employee, 'hired_at') and employee.hired_at:
+                                time_since_hire = datetime.now() - employee.hired_at.replace(tzinfo=None) if employee.hired_at.tzinfo else datetime.now() - employee.hired_at
+                                if time_since_hire > timedelta(minutes=30):
+                                    should_move_out = True
+                
+                # Move employee out if training exceeded 30 minutes
+                if should_move_out:
+                    target_room = employee.home_room
+                    if not target_room:
+                        # Fallback to cubicles or open office
+                        from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                        employee_floor = getattr(employee, 'floor', 1)
+                        target_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                    
+                    try:
+                        await update_employee_location(employee, target_room, "working", db)
+                        await db.flush()
+                        print(f"Moved {employee.name} out of training room after exceeding 30 minutes")
+                    except Exception as e:
+                        print(f"Error moving {employee.name} out of training room: {e}")
+                        import traceback
+                        traceback.print_exc()
+        except Exception as e:
+            print(f"Error in ensure_training_sessions: {e}")
             import traceback
             traceback.print_exc()
     
@@ -359,10 +459,64 @@ class OfficeSimulator:
         # FIRST: Fix ALL idle employees immediately - they should be working!
         await self.fix_idle_employees()
         
-        # Second: Fix any employees stuck in training rooms with waiting status
+        # Second: Fix employees walking without a destination - CRITICAL FIX
+        try:
+            async with async_session_maker() as db:
+                # Ensure all employees in training rooms have active training sessions
+                await self.ensure_training_sessions(db)
+                
+                # Check for and end expired training sessions (over 30 minutes)
+                from business.training_manager import TrainingManager
+                training_manager = TrainingManager()
+                ended_count = await training_manager.check_and_end_expired_sessions(db)
+                if ended_count > 0:
+                    await db.commit()
+                    logger.info(f"✅ Ended {ended_count} expired training sessions (over 30 minutes)")
+                from engine.movement_system import fix_walking_employees_without_destination
+                fixed = await fix_walking_employees_without_destination(db)
+                if fixed > 0:
+                    await db.commit()
+                    logger.info(f"✅ Fixed {fixed} employees walking without destination")
+                # Also check and fix any remaining walking employees without target_room
+                from sqlalchemy import select, and_, or_
+                from database.models import Employee
+                result = await db.execute(
+                    select(Employee).where(
+                        and_(
+                            Employee.status == "active",
+                            Employee.activity_state == "walking",
+                            or_(
+                                Employee.target_room.is_(None),
+                                Employee.target_room == ""
+                            )
+                        )
+                    )
+                )
+                remaining = result.scalars().all()
+                if remaining:
+                    logger.warning(f"⚠️ Found {len(remaining)} employees still walking without destination after fix! Running additional fix...")
+                    fixed2 = await fix_walking_employees_without_destination(db)
+                    if fixed2 > 0:
+                        await db.commit()
+                        logger.info(f"✅ Additional fix: {fixed2} more employees fixed")
+        except Exception as e:
+            logger.error(f"Error fixing walking employees: {e}", exc_info=True)
+        
+        # Third: Enforce room capacity - detect and fix over-capacity rooms
+        try:
+            async with async_session_maker() as capacity_db:
+                from engine.movement_system import enforce_room_capacity
+                capacity_stats = await enforce_room_capacity(capacity_db)
+                if capacity_stats["employees_redistributed"] > 0:
+                    await capacity_db.commit()
+                    logger.warning(f"🔧 Capacity enforcement: Fixed {capacity_stats['over_capacity_rooms']} over-capacity rooms, redistributed {capacity_stats['employees_redistributed']} employees")
+        except Exception as e:
+            logger.error(f"Error enforcing room capacity: {e}", exc_info=True)
+        
+        # Fourth: Fix any employees stuck in training rooms with waiting status
         await self.fix_waiting_in_training_rooms()
         
-        # Third: Process waiting employees to retry their movement
+        # Fifth: Process waiting employees to retry their movement
         await self.process_waiting_employees()
         
         # System-level break enforcement (runs every tick to catch abuse immediately)
@@ -372,11 +526,9 @@ class OfficeSimulator:
                 break_manager = CoffeeBreakManager(break_db)
                 enforcement_stats = await break_manager.enforce_break_limits_system_level()
                 if enforcement_stats["total_returned"] > 0:
-                    print(f"⏰ System-level break enforcement: returned {enforcement_stats['total_returned']} employee(s) to work ({enforcement_stats['managers_returned']} managers, {enforcement_stats['regular_employees_returned']} regular employees)")
+                    logger.info(f"[*] System-level break enforcement: returned {enforcement_stats['total_returned']} employee(s) to work ({enforcement_stats['managers_returned']} managers, {enforcement_stats['regular_employees_returned']} regular employees)")
         except Exception as e:
-            import traceback
-            print(f"❌ Error in system-level break enforcement: {e}")
-            traceback.print_exc()
+            logger.error(f"[-] Error in system-level break enforcement: {e}", exc_info=True)
         
         # Conduct periodic reviews every tick to ensure reviews happen promptly
         # This ensures we catch reviews as soon as they're due
@@ -387,7 +539,7 @@ class OfficeSimulator:
                 reviews_created = await review_manager.conduct_periodic_reviews(hours_since_last_review=6.0)
                 # Commit is handled inside conduct_periodic_reviews, but ensure session stays open
                 if reviews_created:
-                    print(f"✅ Conducted {len(reviews_created)} employee performance reviews")
+                    print(f"[+] Conducted {len(reviews_created)} employee performance reviews")
                     # Verify reviews are in the database by querying them
                     for review in reviews_created:
                         # Query back to verify persistence
@@ -406,12 +558,12 @@ class OfficeSimulator:
                             )
                             mgr = mgr_result.scalar_one_or_none()
                             if emp and mgr:
-                                print(f"   📝 {mgr.name} reviewed {emp.name} - Rating: {review.overall_rating}/5.0 (Review ID: {review.id})")
+                                print(f"   [*] {mgr.name} reviewed {emp.name} - Rating: {review.overall_rating}/5.0 (Review ID: {review.id})")
                         else:
-                            print(f"   ⚠️  WARNING: Review {review.id} not found after commit!")
+                            print(f"   [!] WARNING: Review {review.id} not found after commit!")
         except Exception as e:
             import traceback
-            print(f"❌ Error conducting periodic reviews: {e}")
+            print(f"[-] Error conducting periodic reviews: {e}")
             print(f"Traceback: {traceback.format_exc()}")
         
         # Update performance award periodically (every 4 minutes = 30 ticks)
@@ -422,13 +574,13 @@ class OfficeSimulator:
                 async with async_session_maker() as award_db:
                     from business.review_manager import ReviewManager
                     review_manager = ReviewManager(award_db)
-                    print("🏆 [AWARD] Running performance award update from simulation tick...")
+                    print("[AWARD] Running performance award update from simulation tick...")
                     await review_manager._update_performance_award()
                     await award_db.commit()
-                    print("🏆 [AWARD] Award update from simulation tick completed!")
+                    print("[AWARD] Award update from simulation tick completed!")
             except Exception as e:
                 import traceback
-                print(f"❌ [AWARD] Error updating award in simulation tick: {e}")
+                print(f"[-] [AWARD] Error updating award in simulation tick: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
         
         # Generate boardroom discussions every 2 minutes (120 seconds)
@@ -445,10 +597,10 @@ class OfficeSimulator:
                         print(f"💼 Generated {chats_created} boardroom discussions")
             except Exception as e:
                 import traceback
-                print(f"❌ Error generating boardroom discussions: {e}")
+                print(f"[-] Error generating boardroom discussions: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
         
-        # Customer reviews are now handled by a dedicated background task (every 2 hours)
+        # Customer reviews are now handled by a dedicated background task (runs immediately, then every 30 minutes)
         # See generate_customer_reviews_periodically() method
         
         # Quick Wins Features Integration
@@ -469,7 +621,7 @@ class OfficeSimulator:
                         if celebration:
                             print(f"🎂 Birthday celebration for {emp.name}!")
             except Exception as e:
-                print(f"❌ Error checking birthdays: {e}")
+                print(f"[-] Error checking birthdays: {e}")
         
         # Check holidays daily
         if self.last_holiday_check_date != current_date:
@@ -484,7 +636,7 @@ class OfficeSimulator:
                         if celebration:
                             print(f"🎉 Holiday celebration: {holiday_name}!")
             except Exception as e:
-                print(f"❌ Error checking holidays: {e}")
+                print(f"[-] Error checking holidays: {e}")
         
         # Update weather daily
         if self.last_weather_date != current_date:
@@ -495,7 +647,7 @@ class OfficeSimulator:
                     weather_manager = WeatherManager(weather_db)
                     await weather_manager.get_today_weather()
             except Exception as e:
-                print(f"❌ Error updating weather: {e}")
+                print(f"[-] Error updating weather: {e}")
         
         # Check for random events (every 20 ticks = ~2.5 minutes)
         if self.quick_wins_counter % 20 == 0:
@@ -506,7 +658,7 @@ class OfficeSimulator:
                     await event_manager.resolve_expired_events()
                     event = await event_manager.check_for_random_event()
                     if event:
-                        print(f"⚠️ Random event: {event.title}")
+                        print(f"[!] Random event: {event.title}")
             except Exception as e:
                 print(f"❌ Error checking random events: {e}")
         
@@ -601,15 +753,15 @@ class OfficeSimulator:
                     
                     # If it's a new day and there are no meetings, or if there are fewer than 3 meetings, generate them
                     if is_new_day and len(existing_meetings) == 0:
-                        print(f"📅 New day detected ({current_date}), generating meetings for today...")
+                        print(f"[*] New day detected ({current_date}), generating meetings for today...")
                         meetings_created = await meeting_manager.generate_meetings()
                         if meetings_created > 0:
-                            print(f"📅 Generated {meetings_created} meetings for the new day")
+                            print(f"[+] Generated {meetings_created} meetings for the new day")
                     elif len(existing_meetings) < 3:
-                        print(f"📅 Only {len(existing_meetings)} meetings found for today, generating more...")
+                        print(f"[*] Only {len(existing_meetings)} meetings found for today, generating more...")
                         meetings_created = await meeting_manager.generate_meetings()
                         if meetings_created > 0:
-                            print(f"📅 Generated {meetings_created} additional meetings for today")
+                            print(f"[+] Generated {meetings_created} additional meetings for today")
                     else:
                         # Meetings already exist for today, no need to generate
                         pass
@@ -648,8 +800,8 @@ class OfficeSimulator:
                 employee_list = list(employees)
                 random.shuffle(employee_list)
                 
-                # Process up to 3 employees per tick to avoid overload
-                for employee in employee_list[:3]:
+                # Process up to 5 employees per tick (increased from 3 for more activity and communications)
+                for employee in employee_list[:5]:
                     # Use a separate session for each employee to isolate transactions
                     async with async_session_maker() as db:
                         try:
@@ -696,7 +848,7 @@ class OfficeSimulator:
                                         "data": {
                                             "activity_type": "suggestion_submitted",
                                             "employee_id": employee_instance.id,
-                                            "description": f"💡 {employee_instance.name} submitted a suggestion: {suggestion.title}",
+                                            "description": f"[*] {employee_instance.name} submitted a suggestion: {suggestion.title}",
                                             "timestamp": suggestion.created_at.isoformat()
                                         }
                                     })
@@ -1036,7 +1188,7 @@ class OfficeSimulator:
             # These should be terminated regardless of budget
             employees_with_bad_reviews = await self._check_employees_with_bad_reviews(db, active_employees)
             if employees_with_bad_reviews:
-                print(f"⚠️  Found {len(employees_with_bad_reviews)} employee(s) with consistently bad performance reviews - terminating")
+                print(f"[!] Found {len(employees_with_bad_reviews)} employee(s) with consistently bad performance reviews - terminating")
                 for employee in employees_with_bad_reviews:
                     if active_count > MIN_EMPLOYEES:
                         await self._fire_employee_for_performance(db, employee)
@@ -1050,7 +1202,7 @@ class OfficeSimulator:
             if active_count > MIN_EMPLOYEES:
                 restructuring_needed, restructuring_reason = await self._check_restructuring_needs(db, active_employees, business_context)
                 if restructuring_needed:
-                    print(f"⚠️  Restructuring needed: {restructuring_reason}")
+                    logger.warning(f"[!] Restructuring needed: {restructuring_reason}")
                     if random.random() < 0.3:  # 30% chance to fire for restructuring
                         await self._fire_employee_for_restructuring(db, active_employees, restructuring_reason)
                         fired_this_tick = True
@@ -1445,9 +1597,9 @@ class OfficeSimulator:
         final_count = len(final_active_employees)
         
         if final_count != active_count:
-            print(f"📈 Employee count changed: {active_count} → {final_count} (delta: {final_count - active_count})")
+            logger.info(f"📈 Employee count changed: {active_count} → {final_count} (delta: {final_count - active_count})")
         else:
-            print(f"📊 No employee count change this tick (still {final_count}/{MAX_EMPLOYEES})")
+            logger.info(f"📊 No employee count change this tick (still {final_count}/{MAX_EMPLOYEES})")
     
     async def _hire_employee(self, db: AsyncSession, business_context: dict):
         """Hire a new employee."""
@@ -1573,17 +1725,34 @@ class OfficeSimulator:
             new_employee.current_room = training_room
             new_employee.activity_state = "training"  # Mark as in training
             
+            # Create training session immediately for new hire
+            try:
+                from business.training_manager import TrainingManager
+                training_manager = TrainingManager()
+                await training_manager.start_training_session(new_employee, training_room, db)
+                await db.flush()
+            except Exception as e:
+                print(f"Error creating training session for new hire {new_employee.name}: {e}")
+                import traceback
+                traceback.print_exc()
+            
             # Create activity
             activity = Activity(
                 employee_id=None,
                 activity_type="hiring",
-                description=f"Hired {name} as {title} in {department}",
+                description=f"Hired {name} as {title} in {department} - Starting training",
                 activity_metadata={"employee_id": None, "action": "hire"}
             )
             db.add(activity)
             
             await db.flush()
             activity.activity_metadata["employee_id"] = new_employee.id
+            # Broadcast activity
+            try:
+                from business.activity_broadcaster import broadcast_activity
+                await broadcast_activity(activity, db, new_employee)
+            except:
+                pass  # Don't fail if broadcasting fails
             
             # Create notification for employee hire
             from database.models import Notification
@@ -1728,6 +1897,17 @@ class OfficeSimulator:
         
         new_employee.current_room = training_room
         new_employee.activity_state = "training"  # Mark as in training
+        
+        # Create training session immediately for new hire
+        try:
+            from business.training_manager import TrainingManager
+            training_manager = TrainingManager()
+            await training_manager.start_training_session(new_employee, training_room, db)
+            await db.flush()
+        except Exception as e:
+            print(f"Error creating training session for new hire {new_employee.name}: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Create activity
         activity = Activity(
@@ -2245,6 +2425,13 @@ class OfficeSimulator:
                     }
                 )
                 db.add(activity)
+                await db.flush()
+                # Broadcast activity
+                try:
+                    from business.activity_broadcaster import broadcast_activity
+                    await broadcast_activity(activity, db, None)
+                except:
+                    pass  # Don't fail if broadcasting fails
                 print(f"System: Created new project '{project_name}' following completion of '{completed_project.name}' to maintain growth (active: {active_count}/{max_projects})")
                 
                 # If at capacity, note that hiring will be needed
@@ -2261,6 +2448,13 @@ class OfficeSimulator:
                         }
                     )
                     db.add(activity)
+                    await db.flush()
+                    # Broadcast activity
+                    try:
+                        from business.activity_broadcaster import broadcast_activity
+                        await broadcast_activity(activity, db, None)
+                    except:
+                        pass  # Don't fail if broadcasting fails
     
     async def _check_and_complete_projects(self, db: AsyncSession):
         """Check all active projects and mark those at 100% as completed."""
@@ -2610,7 +2804,7 @@ Return ONLY the termination reason text, nothing else."""
     
     async def update_meetings_frequently(self):
         """Background task to update meeting status and generate live content very frequently (every 2-3 seconds)."""
-        print("🔄 Starting frequent meeting update background task...")
+        print("[*] Starting frequent meeting update background task...")
         from database.database import retry_on_lock
         from sqlalchemy.exc import OperationalError
         
@@ -2642,18 +2836,18 @@ Return ONLY the termination reason text, nothing else."""
     
     async def update_performance_award_periodically(self):
         """Background task to periodically update the performance award (every 5 minutes)."""
-        print("🏆 Starting performance award update background task...")
+        print("[*] Starting performance award update background task...")
         # Run immediately on startup
         try:
             async with async_session_maker() as award_db:
                 from business.review_manager import ReviewManager
                 review_manager = ReviewManager(award_db)
-                print("🏆 [AWARD] Running initial performance award update on startup...")
+                print("[AWARD] Running initial performance award update on startup...")
                 await review_manager._update_performance_award()
                 await award_db.commit()
-                print("🏆 [AWARD] Initial award update completed!")
+                print("[AWARD] Initial award update completed!")
         except Exception as e:
-            print(f"❌ [AWARD] Error in initial award update: {e}")
+            print(f"[-] [AWARD] Error in initial award update: {e}")
             import traceback
             traceback.print_exc()
         
@@ -2667,12 +2861,12 @@ Return ONLY the termination reason text, nothing else."""
                 async with async_session_maker() as award_db:
                     from business.review_manager import ReviewManager
                     review_manager = ReviewManager(award_db)
-                    print("🏆 [AWARD] Running periodic performance award update...")
+                    print("[AWARD] Running periodic performance award update...")
                     await review_manager._update_performance_award()
                     await award_db.commit()
-                    print("🏆 [AWARD] Periodic award update completed!")
+                    print("[AWARD] Periodic award update completed!")
             except Exception as e:
-                print(f"❌ [AWARD] Error in periodic award update: {e}")
+                print(f"[-] [AWARD] Error in periodic award update: {e}")
                 import traceback
                 traceback.print_exc()
                 await asyncio.sleep(60)  # Wait 1 minute before retrying on error
@@ -2681,7 +2875,7 @@ Return ONLY the termination reason text, nothing else."""
         """Background task to update business goals daily at midnight (00:00)."""
         from datetime import datetime, time, timezone, timedelta
         
-        print("🔄 Starting daily goal update background task...")
+        print("[*] Starting daily goal update background task...")
         
         # Check immediately on startup
         try:
@@ -2691,10 +2885,10 @@ Return ONLY the termination reason text, nothing else."""
                 
                 # Check if goals need to be updated today
                 if await goal_system.should_update_goals_today():
-                    print("📅 Updating business goals on startup...")
+                    print("[*] Updating business goals on startup...")
                     await goal_system.generate_daily_goals()
                 else:
-                    print("ℹ️  Business goals are up to date")
+                    print("[i] Business goals are up to date")
         except Exception as e:
             print(f"❌ Error in initial goal update: {e}")
             import traceback
@@ -2711,7 +2905,7 @@ Return ONLY the termination reason text, nothing else."""
                 
                 from config import get_timezone
                 tz_name = get_timezone().zone
-                print(f"⏰ Next goal update scheduled for {tomorrow_midnight.strftime('%Y-%m-%d %H:%M:%S')} {tz_name} (in {seconds_until_midnight/3600:.1f} hours)")
+                print(f"[*] Next goal update scheduled for {tomorrow_midnight.strftime('%Y-%m-%d %H:%M:%S')} {tz_name} (in {seconds_until_midnight/3600:.1f} hours)")
                 
                 # Wait until midnight
                 await asyncio.sleep(seconds_until_midnight)
@@ -2724,10 +2918,10 @@ Return ONLY the termination reason text, nothing else."""
                         
                         # Check if goals need to be updated (should be true at midnight)
                         if await goal_system.should_update_goals_today():
-                            print("📅 Updating business goals for new day...")
+                            print("[*] Updating business goals for new day...")
                             await goal_system.generate_daily_goals()
                         else:
-                            print("ℹ️  Goals already updated today")
+                            print("[i] Goals already updated today")
                             
             except Exception as e:
                 print(f"❌ Error in daily goal update: {e}")
@@ -2737,31 +2931,42 @@ Return ONLY the termination reason text, nothing else."""
                 await asyncio.sleep(3600)
     
     async def generate_customer_reviews_periodically(self):
-        """Background task to generate customer reviews every 2 hours."""
-        print("🔄 Starting customer review generation background task (every 2 hours)...")
+        """Background task to generate customer reviews every 30 minutes."""
+        print("[*] Starting customer review generation background task (runs immediately, then every 30 minutes)...")
+        
+        # Run immediately on startup
+        first_run = True
+        
         while self.running:
             try:
                 async with async_session_maker() as customer_review_db:
                     from business.customer_review_manager import CustomerReviewManager
                     customer_review_manager = CustomerReviewManager(customer_review_db)
+                    
+                    # On first run, generate for all completed projects (hours_since_completion=0)
+                    # On subsequent runs, generate for projects completed at least 1 hour ago
+                    hours_threshold = 0.0 if first_run else 1.0
                     reviews_created = await customer_review_manager.generate_reviews_for_completed_projects(
-                        hours_since_completion=24.0
+                        hours_since_completion=hours_threshold
                     )
                     if reviews_created:
-                        print(f"⭐ Generated {len(reviews_created)} customer review(s) for completed projects")
+                        print(f"[+] Generated {len(reviews_created)} customer review(s) for completed projects")
                     else:
-                        print("ℹ️  No new customer reviews to generate at this time")
+                        if first_run:
+                            print("[i] No new customer reviews to generate at this time (no completed projects or reviews already exist)")
+                        # Don't print on every periodic run to avoid spam
             except Exception as e:
                 print(f"❌ Error generating customer reviews: {e}")
                 import traceback
                 traceback.print_exc()
             
-            # Wait 2 hours (7200 seconds) before next generation
-            await asyncio.sleep(7200)
+            first_run = False
+            # Wait 30 minutes (1800 seconds) before next generation
+            await asyncio.sleep(1800)
     
     async def process_suggestions_periodically(self):
         """Background task to process suggestion votes and manager comments every 60 minutes."""
-        print("💡 Starting suggestion processing background task (every 60 minutes)...")
+        print("[*] Starting suggestion processing background task (every 60 minutes)...")
         while self.running:
             try:
                 async with async_session_maker() as suggestion_db:
@@ -2774,7 +2979,7 @@ Return ONLY the termination reason text, nothing else."""
                     # Process manager comments
                     await suggestion_manager.process_manager_comments()
                     
-                    print("💡 Suggestion processing completed")
+                    print("[+] Suggestion processing completed")
             except Exception as e:
                 print(f"❌ Error processing suggestions: {e}")
                 import traceback
@@ -2784,7 +2989,7 @@ Return ONLY the termination reason text, nothing else."""
             await asyncio.sleep(3600)
     
     async def update_shared_drive_periodically(self):
-        """Background task to update shared drive every 20-30 minutes (optimized to prevent freezing)."""
+        """Background task to update shared drive every 5-10 minutes (optimized to prevent freezing)."""
         import random
         from business.shared_drive_manager import SharedDriveManager
         from database.database import retry_on_lock
@@ -2808,11 +3013,11 @@ Return ONLY the termination reason text, nothing else."""
                         employees = result.scalars().all()
                         
                         if employees:
-                            # Process only 1-2 employees per cycle to prevent freezing
+                            # Process 2-3 employees per cycle for more frequent updates
                             if first_run:
-                                num_to_process = min(2, len(employees))  # Only 2 on startup
+                                num_to_process = min(3, len(employees))  # 3 on startup
                             else:
-                                num_to_process = min(1, len(employees))  # Only 1 per cycle
+                                num_to_process = min(2, len(employees))  # 2 per cycle for better coverage
                             
                             employees_to_process = random.sample(list(employees), num_to_process)
                             
@@ -2883,14 +3088,134 @@ Return ONLY the termination reason text, nothing else."""
             # Mark first run as complete
             first_run = False
             
-            # Wait 20-30 minutes (1200-1800 seconds) before next update - much less frequent
-            wait_time = random.randint(1200, 1800)
+            # Wait 5-10 minutes (300-600 seconds) before next update - more frequent updates
+            wait_time = random.randint(300, 600)
             print(f"📁 Next shared drive update in {wait_time // 60} minutes")
             await asyncio.sleep(wait_time)
     
+    async def check_and_respond_to_messages_periodically(self):
+        """Background task to check and respond to messages for all employees every 30 seconds."""
+        print("💬 Starting message response background task (every 30 seconds)...")
+        
+        # Wait a bit on startup to let system stabilize
+        await asyncio.sleep(5)
+        
+        while self.running:
+            try:
+                async with async_session_maker() as message_db:
+                    from employees.roles import create_employee_agent
+                    from sqlalchemy import select
+                    
+                    # Get all active employees
+                    result = await message_db.execute(
+                        select(Employee).where(Employee.status == "active")
+                    )
+                    employees = result.scalars().all()
+                    
+                    if not employees:
+                        print("ℹ️  No active employees to check messages for")
+                    else:
+                        # Get business context
+                        business_context = await self.get_business_context(message_db)
+                        
+                        responses_count = 0
+                        for employee in employees:
+                            try:
+                                # Create employee agent
+                                agent = create_employee_agent(employee, message_db, self.llm_client)
+                                
+                                # Check and respond to messages
+                                await agent._check_and_respond_to_messages(business_context)
+                                
+                                responses_count += 1
+                            except Exception as e:
+                                print(f"❌ Error checking messages for {employee.name}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
+                        
+                        await message_db.commit()
+                        logger.info(f"💬 Message response check completed for {responses_count} employee(s)")
+                        print(f"💬 Message response check completed for {responses_count} employee(s)")
+                        
+            except Exception as e:
+                logger.error(f"[-] Error in message response background task: {e}", exc_info=True)
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 30 seconds before next check (much more frequent for faster responses)
+            if self.running:
+                await asyncio.sleep(30)
+    
+    async def generate_communications_periodically(self):
+        """Background task to generate spontaneous communications between employees every 5 minutes."""
+        print("💬 Starting periodic communication generation task (every 5 minutes)...")
+        
+        # Wait a bit on startup to let system stabilize
+        await asyncio.sleep(60)
+        
+        while self.running:
+            try:
+                async with async_session_maker() as comm_db:
+                    from employees.roles import create_employee_agent
+                    from sqlalchemy import select
+                    import random
+                    
+                    # Get all active employees
+                    result = await comm_db.execute(
+                        select(Employee).where(Employee.status == "active")
+                    )
+                    employees = result.scalars().all()
+                    
+                    if not employees or len(employees) < 2:
+                        print("ℹ️  Not enough employees for communication generation")
+                    else:
+                        # Get business context
+                        business_context = await self.get_business_context(comm_db)
+                        
+                        # Select 3-5 random employees to generate communications
+                        num_to_process = min(random.randint(3, 5), len(employees))
+                        selected_employees = random.sample(employees, num_to_process)
+                        
+                        communications_generated = 0
+                        for employee in selected_employees:
+                            try:
+                                # Create employee agent
+                                agent = create_employee_agent(employee, comm_db, self.llm_client)
+                                
+                                # Create a simple decision context for spontaneous communication
+                                decision = {
+                                    "action_type": "communication",
+                                    "decision": "Reach out to a teammate",
+                                    "reasoning": "Spontaneous team communication to stay connected",
+                                    "confidence": 0.7
+                                }
+                                
+                                # Generate communication (this will use the improved probabilities)
+                                await agent._generate_communication(decision, business_context)
+                                communications_generated += 1
+                            except Exception as e:
+                                print(f"❌ Error generating communication for {employee.name}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
+                        
+                        await comm_db.commit()
+                        if communications_generated > 0:
+                            logger.info(f"[+] Generated {communications_generated} spontaneous communication(s)")
+                        
+            except Exception as e:
+                logger.error(f"[-] Error in periodic communication generation task: {e}", exc_info=True)
+                import traceback
+                traceback.print_exc()
+            
+            # Wait 5 minutes (300 seconds) before next generation
+            if self.running:
+                await asyncio.sleep(300)
+    
     async def manage_employees_periodically(self):
         """Background task to manage employee hiring and firing every 30-60 seconds."""
-        print("👥 Starting employee management background task (every 30-60 seconds)...")
+        logger.info("👥 Starting employee management background task (every 30-60 seconds)...")
         import random
         from database.database import retry_on_lock
         from sqlalchemy.exc import OperationalError
@@ -2905,10 +3230,10 @@ Return ONLY the termination reason text, nothing else."""
                         try:
                             business_context = await self.get_business_context(manage_db)
                             
-                            print(f"🔄 Running employee management background task...")
+                            logger.info(f"[*] Running employee management background task...")
                             await self._manage_employees(manage_db, business_context)
                             await manage_db.commit()
-                            print(f"✅ Employee management background task completed")
+                            logger.info(f"[+] Employee management background task completed")
                         except Exception as e:
                             await manage_db.rollback()
                             raise
@@ -2918,25 +3243,21 @@ Return ONLY the termination reason text, nothing else."""
                     
             except OperationalError as e:
                 if "database is locked" in str(e):
-                    print(f"❌ Employee management failed after retries (database locked)")
+                    logger.error(f"[-] Employee management failed after retries (database locked)")
                 else:
-                    print(f"❌ Error in employee management background task: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.error(f"[-] Error in employee management background task: {e}", exc_info=True)
             except Exception as e:
-                print(f"❌ Error in employee management background task: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[-] Error in employee management background task: {e}", exc_info=True)
             
             # Also manage project capacity in the same task
             try:
                 async def manage_projects():
                     async with async_session_maker() as project_db:
                         try:
-                            print(f"🔄 Running project capacity management...")
+                            logger.info(f"[*] Running project capacity management...")
                             await self._manage_project_capacity(project_db)
                             await project_db.commit()
-                            print(f"✅ Project capacity management completed")
+                            logger.info(f"[+] Project capacity management completed")
                         except Exception as e:
                             await project_db.rollback()
                             raise
@@ -2945,15 +3266,11 @@ Return ONLY the termination reason text, nothing else."""
                 await retry_on_lock(manage_projects, max_retries=3, initial_delay=1.0)
             except OperationalError as e:
                 if "database is locked" in str(e):
-                    print(f"❌ Project management failed after retries (database locked)")
+                    logger.error(f"[-] Project management failed after retries (database locked)")
                 else:
-                    print(f"❌ Error in project capacity management: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.error(f"[-] Error in project capacity management: {e}", exc_info=True)
             except Exception as e:
-                print(f"❌ Error in project capacity management: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[-] Error in project capacity management: {e}", exc_info=True)
             
             # Wait 30-60 seconds before next check
             wait_time = random.randint(30, 60)
@@ -2962,42 +3279,50 @@ Return ONLY the termination reason text, nothing else."""
     async def run(self):
         """Run the simulation loop."""
         self.running = True
-        print("Office simulation started...")
+        logger.info("Office simulation started...")
         
         # Start the frequent meeting update task in the background
         meeting_task = asyncio.create_task(self.update_meetings_frequently())
-        print(f"✅ Created meeting update background task: {meeting_task}")
+        logger.info(f"[+] Created meeting update background task: {meeting_task}")
         
         # Start the daily goal update task in the background
         goal_task = asyncio.create_task(self.update_goals_daily())
-        print(f"✅ Created daily goal update background task: {goal_task}")
+        logger.info(f"[+] Created daily goal update background task: {goal_task}")
         
-        # Start the customer review generation task in the background (every 2 hours)
+        # Start the customer review generation task in the background (runs immediately, then every 30 minutes)
         customer_review_task = asyncio.create_task(self.generate_customer_reviews_periodically())
-        print(f"✅ Created customer review generation background task (every 2 hours): {customer_review_task}")
+        logger.info(f"[+] Created customer review generation background task (runs immediately, then every 30 minutes): {customer_review_task}")
         
         # Start the performance award update task in the background (every 5 minutes)
         award_task = asyncio.create_task(self.update_performance_award_periodically())
-        print(f"✅ Created performance award update background task (every 5 minutes, runs immediately): {award_task}")
+        logger.info(f"[+] Created performance award update background task (every 5 minutes, runs immediately): {award_task}")
         
         # Start the suggestion processing task in the background (every 60 minutes)
         suggestion_task = asyncio.create_task(self.process_suggestions_periodically())
-        print(f"✅ Created suggestion processing background task (every 60 minutes): {suggestion_task}")
+        logger.info(f"[+] Created suggestion processing background task (every 60 minutes): {suggestion_task}")
         
         # Start the shared drive update task in the background (every 20-30 minutes, optimized)
         shared_drive_task = asyncio.create_task(self.update_shared_drive_periodically())
-        print(f"✅ Created shared drive update background task (every 20-30 minutes, optimized): {shared_drive_task}")
+        logger.info(f"[+] Created shared drive update background task (every 20-30 minutes, optimized): {shared_drive_task}")
         
         # Start the employee management task in the background (every 30-60 seconds)
         employee_management_task = asyncio.create_task(self.manage_employees_periodically())
-        print(f"✅ Created employee management background task (every 30-60 seconds): {employee_management_task}")
+        logger.info(f"[+] Created employee management background task (every 30-60 seconds): {employee_management_task}")
+        
+        # Start the message response task in the background (every 30 seconds)
+        message_response_task = asyncio.create_task(self.check_and_respond_to_messages_periodically())
+        logger.info(f"[+] Created message response background task (every 30 seconds): {message_response_task}")
+        
+        # Start the periodic communication generation task (every 5 minutes for spontaneous communications)
+        communication_task = asyncio.create_task(self.generate_communications_periodically())
+        logger.info(f"[+] Created periodic communication generation background task (every 5 minutes): {communication_task}")
         
         while self.running:
             try:
                 await self.simulation_tick()
                 await asyncio.sleep(8)  # Wait 8 seconds between ticks
             except Exception as e:
-                print(f"Error in simulation loop: {e}")
+                logger.error(f"Error in simulation loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
     
     def stop(self):

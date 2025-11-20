@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.models import Employee, Activity
-from sqlalchemy import select
+from database.models import Employee, Activity, Meeting, BirthdayCelebration, HolidayCelebration
+from sqlalchemy import select, or_, func
 from datetime import datetime, timedelta
 from config import now as local_now
 import random
@@ -215,7 +215,17 @@ class CoffeeBreakManager:
                 print(f"⚠️ {employee.name} was in breakroom but not on break - moved to work")
                 continue  # Skip break duration check for this employee
             
-            # Second check: If employee is on break, check break duration
+            # Second check: If employee is on break, check if they're in a scheduled celebration
+            # If they are, don't kick them out until the celebration is over
+            celebration_end_time = await self.check_employee_in_scheduled_celebration(employee)
+            if celebration_end_time:
+                # Employee is in a scheduled celebration - check if it's still ongoing
+                if now < celebration_end_time:
+                    # Celebration is still ongoing, don't kick them out
+                    continue
+                # Celebration has ended, proceed with normal break enforcement
+            
+            # Third check: If employee is on break, check break duration
             if not employee.last_coffee_break:
                 continue
             
@@ -340,7 +350,17 @@ class CoffeeBreakManager:
                     print(f"⚠️ {employee.name} was in breakroom but not on break - moved to work")
                 continue  # Skip break duration check for this employee
             
-            # Second check: If employee is on break, check break duration
+            # Second check: If employee is on break, check if they're in a scheduled celebration
+            # If they are, don't kick them out until the celebration is over
+            celebration_end_time = await self.check_employee_in_scheduled_celebration(employee)
+            if celebration_end_time:
+                # Employee is in a scheduled celebration - check if it's still ongoing
+                if now < celebration_end_time:
+                    # Celebration is still ongoing, don't kick them out
+                    continue
+                # Celebration has ended, proceed with normal break enforcement
+            
+            # Third check: If employee is on break, check break duration
             if not employee.last_coffee_break:
                 continue
             
@@ -400,6 +420,134 @@ class CoffeeBreakManager:
             "managers_returned": manager_abuse_count,
             "regular_employees_returned": len(returned_employees) - manager_abuse_count
         }
+    
+    async def check_employee_in_scheduled_celebration(self, employee: Employee) -> Optional[datetime]:
+        """Check if an employee is in a scheduled birthday or holiday celebration party.
+        Returns the end time of the party if the employee is in one, None otherwise.
+        """
+        now = local_now()
+        
+        # Check Meeting records for birthday or holiday parties
+        # Look for meetings that are currently happening (start_time <= now <= end_time)
+        meeting_result = await self.db.execute(
+            select(Meeting).where(
+                Meeting.start_time <= now,
+                Meeting.end_time >= now
+            )
+        )
+        meetings = meeting_result.scalars().all()
+        
+        for meeting in meetings:
+            # Check if employee is organizer or in attendee_ids
+            is_organizer = meeting.organizer_id == employee.id
+            is_attendee = False
+            if meeting.attendee_ids:
+                # Convert attendee_ids to a set of integers for comparison
+                attendee_ids_set = set()
+                for aid in meeting.attendee_ids:
+                    if isinstance(aid, int):
+                        attendee_ids_set.add(aid)
+                    elif isinstance(aid, str) and aid.isdigit():
+                        attendee_ids_set.add(int(aid))
+                    elif isinstance(aid, (int, float)):
+                        attendee_ids_set.add(int(aid))
+                is_attendee = employee.id in attendee_ids_set
+            
+            if is_organizer or is_attendee:
+                metadata = meeting.meeting_metadata or {}
+                if isinstance(metadata, dict):
+                    # Check if it's a birthday or holiday party
+                    if metadata.get('is_birthday_party') or metadata.get('is_holiday_party'):
+                        # Check if employee is in the breakroom (where parties are held)
+                        from employees.room_assigner import ROOM_BREAKROOM
+                        if employee.current_room and ROOM_BREAKROOM in employee.current_room:
+                            # Party is still ongoing, return end time
+                            return meeting.end_time
+        
+        # Check BirthdayCelebration records
+        # Look for celebrations today where employee is an attendee or the birthday person
+        birthday_result = await self.db.execute(
+            select(BirthdayCelebration).where(
+                func.date(BirthdayCelebration.celebration_date) == now.date()
+            )
+        )
+        birthday_celebrations = birthday_result.scalars().all()
+        
+        for celebration in birthday_celebrations:
+            # Check if employee is the birthday person or in attendees
+            is_birthday_person = celebration.employee_id == employee.id
+            is_attendee = False
+            if celebration.attendees:
+                # Convert attendees to a set of integers for comparison
+                attendee_ids_set = set()
+                for aid in celebration.attendees:
+                    if isinstance(aid, int):
+                        attendee_ids_set.add(aid)
+                    elif isinstance(aid, str) and aid.isdigit():
+                        attendee_ids_set.add(int(aid))
+                    elif isinstance(aid, (int, float)):
+                        attendee_ids_set.add(int(aid))
+                is_attendee = employee.id in attendee_ids_set
+            
+            if is_birthday_person or is_attendee:
+                # Check if employee is in the breakroom where the party is held
+                from employees.room_assigner import ROOM_BREAKROOM
+                if employee.current_room and celebration.party_room:
+                    if ROOM_BREAKROOM in employee.current_room and ROOM_BREAKROOM in celebration.party_room:
+                        # Check if party time is set and hasn't ended yet
+                        if celebration.party_time:
+                            # Party time is the start, assume 1 hour duration
+                            party_end = celebration.party_time + timedelta(hours=1)
+                            if now < party_end:
+                                return party_end
+                        else:
+                            # No party_time set, use celebration_date + 1 hour as fallback
+                            party_end = celebration.celebration_date + timedelta(hours=1)
+                            if now < party_end:
+                                return party_end
+        
+        # Check HolidayCelebration records
+        # Look for celebrations today where employee is an attendee
+        holiday_result = await self.db.execute(
+            select(HolidayCelebration).where(
+                func.date(HolidayCelebration.celebration_date) == now.date()
+            )
+        )
+        holiday_celebrations = holiday_result.scalars().all()
+        
+        for celebration in holiday_celebrations:
+            # Check if employee is in attendees
+            is_attendee = False
+            if celebration.attendees:
+                # Convert attendees to a set of integers for comparison
+                attendee_ids_set = set()
+                for aid in celebration.attendees:
+                    if isinstance(aid, int):
+                        attendee_ids_set.add(aid)
+                    elif isinstance(aid, str) and aid.isdigit():
+                        attendee_ids_set.add(int(aid))
+                    elif isinstance(aid, (int, float)):
+                        attendee_ids_set.add(int(aid))
+                is_attendee = employee.id in attendee_ids_set
+            
+            if is_attendee:
+                # Check if employee is in the breakroom where the party is held
+                from employees.room_assigner import ROOM_BREAKROOM
+                if employee.current_room and celebration.party_room:
+                    if ROOM_BREAKROOM in employee.current_room and ROOM_BREAKROOM in celebration.party_room:
+                        # Check if party time is set and hasn't ended yet
+                        if celebration.party_time:
+                            # Party time is the start, assume 1 hour duration
+                            party_end = celebration.party_time + timedelta(hours=1)
+                            if now < party_end:
+                                return party_end
+                        else:
+                            # No party_time set, use celebration_date + 1 hour as fallback
+                            party_end = celebration.celebration_date + timedelta(hours=1)
+                            if now < party_end:
+                                return party_end
+        
+        return None
     
     async def check_manager_break_frequency(self, employee: Employee) -> dict:
         """Check if a manager is taking breaks too frequently (abuse detection).

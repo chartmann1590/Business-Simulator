@@ -29,8 +29,10 @@ class CustomerReviewManager:
         completed_projects = result.scalars().all()
         
         if not completed_projects:
-            print("ℹ️  No completed projects found")
+            print("ℹ️  No completed projects found - reviews can only be generated for completed projects")
             return []
+        
+        print(f"📊 Found {len(completed_projects)} completed project(s) to check for review generation")
         
         reviews_created = []
         
@@ -38,9 +40,19 @@ class CustomerReviewManager:
             # If hours_since_completion is 0, generate for all completed projects (initial generation)
             # Otherwise, check if project was completed long enough ago
             if hours_since_completion > 0:
+                # If project doesn't have completed_at, treat it as an old completed project and generate reviews
+                # This handles projects that were completed before the completed_at field was added
                 if not project.completed_at:
-                    continue
+                    # Set completed_at to a time in the past so it passes the threshold
+                    # Use created_at if available, otherwise set to 25 hours ago
+                    if project.created_at:
+                        project.completed_at = project.created_at
+                    else:
+                        project.completed_at = now - timedelta(hours=25)
+                    print(f"⚠️  Project '{project.name}' (ID: {project.id}) is completed but missing completed_at. Setting to ensure reviews are generated.")
+                    await self.db.flush()  # Flush to make it available for the time check below
                 
+                # Now check if enough time has passed
                 completed_at = project.completed_at.replace(tzinfo=None) if project.completed_at.tzinfo else project.completed_at
                 hours_since = (now - completed_at).total_seconds() / 3600
                 
@@ -93,6 +105,34 @@ class CustomerReviewManager:
                 print(f"❌ Error committing reviews: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 await self.db.rollback()
+        else:
+            # Provide helpful feedback on why no reviews were created
+            projects_without_reviews = []
+            projects_with_reviews = []
+            projects_too_recent = []
+            
+            for project in completed_projects:
+                result = await self.db.execute(
+                    select(CustomerReview).where(CustomerReview.project_id == project.id)
+                )
+                existing_reviews = result.scalars().all()
+                
+                if hours_since_completion > 0 and project.completed_at:
+                    completed_at = project.completed_at.replace(tzinfo=None) if project.completed_at.tzinfo else project.completed_at
+                    hours_since = (now - completed_at).total_seconds() / 3600
+                    if hours_since < hours_since_completion:
+                        projects_too_recent.append(project.name)
+                        continue
+                
+                if len(existing_reviews) == 0:
+                    projects_without_reviews.append(project.name)
+                elif len(existing_reviews) >= 10:
+                    projects_with_reviews.append(project.name)
+            
+            if projects_without_reviews:
+                print(f"ℹ️  {len(projects_without_reviews)} completed project(s) without reviews: {', '.join(projects_without_reviews[:3])}{'...' if len(projects_without_reviews) > 3 else ''}")
+            if projects_too_recent:
+                print(f"ℹ️  {len(projects_too_recent)} project(s) completed too recently (need {hours_since_completion} hours): {', '.join(projects_too_recent[:3])}{'...' if len(projects_too_recent) > 3 else ''}")
         
         return reviews_created
     

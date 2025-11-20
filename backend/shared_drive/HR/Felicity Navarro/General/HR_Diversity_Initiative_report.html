@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Context Report</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 10pt;
+            border-bottom: 3px solid #000000;
+        }
+        
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: .5in;
+        }
+        
+        p {
+            line-height: 1.5;
+            margin-bottom: 12pt;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        th, td {
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        ul, ol {
+            list-style-type: decimal;
+        }
+        
+        li {
+            margin-bottom: 10pt;
+        }
+        
+        a {
+            text-decoration: none;
+            color: #000000;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center;">
+        <h1>Business Context Report</h1>
+        <p>Document Classification: Confidential</p>
+        <p>Confidentiality Notice: This report contains confidential business information. Distribution is restricted to authorized personnel.</p>
+    </div>
+    
+    <header style="background-color: #ffffff; padding: 10pt;">
+        <span style="font-size: 12pt; font-weight: bold;">Date:</span>
+        <span style="font-size: 12pt; font-weight: bold;">Felicity Navarro</span>,
+        <span style="font-size: 12pt; font-weight: bold;">HR Department</span>,
+        <span style="font-size: 12pt; font-weight: bold;">Confidential Report</span>
+    </header>
+    
+    <main>
+        <section style="margin-bottom: 10pt;">
+            <h2>Executive Summary</h2>
+            <p>This report provides a comprehensive overview of our business context, highlighting key performance indicators and strategic recommendations. Our total revenue has increased by 15% QoQ, driven primarily by the success of our mobile app development project.</p>
+        </section>
+        
+        <section style="margin-bottom: 10pt;">
+            <h2>Business Metrics</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <th>Total Revenue:</th>
+                    <td>$848,324.28</td>
+                </tr>
+                <tr>
+                    <th>Total Profit:</th>
+                    <td>$361,970.04</td>
+                </tr>
+                <tr>
+                    <th>Profit Margin:</th>
+                    <td>42.67%</td>
+                </tr>
+                <tr>
+                    <th>Total Expenses:</th>
+                    <td>$486,354.24</td>
+                </tr>
+            </table>
+        </section>
+        
+        <section style="margin-bottom: 10pt;">
+            <h2>Active Projects</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <th>Project Name</th>
+                    <th>Status</th>
+                    <th>Budget</th>
+                </tr>
+                <tr>
+                    <td>Mobile App Development</td>
+                    <td>Active</td>
+                    <td>$150,000.00</td>
+                </tr>
+                <tr>
+                    <td>Customer Experience Enhancement</td>
+                    <td>Active</td>
+                    <td>$88,137.90</td>
+                </tr>
+                <tr>
+                    <td>Customer Experience Enhancement</td>
+                    <td>In Progress</td>
+                    <td>$115,778.81</td>
+                </tr>
+            </table>
+        </section>
+        
+        <section style="margin-bottom: 10pt;">
+            <h2>Department Distribution</h2>
+            <ul>
+                <li>Product: 49 employees</li>
+                <li>Finance: 1 employee</li>
+                <li>Operations: 57 employees</li>
+                <li>HR: 53 employees</li>
+                <li>IT: 51 employees</li>
+            </ul>
+        </section>
+        
+        <section style="margin-bottom: 10pt;">
+            <h2>Critical Requirements</h2>
+            <ol>
+                <li>The mobile app development project should be completed within the next quarter to meet our revenue growth targets.</li>
+                <li>We should increase our investment in customer experience enhancement projects by 20% to stay ahead of competitors.</li>
+                <li>Our HR department should develop a comprehensive training program for new employees to improve productivity and retention rates.</li>
+            </ol>
+        </section>
+        
+        <section style="margin-bottom: 10pt;">
+            <h2>Conclusion</h2>
+            <p>In conclusion, our business context is strong, with significant revenue growth and profitability. However, we must continue to invest in strategic projects and improve operational efficiency to maintain our competitive edge.</p>
+        </section>
+    </main>
+    
+    <footer style="background-color: #ffffff; padding: 10pt;">
+        <span style="font-size: 12pt;">Page <span id="page-num">1</span> of <span id="total-pages">1</span></span>,
+        <span style="font-size: 12pt;">Document Version:</span>
+        <span style="font-size: 12pt;"><a href="#">Draft V.1</a></span>,
+        <span style="font-size: 12pt;">Confidentiality Notice:</span>
+        <span style="font-size: 12pt;">This report contains confidential business information. Distribution is restricted to authorized personnel.</span>
+    </footer>
+    
+    <script>
+        document.getElementById('page-num').innerHTML = page;
+        document.getElementById('total-pages').innerHTML = totalPages;
+    </script>
+</body>
+</html>

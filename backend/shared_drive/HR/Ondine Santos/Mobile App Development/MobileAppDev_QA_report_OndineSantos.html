@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Global Styles */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+
+    th {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+      text-align: left;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    tr.total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+
+    /* Financial Styles */
+    .financial {
+      color: green;
+    }
+
+    .negative {
+      color: red;
+    }
+
+    /* Arial Styles */
+    a:link, a:visited {
+      text-decoration: none;
+      color: blue;
+    }
+  </style>
+</head>
+<body>
+
+  <table>
+    <!-- Title Row -->
+    <tr>
+      <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+      <td>Mobile App Development Project</td>
+    </tr>
+
+    <!-- Header Row -->
+    <tr>
+      <th>Department</th>
+      <th>Project Name</th>
+      <th>Budget</th>
+      <th>Revenue</th>
+      <th>Profit</th>
+      <th>Margin %</th>
+      <th>Active Projects</th>
+      <th>Total Employees</th>
+    </tr>
+
+    <!-- Data Rows -->
+    <tr class="total-row">
+      <td colspan="8" style="background-color: #e7f3ff; font-weight: bold;">Total</td>
+      <td style="padding-right: 10px;">$848,324.28</td>
+      <td>$361,970.04</td>
+      <td>42.67%</td>
+      <td>14</td>
+      <td>1152</td>
+    </tr>
+
+    <tr>
+      <td style="background-color: #f2f2f2;">Product</td>
+      <td style="background-color: #f2f2f2;">Mobile App Development</td>
+      <td>$150,000.00</td>
+      <td>$32,045.32</td>
+      <td>$98,219.04</td>
+      <td>66.13%</td>
+      <td>1</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+      <td>HR</td>
+      <td style="background-color: #f2f2f2;">API Infrastructure Upgrade</td>
+      <td>$100,000.00</td>
+      <td>$28,996.55</td>
+      <td>$12,011.19</td>
+      <td>11.96%</td>
+      <td>1</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+      <td>IT</td>
+      <td style="background-color: #f2f2f2;">Mobile App Development</td>
+      <td>$150,000.00</td>
+      <td>$32,045.32</td>
+      <td>$98,219.04</td>
+      <td>66.13%</td>
+      <td>1</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+      <td>Sales</td>
+      <td style="background-color: #f2f2f2;">Digital Transformation Project</td>
+      <td>$196,119.03</td>
+      <td>$70,675.89</td>
+      <td>$35,939.14</td>
+      <td>18.23%</td>
+      <td>1</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+      <td>Sales</td>
+      <td style="background-color: #f2f2f2;">Strategic Partnership Development</td>
+      <td>$156,356.16</td>
+      <td>$17,080.48</td>
+      <td>-$10,295.68</td>
+      <td>-6.66%</td>
+      <td>1</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+      <td>Sales</td>
+      <td style="background-color: #f2f2f2;">Customer Experience Enhancement</td>
+      <td>$88,137.90</td>
+      <td>$10,036.51</td>
+      <td>$-11,111.39</td>
+      <td>-12.67%</td>
+      <td>1</td>
+    </tr>
+
+    <!-- Calculated Columns -->
+    <tr style="background-color: #f2f2f2;">
+      <td>Design</td>
+      <td style="background-color: #f2f2f2;">Total Revenue Growth Rate (%)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+
+    <!-- Summary Section -->
+    <tr class="total-row">
+      <td colspan="10" style="background-color: #e7f3ff; font-weight: bold;">Summary</td>
+    </tr>
+
+    <tr>
+      <td style="background-color: #f2f2f2;">Total Revenue Growth Rate (%)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td colspan="10" style="text-align: right; padding-right: 12px;">Last Updated: March 2023</td>
+    </tr>
+  </table>
+
+</body>
+</html>

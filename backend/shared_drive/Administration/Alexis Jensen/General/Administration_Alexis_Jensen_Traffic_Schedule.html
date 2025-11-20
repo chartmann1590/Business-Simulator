@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Report</title>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            font-family: 'Times New Roman', serif;
+            border-bottom: 2px solid #000000;
+        }
+
+        /* HEADER */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1.5in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 0.25in;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        header .date {
+            font-size: 12pt;
+            color: #666666;
+            margin-right: 10px;
+        }
+
+        header .employee-name {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-left: 20px;
+        }
+
+        header .department {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        header .document-classification {
+            font-size: 12pt;
+            color: #666666;
+        }
+
+        /* EXECUTIVE SUMMARY */
+        section {
+            margin-bottom: 2in;
+            padding: 1.5in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        section h2 {
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* MAIN SECTIONS */
+        main-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        main-section .section-header {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 0.5in;
+        }
+
+        main-section table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        main-section th, main-section td {
+            border: 1px solid #000000;
+            padding: 10px;
+            text-align: left;
+        }
+
+        /* DATA SECTIONS */
+        data-section {
+            margin-bottom: 2in;
+            padding: 1.5in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        data-section ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        data-section li {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-bottom: 1px solid #000000;
+        }
+
+        /* CONCLUSION */
+        conclusion {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 2in;
+            padding: 1.5in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* FOOTER */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1in;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 0.25in;
+            text-align: center;
+        }
+
+        footer span {
+            font-size: 12pt;
+            color: #666666;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1 style="text-align: center; font-size: 18pt; font-weight: bold;">Business Report</h1>
+        <header style="font-size: 12pt; color: #666666;">
+            <span class="date">2023-03-01</span>
+            <span class="employee-name">Alexis Jensen</span>
+            <span class="department">Administration</span>
+            <span class="document-classification">Confidential</span>
+        </header>
+        <section>
+            <h2 style="font-size: 18pt; font-weight: bold;">Executive Summary</h2>
+            Our company has achieved significant growth in the past quarter, with total revenue increasing by 15% compared to the same period last year. The profit margin has also improved, reaching 5.37%. However, we have incurred higher expenses due to increased project budgets, resulting in a net profit of $27,595.54.
+            The active projects are <strong>Customer Portal Redesign</strong>, <strong>API Infrastructure Upgrade</strong>, and <strong>Mobile App Development</strong>, with total budgets of $75,000.00, $100,000.00, and $150,000.00 respectively. We have a total of 66 employees across various departments, including Finance (1), Executive (1), Engineering (7), Operations (7), and Product (6).
+        </section>
+        <main-section>
+            <h2 style="font-size: 18pt; font-weight: bold;">Employee Information</h2>
+            <p style="margin-bottom: 12pt;">The employee information is as follows:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <th style="border: 1px solid #000000; padding: 10px;">Employee Information</th>
+                    <th style="border: 1px solid #000000; padding: 10px;">Value</th>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Name</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">Alexis Jensen</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Title</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">Receptionist</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Role</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">Employee</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Department</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">Administration</td>
+                </tr>
+            </table>
+        </main-section>
+        <main-section>
+            <h2 style="font-size: 18pt; font-weight: bold;">Business Metrics</h2>
+            <p style="margin-bottom: 12pt;">The business metrics are as follows:</p>
+            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                <li>Total Revenue: $513,949.78 (15% increase)</li>
+                <li>Total Profit: $27,595.54 (5.37% profit margin)</li>
+                <li>Total Expenses: $486,354.24</li>
+            </ul>
+        </main-section>
+        <data-section>
+            <h2 style="font-size: 14pt; font-weight: bold;">Active Projects</h2>
+            <p style="margin-bottom: 12pt;">The active projects are:</p>
+            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                <li><strong>Customer Portal Redesign</strong>: $75,000.00 budget, active status</li>
+                <li><strong>API Infrastructure Upgrade</strong>: $100,000.00 budget, active status</li>
+                <li><strong>Mobile App Development</strong>: $150,000.00 budget, active status</li>
+            </ul>
+        </data-section>
+        <main-section>
+            <h2 style="font-size: 14pt; font-weight: bold;">Department Distribution</h2>
+            <p style="margin-bottom: 12pt;">The department distribution is as follows:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <th style="border: 1px solid #000000; padding: 10px;">Department</th>
+                    <th style="border: 1px solid #000000; padding: 10px;">Employee Count</th>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Finance</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">1</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Executive</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">1</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Engineering</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">7</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Operations</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">7</td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #000000; padding: 10px;">Product</td>
+                    <td style="border: 1px solid #000000; padding: 10px;">6</td>
+                </tr>
+            </table>
+        </main-section>
+        <data-section>
+            <h2 style="font-size: 14pt; font-weight: bold;">Critical Requirements</h2>
+            <p style="margin-bottom: 12pt;">The critical requirements are as follows:</p>
+            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                <li>Manage customer portal redesign project, ensuring timely completion and budget adherence.</li>
+                <li>Conduct regular API infrastructure upgrade reviews to ensure seamless system integration.</li>
+                <li>Develop a comprehensive mobile app development plan, including project scope, timeline, and resource allocation.</li>
+            </ul>
+        </data-section>
+        <main-section>
+            <h2 style="font-size: 14pt; font-weight: bold;">Conclusion</h2>
+            <p style="margin-bottom: 12pt;">In conclusion, our company has achieved significant growth in the past quarter, with total revenue increasing by 15% compared to the same period last year. The profit margin has also improved, reaching 5.37%. However, we have incurred higher expenses due to increased project budgets, resulting in a net profit of $27,595.54.</p>
+            <p style="margin-bottom: 12pt;">We recommend continuing to monitor and manage our active projects, ensuring timely completion and budget adherence. Additionally, we should conduct regular reviews of our API infrastructure upgrade and mobile app development plans to ensure seamless system integration and project success.</p>
+        </main-section>
+        <footer>
+            <span style="font-size: 12pt; color: #666666;">Page 1 of 2</span>
+            <span style="font-size: 12pt; color: #666666;">Document Version: 1.0</span>
+            <span style="font-size: 12pt; color: #666666;">Confidentiality Notice: This document contains confidential information and is intended for authorized personnel only.</span>
+        </footer>
+    </div>

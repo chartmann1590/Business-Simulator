@@ -6,14 +6,24 @@ from sqlalchemy.dialects.postgresql import asyncpg
 import os
 import asyncio
 from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# Look for .env file in the backend directory (parent of database directory)
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dotenv_path=env_path)
 
 # PostgreSQL connection configuration
 # Default connection string for local development
 # Format: postgresql+asyncpg://user:password@host:port/database
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
-)
+# DATABASE_URL must be set in environment variables or .env file
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is required. "
+        "Please set it in your .env file or environment variables. "
+        "Format: postgresql+asyncpg://user:password@host:port/database"
+    )
 
 # PostgreSQL connection pooling configuration optimized for performance
 # pool_size: number of connections to maintain persistently (optimized for async)
@@ -61,7 +71,8 @@ from database.models import (
     Employee, Project, Task, Decision, Financial,
     Activity, BusinessMetric, Email, ChatMessage, BusinessSettings,
     EmployeeReview, Notification, CustomerReview, Product, ProductTeamMember,
-    Meeting, OfficePet, Gossip, Weather, RandomEvent, Newsletter, Suggestion, SuggestionVote, BirthdayCelebration
+    Meeting, OfficePet, Gossip, Weather, RandomEvent, Newsletter, Suggestion, SuggestionVote, BirthdayCelebration,
+    TrainingSession, TrainingMaterial
 )
 
 async def get_db():

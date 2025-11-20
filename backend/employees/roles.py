@@ -888,37 +888,60 @@ class ManagerAgent(EmployeeAgent):
                     if hasattr(member, 'activity_state') and member.activity_state == "training":
                         is_in_training = True
                     
-                    # Check if they're in any training room (floors 1, 2, or 4)
-                    current_room = getattr(member, 'current_room', None)
-                    if (current_room == ROOM_TRAINING_ROOM or 
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor4" or
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor4_2" or
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor4_3" or
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor4_4" or
-                        current_room == f"{ROOM_TRAINING_ROOM}_floor4_5"):
-                        is_in_training = True
+                    # Check if employee is in training (either by activity state, training room, or active training session)
+                    is_in_training = False
                     
-                    # Check if they were hired recently (within last hour = still in training)
-                    hired_at = getattr(member, 'hired_at', None)
-                    if hired_at:
-                        try:
-                            if hasattr(hired_at, 'replace'):
-                                if hired_at.tzinfo is not None:
-                                    hired_at_naive = hired_at.replace(tzinfo=None)
-                                else:
-                                    hired_at_naive = hired_at
-                            else:
-                                hired_at_naive = hired_at
-                            
-                            time_since_hire = local_now() - hired_at_naive
-                            if time_since_hire <= timedelta(hours=1):
+                    # First check activity state
+                    if member.activity_state == "training":
+                        is_in_training = True
+                    else:
+                        # Check if they're in any training room (floors 1, 2, or 4)
+                        current_room = getattr(member, 'current_room', None)
+                        if (current_room == ROOM_TRAINING_ROOM or 
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor2" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_2" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_3" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_4" or
+                            current_room == f"{ROOM_TRAINING_ROOM}_floor4_5"):
+                            is_in_training = True
+                        else:
+                            # Check if they have an active training session
+                            from database.models import TrainingSession
+                            from sqlalchemy import select, and_
+                            session_result = await self.db.execute(
+                                select(TrainingSession).where(
+                                    and_(
+                                        TrainingSession.employee_id == member.id,
+                                        TrainingSession.status == "in_progress"
+                                    )
+                                )
+                            )
+                            active_session = session_result.scalar_one_or_none()
+                            if active_session:
                                 is_in_training = True
-                        except Exception:
-                            pass
+                            else:
+                                # Fallback: Check if recently hired (within 30 minutes)
+                                hired_at = getattr(member, 'hired_at', None)
+                                if hired_at:
+                                    try:
+                                        if hasattr(hired_at, 'replace'):
+                                            if hired_at.tzinfo is not None:
+                                                hired_at_naive = hired_at.replace(tzinfo=None)
+                                            else:
+                                                hired_at_naive = hired_at
+                                        else:
+                                            hired_at_naive = hired_at
+                                        
+                                        time_since_hire = local_now() - hired_at_naive
+                                        if time_since_hire <= timedelta(minutes=30):
+                                            is_in_training = True
+                                    except Exception:
+                                        pass
                     
                     # Only assign tasks if not in training and doesn't have a task
                     # FOCUS: Employees must complete their current task to 100% before getting a new one
+                    # IMPORTANT: Employees in training cannot be assigned tasks - they must complete training first!
                     if not is_in_training and member.current_task_id is None and unassigned_list:
                         # Take highest priority task (from project closest to 100% completion)
                         task = unassigned_list[0]
@@ -1300,6 +1323,13 @@ class EmployeeAgentBase(EmployeeAgent):
                     }
                 )
                 self.db.add(task_activity)
+                await self.db.flush()
+                # Broadcast activity
+                try:
+                    from business.activity_broadcaster import broadcast_activity
+                    await broadcast_activity(task_activity, self.db, self.employee)
+                except:
+                    pass  # Don't fail if broadcasting fails
                 
                 # Update project progress
                 if task.project_id:
@@ -1376,6 +1406,13 @@ class EmployeeAgentBase(EmployeeAgent):
                                 }
                             )
                             self.db.add(activity)
+                            await self.db.flush()
+                            # Broadcast activity
+                            try:
+                                from business.activity_broadcaster import broadcast_activity
+                                await broadcast_activity(activity, self.db, self.employee)
+                            except:
+                                pass  # Don't fail if broadcasting fails
                             
                             # Create notification for project completion
                             from database.models import Notification

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Title Row */
+        th:nth-child(1) {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            background-color: #366092;
+            color: white;
+        }
+
+        /* Header Row */
+        th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(5) {
+            text-align: left;
+            font-size: 11pt;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Data Row */
+        td:nth-child(odd) {
+            background-color: white;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        td:nth-child(even) {
+            background-color: #f2f2f2;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Totals Row */
+        tr:nth-child(27) {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #366092;
+        }
+
+        /* Calculated Columns */
+        td:nth-child(8), th:nth-child(8) {
+            text-align: right;
+            padding-right: 12px;
+            border-right: 1px solid #d0d0d0;
+        }
+    </style>
+</head>
+
+<body>
+<table border="0" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
+    <tr><td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard for $10,000 Project</td></tr>
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Department</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Employee Count</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Managerial Level</th>
+    </tr>
+
+    <tr><th>Marketing</th><td>62</td><th>Manager</th></tr>
+    <tr><th>Design</th><td>57</td><th>Manager</th></tr>
+    <tr><th>IT</th><td>51</td><th>Manager</th></tr>
+    <tr><th HR</th><td>55</td><th>Manager</th></tr>
+    <tr><th>Product</th><td>51</td><th>Manager</th></tr>
+    <tr><th>Sales</th><td>48</td><th>Manager</th></tr>
+    <tr><th>Operations</th><td>58</td><th>Manager</th></tr>
+    <tr><th>Engineering</th><td>53</td><th>Manager</th></tr>
+    <tr><th Administration</th><td>62</td><th>Manager</th></tr>
+
+    <tr style="background-color: #f2f2f2; padding-top: 8px;"><th>Total Employees</th><td>1253</td><th>&nbsp;</th></tr>
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Digital Transformation Project</th>
+        <th style="padding-right: 12px;">Budget $196,119.03, Revenue $70,675.89</th>
+    </tr>
+
+    <tr><td colspan="X" style="text-align: right; padding-right: 12px; border-right: 1px solid #d0d0d0;"></td></tr>
+    <tr>
+        <th>Project ROI%</th>
+        <th>Revenue Growth Rate</th>
+        <th>Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">42.67%</td><td style="padding-right: 12px;">17.08%</td><td style="padding-right: 12px;">-5.32%</td></tr>
+
+    <tr>
+        <th>Department Performance</th>
+        <th>Employee Count Growth Rate</th>
+        <th>Cost Analysis Variance</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">62.23%</td><td style="padding-right: 12px;">-3.42%</td><td style="padding-right: 12px;">$100,000</td></tr>
+
+    <tr>
+        <th>Project Performance Index</th>
+        <th>Profit Margin Growth Rate</th>
+        <th>Expense Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">85.42%</td><td style="padding-right: 12px;">-4.21%</td><td style="padding-right: 12px;">$150,000</td></tr>
+
+    <tr>
+        <th>Financial Summary</th>
+        <th>Quarterly Breakdowns</th>
+        <th>Monthly Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$848,324.28</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;">-10.54%</td></tr>
+
+    <tr>
+        <th>Total Revenue Growth Rate</th>
+        <th>Project Expenses Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">-3.42%</td><td style="padding-right: 12px;">$100,000</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Quarterly Revenue Breakdowns</th>
+        <th>Monthly Revenue Variance Analysis</th>
+        <th>Growth Rate Trends</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;"></td><td style="padding-right: 12px;">$17,080.48</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Profit Growth Rate</th>
+        <th>Project Expenses Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">-4.21%</td><td style="padding-right: 12px;">$150,000</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Quarterly Profit Breakdowns</th>
+        <th>Monthly Profit Variance Analysis</th>
+        <th>Growth Rate Trends</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$361,970.04</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Expenses Growth Rate</th>
+        <th>Project Revenue Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">-3.42%</td><td style="padding-right: 12px;">$100,000</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Quarterly Expenses Breakdowns</th>
+        <th>Monthly Expenses Variance Analysis</th>
+        <th>Growth Rate Trends</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;"></td><td style="padding-right: 12px;">$486,354.24</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Employee Count</th>
+        <th>Department Headcount Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">1253</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr style="background-color: #366092; color: white; font-weight: bold; padding: 8px; border-top: 2px solid #d0d0d0;">
+        <th>Financial Analysis Summary</th>
+        <th>Quarterly Financial Breakdowns</th>
+        <th>Monthly Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$848,324.28</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Profit Margin Growth Rate</th>
+        <th>Project Expenses Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">-4.21%</td><td style="padding-right: 12px;">$150,000</td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Quarterly Profit Breakdowns</th>
+        <th>Monthly Profit Variance Analysis</th>
+        <th>Growth Rate Trends</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$361,970.04</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Employee Cost Analysis</th>
+        <th>Department Headcount Variance Analysis</th>
+        <th>Growth Rate Comparison</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$1,000,000.00</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Project ROI Analysis Summary</th>
+        <th>Quarterly Project Breakdowns</th>
+        <th>Monthly Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;"></td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Financial Analysis Summary</th>
+        <th>Quarterly Financial Breakdowns</th>
+        <th>Monthly Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$848,324.28</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+
+    <tr>
+        <th>Total Financial Analysis Summary</th>
+        <th>Quarterly Financial Breakdowns</th>
+        <th>Monthly Variance Analysis</th>
+    </tr>
+
+    <tr><td style="background-color: #f2f2f2; padding-top: 8px;">$1,000,000.00</td><td style="padding-right: 12px;"></td><td style="padding-right: 12px;"></td></tr>
+</table>
+
+</body>
+</html>

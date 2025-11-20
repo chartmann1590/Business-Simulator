@@ -96,13 +96,14 @@ class BirthdayManager:
         self.db.add(celebration)
         
         # Move birthday person to breakroom when party time arrives
-        # For now, move immediately (we can add scheduling later)
-        await update_employee_location(employee, party_breakroom, "meeting", self.db)
+        # Mark as "break" so they're protected from being kicked out until party ends
+        await update_employee_location(employee, party_breakroom, "break", self.db)
         employee.floor = party_floor
         
         # Move all attendees to the breakroom
+        # Mark as "break" so they're protected from being kicked out until party ends
         for attendee in attendees:
-            await update_employee_location(attendee, party_breakroom, "meeting", self.db)
+            await update_employee_location(attendee, party_breakroom, "break", self.db)
             attendee.floor = party_floor
         
         # Create activity for birthday person
@@ -119,6 +120,13 @@ class BirthdayManager:
             }
         )
         self.db.add(activity)
+        await self.db.flush()
+        # Broadcast activity
+        try:
+            from business.activity_broadcaster import broadcast_activity
+            await broadcast_activity(activity, self.db, employee)
+        except:
+            pass  # Don't fail if broadcasting fails
         
         # Create activities for attendees
         for attendee in attendees:
@@ -133,6 +141,13 @@ class BirthdayManager:
                 }
             )
             self.db.add(attendee_activity)
+            await self.db.flush()
+            # Broadcast activity
+            try:
+                from business.activity_broadcaster import broadcast_activity
+                await broadcast_activity(attendee_activity, self.db, attendee)
+            except:
+                pass  # Don't fail if broadcasting fails
         
         # Create notifications for all employees about the party
         all_employees_result = await self.db.execute(

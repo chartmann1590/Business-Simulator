@@ -1,4 +1,105 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { apiGet } from '../utils/api'
+
+// Component to render document in iframe for complete isolation
+function DocumentIframe({ content, fileType }) {
+  const iframeRef = useRef(null)
+  const [iframeHeight, setIframeHeight] = useState('800px')
+
+  useEffect(() => {
+    if (!iframeRef.current || !content) return
+
+    const iframe = iframeRef.current
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document
+
+    // Create a completely isolated HTML document
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: ${fileType === 'word' ? "'Times New Roman', serif" : "'Calibri', Arial, sans-serif"};
+              background: #f5f5f5;
+              padding: 20px;
+              overflow-x: hidden;
+            }
+            .document-container {
+              background: white;
+              margin: 0 auto;
+              padding: ${fileType === 'word' ? '48px' : fileType === 'spreadsheet' ? '16px' : '16px'};
+              max-width: ${fileType === 'word' ? '900px' : fileType === 'spreadsheet' ? '100%' : '1200px'};
+              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              min-height: 100%;
+            }
+            /* Ensure all document styles are contained */
+            .document-container * {
+              max-width: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="document-container">
+            ${content}
+          </div>
+          <script>
+            // Auto-resize iframe to content height
+            function resizeIframe() {
+              const container = document.querySelector('.document-container');
+              const height = container.offsetHeight + 40;
+              window.parent.postMessage({ type: 'iframe-resize', height: height }, '*');
+            }
+            window.addEventListener('load', resizeIframe);
+            window.addEventListener('resize', resizeIframe);
+            // Use MutationObserver to detect content changes
+            const observer = new MutationObserver(resizeIframe);
+            observer.observe(document.body, { childList: true, subtree: true });
+          </script>
+        </body>
+      </html>
+    `
+
+    iframeDoc.open()
+    iframeDoc.write(htmlContent)
+    iframeDoc.close()
+
+    // Listen for resize messages from iframe
+    const handleMessage = (event) => {
+      if (event.data.type === 'iframe-resize') {
+        setIframeHeight(`${event.data.height}px`)
+      }
+    }
+    window.addEventListener('message', handleMessage)
+
+    return () => {
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [content, fileType])
+
+  return (
+    <div className="w-full h-full">
+      <iframe
+        ref={iframeRef}
+        style={{
+          width: '100%',
+          height: iframeHeight,
+          border: 'none',
+          background: 'white',
+          display: 'block',
+        }}
+        title="Document Viewer"
+        sandbox="allow-same-origin allow-scripts"
+      />
+    </div>
+  )
+}
 
 function DocumentViewer({ file, versionNumber = null }) {
   const [content, setContent] = useState(null)
@@ -14,26 +115,23 @@ function DocumentViewer({ file, versionNumber = null }) {
       try {
         if (versionNumber) {
           // Fetch specific version
-          const response = await fetch(`/api/shared-drive/files/${file.id}/versions/${versionNumber}`)
-          if (response.ok) {
-            const data = await response.json()
-            setContent(data)
-            setSelectedVersion(data)
+          const result = await apiGet(`/api/shared-drive/files/${file.id}/versions/${versionNumber}`)
+          if (result.ok && result.data) {
+            setContent(result.data)
+            setSelectedVersion(result.data)
           }
         } else {
           // Fetch current version
-          const response = await fetch(`/api/shared-drive/files/${file.id}`)
-          if (response.ok) {
-            const data = await response.json()
-            setContent(data)
+          const result = await apiGet(`/api/shared-drive/files/${file.id}`)
+          if (result.ok && result.data) {
+            setContent(result.data)
           }
         }
 
         // Fetch version history
-        const versionsResponse = await fetch(`/api/shared-drive/files/${file.id}/versions`)
-        if (versionsResponse.ok) {
-          const versionsData = await versionsResponse.json()
-          setVersions(versionsData)
+        const versionsResult = await apiGet(`/api/shared-drive/files/${file.id}/versions`)
+        if (versionsResult.ok && versionsResult.data) {
+          setVersions(Array.isArray(versionsResult.data) ? versionsResult.data : [])
         }
       } catch (error) {
         console.error('Error fetching file content:', error)
@@ -48,19 +146,17 @@ function DocumentViewer({ file, versionNumber = null }) {
   const handleVersionChange = async (versionNum) => {
     if (versionNum === file.current_version) {
       // Show current version
-      const response = await fetch(`/api/shared-drive/files/${file.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setContent(data)
+      const result = await apiGet(`/api/shared-drive/files/${file.id}`)
+      if (result.ok && result.data) {
+        setContent(result.data)
         setSelectedVersion(null)
       }
     } else {
       // Show specific version
-      const response = await fetch(`/api/shared-drive/files/${file.id}/versions/${versionNum}`)
-      if (response.ok) {
-        const data = await response.json()
-        setContent(data)
-        setSelectedVersion(data)
+      const result = await apiGet(`/api/shared-drive/files/${file.id}/versions/${versionNum}`)
+      if (result.ok && result.data) {
+        setContent(result.data)
+        setSelectedVersion(result.data)
       }
     }
   }
@@ -158,134 +254,10 @@ function DocumentViewer({ file, versionNumber = null }) {
 
       {/* Document Content */}
       <div className="flex-1 overflow-auto p-8 bg-gray-100">
-        <style>{`
-          .document-content {
-            font-family: 'Calibri', 'Arial', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #ffffff;
-          }
-          
-          /* Word Document Styling */
-          .document-content h1 {
-            font-family: 'Times New Roman', serif;
-            font-size: 18pt;
-            font-weight: bold;
-            margin-top: 1em;
-            margin-bottom: 0.5em;
-            color: #000000;
-          }
-          .document-content h2 {
-            font-family: 'Times New Roman', serif;
-            font-size: 14pt;
-            font-weight: bold;
-            margin-top: 1em;
-            margin-bottom: 0.5em;
-            color: #000000;
-          }
-          .document-content h3 {
-            font-family: 'Times New Roman', serif;
-            font-size: 12pt;
-            font-weight: bold;
-            margin-top: 1em;
-            margin-bottom: 0.5em;
-            color: #000000;
-          }
-          .document-content p {
-            margin-bottom: 12pt;
-            text-align: justify;
-            font-size: 12pt;
-            line-height: 1.5;
-          }
-          .document-content ul, .document-content ol {
-            margin-left: 36pt;
-            margin-bottom: 12pt;
-          }
-          .document-content li {
-            margin-bottom: 6pt;
-            font-size: 12pt;
-          }
-          
-          /* Spreadsheet Styling */
-          .document-content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1em 0;
-            font-family: 'Arial', sans-serif;
-            font-size: 11pt;
-          }
-          .document-content th {
-            background-color: #366092 !important;
-            color: white !important;
-            font-weight: bold;
-            padding: 8px;
-            text-align: left;
-            border: 1px solid #d0d0d0;
-          }
-          .document-content td {
-            border: 1px solid #d0d0d0;
-            padding: 8px;
-            background-color: white;
-          }
-          .document-content tr:nth-child(even) td {
-            background-color: #f2f2f2 !important;
-          }
-          .document-content tr:last-child td {
-            font-weight: bold;
-          }
-          
-          /* PowerPoint Styling */
-          .document-content .slide {
-            background: #ffffff;
-            padding: 60px;
-            margin: 30px auto;
-            max-width: 960px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            font-family: 'Calibri', 'Arial', sans-serif;
-            min-height: 600px;
-            page-break-after: always;
-          }
-          .document-content .slide h1 {
-            font-family: 'Calibri', 'Arial', sans-serif;
-            font-size: 36pt;
-            font-weight: bold;
-            color: #2F5597;
-            margin-bottom: 40px;
-          }
-          .document-content .slide ul {
-            font-size: 20pt;
-            line-height: 1.8;
-            margin-left: 40px;
-            color: #333;
-          }
-          .document-content .slide li {
-            margin-bottom: 20px;
-            font-size: 20pt;
-          }
-          .document-content .slide p {
-            font-size: 20pt;
-            line-height: 1.8;
-            margin-bottom: 20px;
-          }
-        `}</style>
-        <div
-          className={`mx-auto bg-white shadow-lg ${
-            file.file_type === 'word'
-              ? 'max-w-4xl p-12'
-              : file.file_type === 'spreadsheet'
-              ? 'w-full overflow-x-auto p-4'
-              : 'max-w-5xl p-4'
-          }`}
-          style={{
-            fontFamily: file.file_type === 'word' ? "'Times New Roman', serif" : "'Calibri', Arial, sans-serif",
-            minHeight: '100%',
-          }}
-        >
-          <div
-            dangerouslySetInnerHTML={{ __html: content.content_html || content.html || '' }}
-            className="document-content"
-          />
-        </div>
+        <DocumentIframe 
+          content={content.content_html || content.html || ''} 
+          fileType={file.file_type}
+        />
       </div>
     </div>
   )

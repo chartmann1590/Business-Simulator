@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Dashboard</title>
+  <style>
+    /* Table structure */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+      text-align: left;
+    }
+
+    th {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    tr:nth-child(odd) {
+      background-color: inherit;
+    }
+
+    td:last-child {
+      text-align: right;
+    }
+
+    /* Totals row */
+    tr.total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #366092;
+    }
+
+    .font-style {
+      color: green;
+    }
+    
+    .font-bold {
+      font-weight: bold;
+    }
+
+    /* Number formatting */
+    td.num {
+      text-align: right;
+      padding-right: 16px;
+    }
+
+    td.num span {
+      font-size: 14pt;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr>
+      <th colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</th>
+    </tr>
+    <tr>
+      <th style="background-color: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+      <td>Department: Engineering, Role: Operations Manager, Name: Jasmine Martinez</td>
+      <td>Department: Finance, Role: Financial Analyst, Name: Jane Doe</td>
+      <td>Department: Marketing, Role: Sales Manager, Name: John Smith</td>
+    </tr>
+
+    <!-- Header row -->
+    <tr>
+      <th style="background-color: #366092; color: white; font-weight: bold; padding: 8px;">Business Metrics</th>
+      <th style="padding-right: 16px;">Total Revenue ($)</th>
+      <th style="font-size: 14pt;">Total Profit ($)</th>
+      <th style="font-size: 14pt;">Total Expenses ($)</th>
+      <th style="font-size: 14pt;">Profit Margin (%)</th>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>Revenue</td>
+      <td class="num">848,324.28</td>
+      <td class="font-style num">361,970.04</td>
+      <td class="font-style num">486,354.24</td>
+      <td class="font-bold num" style="background-color: #366092;">42.67%</td>
+    </tr>
+
+    <!-- Active Projects Data row -->
+    <tr>
+      <th style="padding-right: 16px;">Active Project</th>
+      <th style="width: 150px;">Budget ($)</th>
+      <th style="width: 100px;">Revenue ($)</th>
+      <th style="font-size: 14pt;">Profit ($)</th>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>Customer Portal Redesign</td>
+      <td class="num">75,000.00</td>
+      <td class="num">25,831.02</td>
+      <td class="font-style num">1,050.91</td>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>API Infrastructure Upgrade</td>
+      <td class="num">100,000.00</td>
+      <td class="num">28,996.55</td>
+      <td class="font-style num">-71,003.45</td>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>Mobile App Development</td>
+      <td class="num">150,000.00</td>
+      <td class="num">32,045.32</td>
+      <td class="font-style num">-117,954.68</td>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>Digital Transformation Project</td>
+      <td class="num">196,119.03</td>
+      <td class="num">70,675.89</td>
+      <td class="font-style num">-125,443.14</td>
+    </tr>
+
+    <!-- Data row -->
+    <tr>
+      <td>Strategic Partnership Development</td>
+      <td class="num">156,356.16</td>
+      <td class="num">17,080.48</td>
+      <td class="font-style num">-139,275.68</td>
+    </tr>
+
+    <!-- Totals row -->
+    <tr class="total-row">
+      <th colspan="4" style="text-align: right;">Totals:</th>
+      <th class="num total-num">848,324.28</th>
+    </tr>
+
+    <!-- Summary section -->
+    <div>
+      <table>
+        <tr>
+          <td style="font-weight: bold;">Summary:</td>
+          <td style="width: 50px;">Revenue Growth: +2.5%</td>
+          <td>Profit Margin: -10.3%</td>
+          <td>Cost Reduction: -15.6%</td>
+        </tr>
+
+        <tr>
+          <th colspan="4">Key Metrics:</th>
+        </tr>
+
+        <!-- Data row -->
+        <tr>
+          <th style="width: 50px;">Profit Margin</th>
+          <td class="num">42.67%</td>
+        </tr>
+
+        <!-- Data row -->
+        <tr>
+          <th>Cost Reduction</th>
+          <td class="font-style num">-15.6%</td>
+        </tr>
+
+        <!-- Data row -->
+        <tr>
+          <th style="width: 50px;">Employee Count</th>
+          <td class="num">1,154</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Footer section -->
+    <div>
+      <p style="font-size: 14pt; padding-top: 12px;">Data Source: Real Business Data<br>Last Updated: March 2023</p>
+      <p style="font-size: 14pt; padding-top: 8px;">Notes: Assumptions made to calculate profit margins, cost reductions, and employee count. Please verify with actual business data.</p>
+    </div>
+
+  </table>
+
+  </body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Report</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-decoration: underline;
+            color: #000000;
+        }
+
+        header {
+            width: 100%;
+            padding: 5mm;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            position: relative;
+            top: -10px;
+        }
+
+        header date, header employee, header department, header document {
+            float: left;
+            font-size: 12pt;
+            color: #666;
+            margin-right: 10px;
+        }
+
+        . executive-summary {
+            margin-bottom: 20mm;
+        }
+
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 5mm;
+            color: #000000;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 5mm;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f0f0f0;
+        }
+
+        .list-item {
+            margin-bottom: 10mm;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>Business Report</h1>
+        <header>
+            <span class="date">February 12, 2023</span>
+            <span class="employee">Gwendolyn Flynn</span>
+            <span class="department">IT Manager</span>
+            <span class="document" style="float:right">Confidential</span>
+        </header>
+        <div class="executive-summary">
+            This report provides a comprehensive overview of the current business context, highlighting key metrics and insights.
+        </div>
+        <h2>Employee Information</h2>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Title</th>
+                <th>Role</th>
+                <th>Department</th>
+            </tr>
+            <tr>
+                <td>Gwendolyn Flynn</td>
+                <td>IT Manager</td>
+                <td>Manager</td>
+                <td>IT</td>
+            </tr>
+        </table>
+
+        <h2>Current Project: Mobile App Development</h2>
+        <table>
+            <tr>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Budget</th>
+                <th>Revenue</th>
+            </tr>
+            <tr>
+                <td>Develop native mobile applications for iOS and Android.</td>
+                <td>Active</td>
+                <td>$150,000.00</td>
+                <td>$13,135.91</td>
+            </tr>
+        </table>
+
+        <h2>Current Task: Quality Assurance for Mobile App Development</h2>
+        <p>Status: in_progress</p>
+
+        <h2>Business Metrics</h2>
+        <table>
+            <tr>
+                <th>Total Revenue</th>
+                <th>Total Profit</th>
+                <th>Profit Margin</th>
+                <th>Total Expenses</th>
+            </tr>
+            <tr>
+                <td>$687,867.69</td>
+                <td>$201,513.45</td>
+                <td>29.30%</td>
+                <td>$486,354.24</td>
+            </tr>
+        </table>
+
+        <h2>Active Projects</h2>
+        <ul>
+            <li>Mobile App Development: $150,000.00 budget, active status</li>
+            <li>Customer Experience Enhancement: $88,137.90 budget, active status</li>
+            <li>Digital Transformation Project: $166,168.45 budget, active status</li>
+        </ul>
+
+        <h2>Department Distribution</h2>
+        <table>
+            <tr>
+                <th>Department</th>
+                <th>Employees</th>
+            </tr>
+            <tr>
+                <td>Executive</td>
+                <td>1</td>
+            </tr>
+            <tr>
+                <td>Engineering</td>
+                <td>64</td>
+            </tr>
+            <tr>
+                <td>Finance</td>
+                <td>1</td>
+            </tr>
+            <tr>
+                <td>Operations</td>
+                <td>49</td>
+            </tr>
+            <tr>
+                <td>IT</td>
+                <td>57</td>
+            </tr>
+        </table>
+
+    </div>
+    <footer style="position: relative; top:-50mm;">
+        <p>Page 1 of 10<br>
+        Document Version: 1.0<br>
+        Confidentiality Notice: This report contains confidential and proprietary information of [Company Name].<br>
+            Printed with permission from Gwendolyn Flynn, IT Manager.
+        </footer>
+</body>
+</html>

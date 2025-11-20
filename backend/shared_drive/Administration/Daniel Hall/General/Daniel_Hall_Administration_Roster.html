@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Header row */
+    th {
+      background: #366092;
+      color: white;
+      font-weight: bold;
+      padding: 8px;
+      border-bottom: 1px solid #d0d0d0;
+    }
+
+    /* Data rows */
+    td:nth-child(even) {
+      background: #f2f2f2;
+    }
+    
+    /* Totals row */
+    tr.total-row td:nth-child(2), th.total-col {
+      background: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid black;
+    }
+
+    /* Numbers and currency */
+    number {
+      text-align: right;
+    }
+    .currency {
+      text-align: right;
+    }
+    
+    /* Cells padding */
+    td, th {
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <table border="0" style="border-collapse: collapse; width:100%;">
+    <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+      <td colspan="10">Financial Dashboard - Administration Department</td>
+    </tr>
+
+    <!-- Header row -->
+    <tr>
+      <th>Employee Name</th>
+      <th>Title</th>
+      <th>Department</th>
+      <th>Total Revenue</th>
+      <th>Total Profit</th>
+      <th>Total Expenses</th>
+      <th>Profit Margin (%)</th>
+      <th>Active Projects</th>
+      <th>Total Employees</th>
+    </tr>
+
+    <!-- Data rows -->
+    <tr class="total-row">
+      <td Daniel Hall</td>
+      <td>Receptionist</td>
+      <td Administration</td>
+      <td class="currency">$848,324.28</td>
+      <td class="currency">$361,970.04</td>
+      <td class="currency">$486,354.24</td>
+      <td>(42.67%)</td>
+      <td>14</td>
+      <td>1154</td>
+    </tr>
+
+    <!-- Employee information -->
+    <tr>
+      <th colspan="3">Employee Information:</th>
+      <td colspan="7"><a href="#" style="text-align: left;">View Details</a></td>
+    </tr>
+
+    <tr>
+      <td Daniel Hall</td>
+      <td>Receptionist</td>
+      <td Administration</td>
+      <td class="currency">$848,324.28</td>
+      <td class="currency">$361,970.04</td>
+      <td class="currency">$486,354.24</td>
+      <td>(42.67%)</td>
+      <td>14</td>
+      <td>1154</td>
+    </tr>
+
+    <!-- Active projects -->
+    <tr>
+      <th colspan="3">Active Projects:</th>
+      <td colspan="7"><a href="#" style="text-align: left;">View Details</a></td>
+    </tr>
+
+    <tr>
+      <th>Project Name</th>
+      <th>Budget</th>
+      <th>Revenue</th>
+      <th>Profit Margin (%)</th>
+      <th>Paid Status</th>
+    </tr>
+
+    <tr>
+      <td>Customer Portal Redesign</td>
+      <td class="currency">$75,000.00</td>
+      <td class="currency">$25,831.02</td>
+      <td>(34.22%)</td>
+      <td><span style="background-color: green;">Paid</span></td>
+    </tr>
+
+    <tr>
+      <td>API Infrastructure Upgrade</td>
+      <td class="currency">$100,000.00</td>
+      <td class="currency">$28,996.55</td>
+      <td>(29.60%)</td>
+      <td><span style="background-color: green;">Paid</span></td>
+    </tr>
+
+    <tr>
+      <td>Mobile App Development</td>
+      <td class="currency">$150,000.00</td>
+      <td class="currency">$32,045.32</td>
+      <td>(21.38%)</td>
+      <td><span style="background-color: green;">Paid</span></td>
+    </tr>
+
+    <tr>
+      <td>Digital Transformation Project</td>
+      <td class="currency">$196,119.03</td>
+      <td class="currency">$70,675.89</td>
+      <td>(36.11%)</td>
+      <td><span style="background-color: green;">Paid</span></td>
+    </tr>
+
+    <tr>
+      <td>Strategic Partnership Development</td>
+      <td class="currency">$156,356.16</td>
+      <td class="currency">$17,080.48</td>
+      <td>(10.90%)</td>
+      <td><span style="background-color: red;">Pending</span></td>
+    </tr>
+
+    <!-- Department information -->
+    <tr>
+      <th colspan="3">Department Information:</th>
+      <td colspan="7"><a href="#" style="text-align: left;">View Details</a></td>
+    </tr>
+
+    <tr>
+      <th>Department Name</th>
+      <th>Employee Count</th>
+      <th>Total Revenue</th>
+      <th>Total Profit</th>
+      <th>Total Expenses</th>
+    </tr>
+
+    <tr>
+      <td>Marketing</td>
+      <td>65</td>
+      <td class="currency">$123,456.78</td>
+      <td class="currency">$45,678.90</td>
+      <td class="currency">$77,890.12</td>
+    </tr>
+
+    <tr>
+      <td>Product</td>
+      <td>49</td>
+      <td class="currency">$98,765.43</td>
+      <td class="currency">$32,345.67</td>
+      <td class="currency">$66,419.80</td>
+    </tr>
+
+    <tr>
+      <td>HR</td>
+      <td>54</td>
+      <td class="currency">$56,543.21</td>
+      <td class="currency">$20,987.53</td>
+      <td class="currency">$35,555.69</td>
+    </tr>
+
+    <tr>
+      <td>Sales</td>
+      <td>46</td>
+      <td class="currency">$112,789.01</td>
+      <td class="currency">$37,654.23</td>
+      <td class="currency">$74,134.78</td>
+    </tr>
+
+    <tr>
+      <td>IT</td>
+      <td>51</td>
+      <td class="currency">$65,432.10</td>
+      <td class="currency">$21,987.53</td>
+      <td class="currency">$43,444.57</td>
+    </tr>
+
+    <tr>
+      <td>Design</td>
+      <td>55</td>
+      <td class="currency">$71,890.12</td>
+      <td class="currency">$23,456.78</td>
+      <td class="currency">$48,434.34</td>
+    </tr>
+
+    <tr>
+      <td>Operations</td>
+      <td>57</td>
+      <td class="currency">$81,789.01</td>
+      <td class="currency">$27,654.23</td>
+      <td class="currency">$53,134.78</td>
+    </tr>
+
+    <tr>
+      <td>Engineering</td>
+      <td>59</td>
+      <td class="currency">$90,765.43</td>
+      <td class="currency">$30,345.67</td>
+      <td class="currency">$59,419.80</td>
+    </tr>
+
+    <tr>
+      <tdAdministration</td>
+      <td>62</td>
+      <td class="currency">$103,456.78</td>
+      <td class="currency>$34,987.53</td>
+      <td class="currency">$68,555.69</td>
+    </tr>
+
+    <tr>
+      <th colspan="3">Financial Summary:</th>
+      <td colspan="5"><a href="#" style="text-align: left;">View Details</a></td>
+    </tr>
+
+    <tr>
+      <th>Total Revenue</th>
+      <th>Total Profit</th>
+      <th>Total Expenses</th>
+      <th>Profit Margin (%)</th>
+      <th>Net Income</th>
+    </tr>
+
+    <tr>
+      <td class="currency">$1,323,890.28</td>
+      <td class="currency">$533,219.15</td>
+      <td class="currency">$789,135.13</td>
+      <td>(40.20%)</td>
+      <td class="currency">$534,084.02</td>
+    </tr>
+
+  </table>
+</body>
+</html>

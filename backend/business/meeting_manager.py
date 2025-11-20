@@ -12,6 +12,10 @@ import httpx
 from typing import List, Optional, Dict
 from llm.ollama_client import OllamaClient
 from config import now as local_now
+import logging
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 
 class MeetingManager:
@@ -689,7 +693,7 @@ Respond in JSON format:
                         meeting.meeting_metadata = final_metadata
                         await safe_commit(self.db)
                     
-                    print(f"✅ Generated live content for meeting {meeting_id}: {meeting_title}")
+                    logger.info(f"✅ Generated live content for meeting {meeting_id}: {meeting_title}")
                 except Exception as e:
                     import traceback
                     from sqlalchemy.exc import OperationalError, PendingRollbackError
@@ -1032,12 +1036,12 @@ Write only the goodbye message, nothing else."""
         
         # Commit the closing sequence
         await safe_commit(self.db)
-        print(f"✅ Generated closing sequence for meeting {meeting.id} with {len(live_messages)} total messages")
+        logger.info(f"✅ Generated closing sequence for meeting {meeting.id} with {len(live_messages)} total messages")
     
     async def _generate_live_meeting_content(self, meeting: Meeting):
         """Generate live meeting messages and update transcript."""
-        print(f"🔄 Generating live content for meeting {meeting.id}: {meeting.title}")
-        print(f"   Using LLM model: {self.llm_client.model} at {self.llm_client.base_url}")
+        logger.info(f"🔄 Generating live content for meeting {meeting.id}: {meeting.title}")
+        logger.info(f"   Using LLM model: {self.llm_client.model} at {self.llm_client.base_url}")
         
         # Refresh meeting to get latest state
         await self.db.refresh(meeting)
@@ -1049,10 +1053,10 @@ Write only the goodbye message, nothing else."""
         attendees = result.scalars().all()
         
         if len(attendees) < 2:
-            print(f"⚠️ Meeting {meeting.id} has less than 2 attendees, skipping content generation")
+            logger.warning(f"⚠️ Meeting {meeting.id} has less than 2 attendees, skipping content generation")
             return
         
-        print(f"✅ Meeting {meeting.id} has {len(attendees)} attendees, proceeding with content generation")
+        logger.info(f"✅ Meeting {meeting.id} has {len(attendees)} attendees, proceeding with content generation")
         
         # Get business context
         from engine.office_simulator import get_business_context
@@ -1074,12 +1078,12 @@ Write only the goodbye message, nothing else."""
         
         # Start with existing messages
         live_messages = list(existing_messages_from_db) if isinstance(existing_messages_from_db, list) else []
-        print(f"   📝 Starting with {len(live_messages)} existing messages from database")
+        logger.info(f"   📝 Starting with {len(live_messages)} existing messages from database")
         
         # Generate ONLY 1 message at a time - no one talks over each other
         # One person speaks, then wait for the next update cycle
         num_messages = 1
-        print(f"   Generating 1 new message for meeting {meeting.id} (one at a time, no overlapping)")
+        logger.info(f"   Generating 1 new message for meeting {meeting.id} (one at a time, no overlapping)")
         
         # Track who should speak next to ensure proper turn-taking
         # Get the last message to see who was speaking and to whom
@@ -1117,7 +1121,7 @@ Write only the goodbye message, nothing else."""
                     if (speakers[0] == recipients[1] and speakers[1] == recipients[0]):
                         is_loop = True
                         loop_pair = tuple(sorted(speakers))
-                        print(f"   ⚠️⚠️⚠️ LOOP DETECTED: Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
+                        logger.warning(f"   ⚠️⚠️⚠️ LOOP DETECTED: Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
             
             # Also check for 3-message loops (A->B, B->A, A->B)
             if not is_loop and len(last_4_messages) >= 3:
@@ -1133,7 +1137,7 @@ Write only the goodbye message, nothing else."""
                     if speakers[-1] == recipients[-2] and speakers[-2] == recipients[-1]:
                         is_loop = True
                         loop_pair = pair
-                        print(f"   ⚠️⚠️⚠️ LOOP DETECTED (3-message): Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
+                        logger.warning(f"   ⚠️⚠️⚠️ LOOP DETECTED (3-message): Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
             
             # CRITICAL: If someone was just addressed, they MUST respond next
             # BUT: If we're in a loop, BREAK IT by picking someone else
@@ -1146,19 +1150,19 @@ Write only the goodbye message, nothing else."""
                     available = [a for a in attendees if a.id not in excluded]
                     if available:
                         next_speaker_id = random.choice(available).id
-                        print(f"   ✅✅✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} instead (forced rotation, breaking loop)")
+                        logger.info(f"   ✅✅✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} instead (forced rotation, breaking loop)")
                     else:
                         # Can't break - at least exclude the two in the loop
                         available = [a for a in attendees if a.id not in loop_pair]
                         if available:
                             next_speaker_id = random.choice(available).id
-                            print(f"   ✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} (minimal exclusion)")
+                            logger.info(f"   ✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} (minimal exclusion)")
                         else:
                             next_speaker_id = last_message.get("recipient_id")
-                            print(f"   ⚠️ Cannot break loop - only 2 attendees")
+                            logger.warning(f"   ⚠️ Cannot break loop - only 2 attendees")
                 else:
                     next_speaker_id = last_message.get("recipient_id")
-                    print(f"   Turn-taking: {last_message.get('recipient_name', 'Someone')} was addressed, they will respond next")
+                    logger.info(f"   Turn-taking: {last_message.get('recipient_name', 'Someone')} was addressed, they will respond next")
             else:
                 # If no recipient in last message, pick someone else to continue
                 # AGGRESSIVE: Exclude the last 2-3 speakers completely
@@ -1173,11 +1177,11 @@ Write only the goodbye message, nothing else."""
                 less_recent_speakers = [a for a in available if a.id not in recent_speakers]
                 if less_recent_speakers:
                     next_speaker_id = random.choice(less_recent_speakers).id
-                    print(f"   Turn-taking: Selecting {next((a.name for a in less_recent_speakers if a.id == next_speaker_id), 'Someone')} (hasn't spoken recently)")
+                    logger.info(f"   Turn-taking: Selecting {next((a.name for a in less_recent_speakers if a.id == next_speaker_id), 'Someone')} (hasn't spoken recently)")
                 elif available:
                     # If everyone has spoken recently, just pick someone else
                     next_speaker_id = random.choice(available).id
-                    print(f"   Turn-taking: All attendees have spoken recently, selecting random attendee")
+                    logger.info(f"   Turn-taking: All attendees have spoken recently, selecting random attendee")
                 else:
                     # Fallback
                     next_speaker_id = random.choice(attendees).id
@@ -1224,7 +1228,7 @@ Write only the goodbye message, nothing else."""
                     if available_next:
                         # Perfect - we have someone who hasn't spoken in the last 8 messages
                         next_speaker_id = random.choice(available_next).id
-                        print(f"   ✅✅✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (hasn't spoken in last 8 messages - FORCED ROTATION)")
+                        logger.info(f"   ✅✅✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (hasn't spoken in last 8 messages - FORCED ROTATION)")
                     else:
                         # If we've excluded everyone, at least exclude the two who just spoke + last 4
                         minimal_exclude = {sender.id, recipient.id}
@@ -1233,16 +1237,16 @@ Write only the goodbye message, nothing else."""
                         available_next = [a for a in attendees if a.id not in minimal_exclude]
                         if available_next:
                             next_speaker_id = random.choice(available_next).id
-                            print(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (minimal exclusion - last 4)")
+                            logger.info(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (minimal exclusion - last 4)")
                         else:
                             # Last resort: exclude just the two who just spoke
                             available_next = [a for a in attendees if a.id not in {sender.id, recipient.id}]
                             if available_next:
                                 next_speaker_id = random.choice(available_next).id
-                                print(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (only excluding the two who just spoke)")
+                                logger.info(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (only excluding the two who just spoke)")
                             else:
                                 # Only two people in meeting - can't break loop
-                                print(f"   ⚠️ Only 2 attendees, cannot break loop")
+                                logger.warning(f"   ⚠️ Only 2 attendees, cannot break loop")
                                 next_speaker_id = None  # Don't set it, let it be chosen randomly
                 else:
                     # Not responding - sender addresses someone else
@@ -1284,23 +1288,23 @@ Write only the goodbye message, nothing else."""
                     
                     if good_recipients:
                         recipient = random.choice(good_recipients)
-                        print(f"   ✅ NO LOOP: Addressing {recipient.name} (no recent pair, hasn't been addressed/spoken recently)")
+                        logger.info(f"   ✅ NO LOOP: Addressing {recipient.name} (no recent pair, hasn't been addressed/spoken recently)")
                     else:
                         # Fallback: prioritize those who haven't been addressed recently
                         less_recent_recipients = [a for a in available_recipients if a.id not in recent_recipients]
                         if less_recent_recipients:
                             recipient = random.choice(less_recent_recipients)
-                            print(f"   Turn-taking: Addressing {recipient.name} (hasn't been addressed recently)")
+                            logger.info(f"   Turn-taking: Addressing {recipient.name} (hasn't been addressed recently)")
                         else:
                             # Last resort: pick randomly but avoid immediate loop
                             non_loop_recipients = [a for a in available_recipients 
                                                   if (sender.id, a.id) not in recent_pairs]
                             if non_loop_recipients:
                                 recipient = random.choice(non_loop_recipients)
-                                print(f"   Turn-taking: Addressing {recipient.name} (avoiding immediate loop)")
+                                logger.info(f"   Turn-taking: Addressing {recipient.name} (avoiding immediate loop)")
                             else:
                                 recipient = random.choice(available_recipients)
-                                print(f"   ⚠️ Addressing {recipient.name} (random, all pairs used - may create loop)")
+                                logger.warning(f"   ⚠️ Addressing {recipient.name} (random, all pairs used - may create loop)")
                     
                     # Next speaker will be the recipient (they should respond)
                     next_speaker_id = recipient.id
@@ -1466,7 +1470,7 @@ Write only the message, nothing else."""
                 "timestamp": now_iso
             }
             live_messages.append(message_entry)
-            print(f"   Added message {messages_generated}/{num_messages}: {sender.name} -> {recipient.name}: {message_text[:50]}...")
+            logger.info(f"   Added message {messages_generated}/{num_messages}: {sender.name} -> {recipient.name}: {message_text[:50]}...")
             
             # Track current speaker in metadata (for visual indicators)
             # The sender is currently speaking, recipient will speak next
@@ -1484,7 +1488,7 @@ Write only the message, nothing else."""
         # Update metadata - ensure live_messages is always a list
         # Use the metadata we already have (don't refresh - we've been building live_messages in it)
         # The live_messages list already contains existing + new messages
-        print(f"   📊 Final message count: {len(live_messages)} total messages (started with {len(existing_messages_from_db)}, added {len(live_messages) - len(existing_messages_from_db)} new)")
+        logger.info(f"   📊 Final message count: {len(live_messages)} total messages (started with {len(existing_messages_from_db)}, added {len(live_messages) - len(existing_messages_from_db)} new)")
         
         # Refresh meeting one more time to ensure we have latest state
         await self.db.refresh(meeting)
@@ -1502,7 +1506,7 @@ Write only the message, nothing else."""
         # Always update last_content_update to current time when we generate content
         now_iso = local_now().isoformat()
         metadata["last_content_update"] = now_iso
-        print(f"   ⏰ Set last_content_update to: {now_iso}")
+        logger.info(f"   ⏰ Set last_content_update to: {now_iso}")
         
         # CRITICAL: Ensure live_transcript and transcript are synchronized
         # The live_transcript should always match what's in live_messages
@@ -1541,8 +1545,8 @@ Write only the message, nothing else."""
         await self.db.refresh(meeting)
         final_metadata = meeting.meeting_metadata or {}
         final_update = final_metadata.get("last_content_update", "NOT SET")
-        print(f"   ✅ Verified last_content_update after commit: {final_update}")
-        print(f"✅ Successfully generated {messages_generated} new messages ({len(live_messages)} total) for meeting {meeting.id}")
+        logger.info(f"   ✅ Verified last_content_update after commit: {final_update}")
+        logger.info(f"✅ Successfully generated {messages_generated} new messages ({len(live_messages)} total) for meeting {meeting.id}")
     
     async def _generate_final_transcript(self, meeting: Meeting) -> str:
         """Generate a final meeting transcript."""

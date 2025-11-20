@@ -269,3 +269,4 @@ async def create_optimization_indexes():
 if __name__ == "__main__":
     asyncio.run(create_optimization_indexes())
 
+

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* FANCY TITLE */
+    h1 {
+      text-align: center;
+      margin-top: 0;
+      font-size: 18pt;
+      font-family: 'Times New Roman', serif;
+      border-bottom: 2px solid #000000;
+      margin-bottom: 1in;
+    }
+
+    /* HEADER */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 50mm;
+      background-color: #ffffff;
+      padding-top: 10mm;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    header .date {
+      font-size: 12pt;
+      color: #666666;
+      margin-bottom: 5mm;
+    }
+    
+    header .employee-name {
+      font-size: 14pt;
+      color: #000000;
+      margin-right: 10mm;
+    }
+    
+    header .department {
+      font-size: 12pt;
+      color: #000000;
+    }
+    
+    /* EXECUTIVE SUMMARY */
+    section .summary {
+      margin-top: 2in;
+      padding-bottom: 1in;
+      border-bottom: 1px solid #000000;
+    }
+
+    section .summary .executive-summary {
+      font-size: 14pt;
+      color: #000000;
+      margin-bottom: 5mm;
+    }
+    
+    /* MAIN SECTIONS */
+    section .section-header {
+      margin-top: 2in;
+      padding-bottom: 1in;
+      border-bottom: 1px solid #000000;
+    }
+
+    section .main-sections ul, section .main-sections ol {
+      list-style-type: none;
+      padding-left: 20mm;
+    }
+    
+    /* DATA SECTIONS */
+    table {
+      margin-top: 2in;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #000000;
+      padding: 5mm;
+    }
+    
+    /* CONCLUSION */
+    section .conclusion {
+      margin-top: 2in;
+      padding-bottom: 1in;
+      border-bottom: 1px solid #000000;
+    }
+
+    /* FOOTER */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 20mm;
+      background-color: #ffffff;
+      padding-top: 10mm;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    footer .page-number {
+      font-size: 12pt;
+      color: #666666;
+      margin-right: 5mm;
+    }
+    
+    footer .document-version {
+      font-size: 10pt;
+      color: #999999;
+    }
+    
+    footer .confidentiality-notice {
+      font-size: 10pt;
+      color: #000000;
+    }
+  </style>
+</head>
+<body>
+  <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <h1 style="text-align: center; font-size: 18pt; font-family: 'Times New Roman', serif; border-bottom: 2px solid #000000; margin-bottom: 1in;">Strategic Report</h1>
+    <header style="position: fixed; top: 0; left: 0; width: 100%; height: 50mm; background-color: #ffffff; padding-top: 10mm; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+      <p class="date">February 22, 2024</p>
+      <p class="employee-name">Rachel Xu</p>
+      <p class="department">Operations</p>
+    </header>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Executive Summary</h2>
+      <p class="executive-summary">This report provides an overview of our current business context, highlighting key performance indicators and strategic recommendations for improvement.</p>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Employee Information</h2>
+      <table style="width: 100%;">
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Name</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">Rachel Xu</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Title</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">Sales Manager</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Role</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">Manager</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Department</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">Operations</td>
+        </tr>
+      </table>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Current Project</h2>
+      <ul style="list-style-type: none; padding-left: 20mm;">
+        <li>Project Name: Customer Portal Redesign</li>
+        <li>Status: Active</li>
+        <li>Budget: $75,000.00</li>
+        <li>Revenue: $25,831.02</li>
+      </ul>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Business Metrics</h2>
+      <table style="width: 100%;">
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Total Revenue</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">$848,324.28</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Total Profit</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">$361,970.04</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Profit Margin</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">42.67%</td>
+        </tr>
+      </table>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Active Projects</h2>
+      <ul style="list-style-type: none; padding-left: 20mm;">
+        <li>Project Name: API Infrastructure Upgrade</li>
+        <li>Status: Active</li>
+        <li>Budget: $100,000.00</li>
+      </ul>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Department Distribution</h2>
+      <table style="width: 100%;">
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Product</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">50 employees</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Finance</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">1 employee</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">Operations</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">51 employees</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">HR</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">56 employees</td>
+        </tr>
+        <tr>
+          <th style="border: 1px solid #000000; padding: 5mm;">IT</th>
+          <td style="border: 1px solid #000000; padding: 5mm;">58 employees</td>
+        </tr>
+      </table>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Critical Requirements</h2>
+      <ul style="list-style-type: none; padding-left: 20mm;">
+        <li>1. Document type: Create a realistic business document based on the employee's role:</li>
+          <li style="font-weight: bold;">Managers/Executives: Strategic reports, quarterly reviews, business analysis</li>
+          <li style="font-style: italic;">Finance/Accounting: Financial reports, budget analysis, revenue breakdowns</li>
+          <li style="font-style: italic;">Sales/Marketing: Sales reports, campaign analysis, market research</li>
+          <li style="font-style: italic;">IT/Engineering: Technical reports, project status, system analysis</li>
+          <li style="font-style: italic;">HR: Employee reports, hiring analysis, performance reviews</li>
+          <li style="font-style: italic;">Operations: Operational reports, efficiency analysis, process documentation</li>
+        <li>2. Premium styling:</li>
+          <li style="color: #666666;">White background (#ffffff) with subtle shadows</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">1-inch margins on all sides</li>
+          <li style="font-family: 'Times New Roman', serif; font-size: 12pt; margin-left: 20mm;">Times New Roman (12pt) for body, Calibri (11pt) for headers</li>
+          <li style="color: #000000; margin-left: 20mm;">Black text (#000000) with proper contrast</li>
+          <li style="line-height: 1.5; margin-left: 20mm;">Line height: 1.5 for readability</li>
+          <li style="margin-bottom: 10mm; padding-bottom: 12pt; border-bottom: 1px solid #000000;">Professional paragraph spacing (12pt between paragraphs)</li>
+        <li style="font-weight: bold;">3. Document structure:</li>
+          <li style="color: #666666;">Fancy title: Centered, 18pt, bold, Times New Roman, with decorative underline</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">Header: Date, employee name, department, document classification</li>
+          <li style="font-family: 'Times New Roman', serif; font-size: 12pt; margin-left: 20mm;">Executive summary: 2-3 paragraphs summarizing key points</li>
+        <li style="font-style: italic;">4. Content requirements:</li>
+          <li style="color: #666666;">Include actual numbers from the business context (revenue, profit, employee counts, project budgets)</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">Reference specific projects by name and their actual status/budget</li>
+          <li style="font-style: italic;">Mention real departments and their employee counts</li>
+          <li style="color: #666666;">Use actual profit margins, revenue figures, expense data</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">Include realistic dates, percentages, and calculations</li>
+          <li style="font-style: italic;">Add professional analysis of the data (trends, insights, recommendations)</li>
+        <li style="font-weight: bold;">5. Make it fancy:</li>
+          <li style="color: #666666;">Add professional formatting: tables, bullet points, numbered lists</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">Include data visualizations described in text (e.g., 'Revenue increased 15% QoQ')</li>
+          <li style="font-style: italic;">Use professional language with industry-specific terms</li>
+          <li style="color: #666666;">Add executive-level insights and strategic recommendations</li>
+          <li style="margin-left: 20mm; font-size: 12pt;">Include realistic business scenarios and case studies</li>
+        </li>
+      </ul>
+    </section>
+    <section style="margin-top: 2in; padding-bottom: 1in; border-bottom: 1px solid #000000;">
+      <h2 style="font-size: 14pt; color: #000000; margin-bottom: 5mm;">Conclusion</h2>
+      <p class="conclusion">In conclusion, this report provides a comprehensive overview of our current business context and highlights key areas for improvement.</p>
+    </section>
+    <footer style="position: fixed; bottom: 0; left: 0; width: 100%; height: 20mm; background-color: #ffffff; padding-top: 10mm; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+      <p class="page-number">Page 5</p>
+      <p class="document-version">Version 1.0</p>
+      <p class="confidentiality-notice">&copy; 2024 Confidential.</p>
+    </footer>
+  </div>
+</body>
+</html>

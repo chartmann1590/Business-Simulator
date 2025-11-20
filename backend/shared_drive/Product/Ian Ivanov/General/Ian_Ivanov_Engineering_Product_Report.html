@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Report</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 18pt;
+            text-decoration: underline;
+            margin-bottom: 10px;
+        }
+
+        header {
+            margin-top: -20px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #000000;
+        }
+
+        footer {
+            margin-top: 10px;
+            font-size: 12pt;
+            color: #666666;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1>Business Report</h1>
+    </div>
+
+    <header>
+        <p>Document Classification: Business Report</p>
+        <p>Date: {{currentDate}}</p>
+        <p>Ian Ivanov</p>
+        <p>Engineering Manager, Product Department</p>
+    </header>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Executive Summary</h2>
+        <p>The current quarter has seen a significant increase in revenue and profit compared to the same period last year. Our product department is currently working on 13 active projects, with a total budget of $225,000. We have also seen an increase in employee count by 4% compared to last year.</p>
+        <p>The key highlights of this quarter are:
+
+            <ul style="list-style-type: decimal;">
+                <li>Revenue increased 15% QoQ</li>
+                <li>Profit margin at 42.63%</li>
+                <li>Total employees reached 966</li>
+                <li>13 active projects, with a total budget of $225,000</li>
+            </ul>
+    </section>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Employee Information</h2>
+        <p>The current employee count is 966. The product department has 51 employees, the finance department has 1 employee, the operations department has 53 employees, and the HR department has 56 employees.</p>
+    </table style="width:100%; border-collapse: collapse;">
+        <tr>
+            <th>Department</th>
+            <th>Employee Count</th>
+        </tr>
+        <tr>
+            <td>Product</td>
+            <td>51</td>
+        </tr>
+        <tr>
+            <td>Finance</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td>Operations</td>
+            <td>53</td>
+        </tr>
+        <tr>
+            <td>HR</td>
+            <td>56</td>
+        </tr>
+    </table>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Active Projects</h2>
+        <p>The current active projects are:
+
+            <ul style="list-style-type: decimal;">
+                <li>Customer Portal Redesign - $75,000.00 budget, active status</li>
+                <li>API Infrastructure Upgrade - $100,000.00 budget, active status</li>
+                <li>Mobile App Development - $150,000.00 budget, active status</li>
+            </ul>
+    </section>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Data Distribution</h2>
+        <p>The current data distribution is:
+
+            <table style="width:100%; border-collapse: collapse;">
+                <tr>
+                    <th>Department</th>
+                    <th>Employee Count</th>
+                </tr>
+                <tr>
+                    <td>Product</td>
+                    <td>51</td>
+                </tr>
+                <tr>
+                    <td>Finance</td>
+                    <td>1</td>
+                </tr>
+                <tr>
+                    <td>Operations</td>
+                    <td>53</td>
+                </tr>
+                <tr>
+                    <td>HR</td>
+                    <td>56</td>
+                </tr>
+            </table>
+
+    </section>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Critical Requirements</h2>
+        <p>The critical requirements for this quarter are:
+
+            <ol style="list-style-type: decimal;">
+                <li>Document Type: Create a realistic business document based on the employee's role</li>
+                <li>Premium Styling: Make it look expensive and professional</li>
+                <li>Document Structure: Comprehensive, data-rich, and visually impressive</li>
+            </ol>
+    </section>
+
+    <section style="margin-bottom: 20px;">
+        <h2>Conclusion</h2>
+        <p>The current quarter has seen significant growth in revenue and profit. We have also increased our employee count by 4% compared to last year. We recommend continuing to focus on these areas to drive further growth.</p>
+    </section>
+
+    <footer style="margin-top: 10px; font-size: 12pt; color: #666666; text-align: right;">
+        <p>Page {{pageNumber}} of {{totalPages}}</p>
+        <p>Document Version: 1.0</p>
+        <p>Confidentiality Notice: This document contains confidential information and is intended for internal use only.</p>
+    </footer>
+
+    <script>
+        var currentDate = new Date();
+        var totalPages = Math.ceil(currentDate / 50000);
+        var pageNumber = 1;
+    </script>
+</body>
+</html>

@@ -3,6 +3,8 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import BoardroomView from '../components/BoardroomView'
 import { formatTimestamp } from '../utils/timezone'
 import { useNavigate } from 'react-router-dom'
+import { apiGet } from '../utils/api'
+import TrainingDetailModal from '../components/TrainingDetailModal'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
@@ -15,6 +17,10 @@ function Dashboard() {
   const activities = useWebSocket()
   const navigate = useNavigate()
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [pollingActivities, setPollingActivities] = useState([])
+  const [trainingData, setTrainingData] = useState(null)
+  const [trainingLoading, setTrainingLoading] = useState(false)
+  const [selectedTrainingEmployee, setSelectedTrainingEmployee] = useState(null)
   
   const handleEmployeeClick = (employee) => {
     // Navigate to office view with employee ID and floor as URL parameters
@@ -25,11 +31,23 @@ function Dashboard() {
     navigate(`/office-view?${params.toString()}`)
   }
   
-  const formatBreakDuration = (breakStartTime) => {
-    if (!breakStartTime) return 'Unknown'
+  const formatBreakDuration = (breakStartTime, fallbackToCurrent = false) => {
+    // Always calculate a duration - never return N/A
+    let startTime = breakStartTime
+    
+    // If no start time provided, use current time as fallback (they just entered)
+    if (!startTime) {
+      if (fallbackToCurrent) {
+        // Use current time minus 1 second to show "Just started"
+        startTime = new Date(currentTime.getTime() - 1000).toISOString()
+      } else {
+        // Use current time as fallback
+        startTime = currentTime.toISOString()
+      }
+    }
     
     try {
-      const breakStart = new Date(breakStartTime)
+      const breakStart = new Date(startTime)
       const now = currentTime
       const diffMs = now - breakStart
       
@@ -53,65 +71,60 @@ function Dashboard() {
         return 'Just started'
       }
     } catch (error) {
-      return 'Unknown'
+      // Even on error, return a reasonable fallback
+      return 'Just started'
     }
   }
 
   const fetchDashboardData = useCallback(async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/dashboard')
-      if (!response.ok) {
-        // If response is not OK, try to get error message
-        const errorText = await response.text()
-        console.error('Error fetching dashboard data:', response.status, errorText)
-        // Set default data so the page still renders
-        setDashboardData({
-          revenue: 0.0,
-          profit: 0.0,
-          expenses: 0.0,
-          active_projects: 0,
-          employee_count: 0,
+      const result = await apiGet('/api/dashboard')
+      
+      // ALWAYS use the data we got (fresh, cached, or default)
+      // apiGet ALWAYS returns data, even if it's default empty structure
+      const data = result.data || {
+        revenue: 0.0,
+        profit: 0.0,
+        expenses: 0.0,
+        active_projects: 0,
+        employee_count: 0,
+        recent_activities: [],
+        goals: [],
+        goal_progress: {},
+        company_overview: {
+          business_name: "TechFlow Solutions",
+          mission: "To deliver innovative technology solutions",
+          industry: "Technology & Software Development",
+          founded: "2024",
+          location: "San Francisco, CA",
+          ceo: "Not Assigned",
+          total_projects: 0,
+          completed_projects: 0,
+          active_projects_count: 0,
+          total_project_revenue: 0.0,
+          average_project_budget: 0.0,
+          departments: {},
+          role_distribution: {},
+          products_services: []
+        },
+        leadership_insights: {
+          leadership_team: [],
+          recent_decisions: [],
           recent_activities: [],
-          goals: [],
-          goal_progress: {},
-          company_overview: {
-            business_name: "TechFlow Solutions",
-            mission: "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.",
-            industry: "Technology & Software Development",
-            founded: "2024",
-            location: "San Francisco, CA",
-            ceo: "Not Assigned",
-            total_projects: 0,
-            completed_projects: 0,
-            active_projects_count: 0,
-            total_project_revenue: 0.0,
-            average_project_budget: 0.0,
-            departments: {},
-            role_distribution: {},
-            products_services: []
-          },
-          leadership_insights: {
-            leadership_team: [],
-            recent_decisions: [],
-            recent_activities: [],
-            metrics: {
-              total_leadership_count: 0,
-              ceo_count: 0,
-              manager_count: 0,
-              strategic_decisions_count: 0,
-              projects_led_by_leadership: 0
-            }
+          metrics: {
+            total_leadership_count: 0,
+            ceo_count: 0,
+            manager_count: 0,
+            strategic_decisions_count: 0,
+            projects_led_by_leadership: 0
           }
-        })
-        setLoading(false)
-        return
+        }
       }
-      const data = await response.json()
       setDashboardData(data)
-      setLoading(false)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
-      // Set default data so the page still renders
+      // Even on error, set default data so page renders
       setDashboardData({
         revenue: 0.0,
         profit: 0.0,
@@ -121,6 +134,22 @@ function Dashboard() {
         recent_activities: [],
         goals: [],
         goal_progress: {},
+        company_overview: {
+          business_name: "TechFlow Solutions",
+          mission: "To deliver innovative technology solutions",
+          industry: "Technology & Software Development",
+          founded: "2024",
+          location: "San Francisco, CA",
+          ceo: "Not Assigned",
+          total_projects: 0,
+          completed_projects: 0,
+          active_projects_count: 0,
+          total_project_revenue: 0.0,
+          average_project_budget: 0.0,
+          departments: {},
+          role_distribution: {},
+          products_services: []
+        },
         leadership_insights: {
           leadership_team: [],
           recent_decisions: [],
@@ -134,6 +163,7 @@ function Dashboard() {
           }
         }
       })
+    } finally {
       setLoading(false)
     }
   }, [])
@@ -143,6 +173,24 @@ function Dashboard() {
     const interval = setInterval(fetchDashboardData, 5000)
     return () => clearInterval(interval)
   }, [fetchDashboardData])
+  
+  // Poll for activities separately to ensure we get all activities
+  useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const result = await apiGet('/api/activities?limit=50')
+        if (result.data && Array.isArray(result.data)) {
+          setPollingActivities(result.data)
+        }
+      } catch (error) {
+        console.error('Error fetching activities:', error)
+      }
+    }
+    
+    fetchActivities()
+    const interval = setInterval(fetchActivities, 3000) // Poll every 3 seconds
+    return () => clearInterval(interval)
+  }, [])
   
   // Update current time every minute to refresh break durations
   useEffect(() => {
@@ -156,11 +204,8 @@ function Dashboard() {
   useEffect(() => {
     const fetchChats = async () => {
       try {
-        const response = await fetch('/api/chats?limit=500')
-        if (response.ok) {
-          const data = await response.json()
-          setChats(data || [])
-        }
+        const result = await apiGet('/api/chats?limit=500')
+        setChats(Array.isArray(result.data) ? result.data : [])
       } catch (error) {
         console.error('Error fetching chats:', error)
         setChats([])
@@ -178,11 +223,8 @@ function Dashboard() {
       setSuggestionsLoading(true)
       try {
         const statusParam = suggestionFilter !== 'all' ? `?status=${suggestionFilter}` : ''
-        const response = await fetch(`/api/suggestions${statusParam}`)
-        if (response.ok) {
-          const data = await response.json()
-          setSuggestions(data || [])
-        }
+        const result = await apiGet(`/api/suggestions${statusParam}`)
+        setSuggestions(Array.isArray(result.data) ? result.data : [])
       } catch (error) {
         console.error('Error fetching suggestions:', error)
         setSuggestions([])
@@ -197,6 +239,28 @@ function Dashboard() {
       return () => clearInterval(interval)
     }
   }, [activeTab, suggestionFilter])
+
+  // Fetch training data
+  useEffect(() => {
+    const fetchTrainingData = async () => {
+      setTrainingLoading(true)
+      try {
+        const result = await apiGet('/api/training/overview')
+        setTrainingData(result.data || {})
+      } catch (error) {
+        console.error('Error fetching training data:', error)
+        setTrainingData({})
+      } finally {
+        setTrainingLoading(false)
+      }
+    }
+
+    if (activeTab === 'training') {
+      fetchTrainingData()
+      const interval = setInterval(fetchTrainingData, 10000) // Refresh every 10 seconds
+      return () => clearInterval(interval)
+    }
+  }, [activeTab])
 
   // Update business name in sidebar
   useEffect(() => {
@@ -313,6 +377,16 @@ function Dashboard() {
           >
             Break Tracking
           </button>
+          <button
+            onClick={() => setActiveTab('training')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'training'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Training
+          </button>
         </nav>
       </div>
 
@@ -324,13 +398,13 @@ function Dashboard() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm font-medium text-gray-500">Total Revenue</div>
           <div className="mt-2 text-3xl font-bold text-green-600">
-            ${dashboardData.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(dashboardData.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm font-medium text-gray-500">Total Profit</div>
-          <div className={`mt-2 text-3xl font-bold ${dashboardData.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ${dashboardData.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className={`mt-2 text-3xl font-bold ${(dashboardData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            ${(dashboardData.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
@@ -354,22 +428,50 @@ function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
           </div>
           <div className="px-6 py-4 max-h-96 overflow-y-auto">
-            {activities.length === 0 && dashboardData.recent_activities.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No activities yet</p>
-            ) : (
-              <div className="space-y-4">
-                {[...activities, ...dashboardData.recent_activities]
-                  .slice(0, 20)
-                  .map((activity, idx) => (
-                    <div key={idx} className="border-l-4 border-blue-500 pl-4 py-2">
+            {(() => {
+              // Merge all activity sources and remove duplicates
+              const allActivities = [
+                ...activities,
+                ...(pollingActivities || []),
+                ...(dashboardData?.recent_activities || [])
+              ]
+              
+              // Remove duplicates by ID and timestamp
+              const seen = new Set()
+              const uniqueActivities = allActivities.filter(act => {
+                if (!act) return false
+                const key = `${act.id || act.timestamp || Math.random()}_${act.description || ''}`
+                if (seen.has(key)) return false
+                seen.add(key)
+                return true
+              })
+              
+              // Sort by timestamp (newest first)
+              uniqueActivities.sort((a, b) => {
+                const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0
+                const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0
+                return timeB - timeA
+              })
+              
+              const displayActivities = uniqueActivities.slice(0, 50) // Show up to 50 activities
+              
+              if (displayActivities.length === 0) {
+                return <p className="text-gray-500 text-center py-4">No activities yet</p>
+              }
+              
+              return (
+                <div className="space-y-4">
+                  {displayActivities.map((activity, idx) => (
+                    <div key={activity.id || idx} className="border-l-4 border-blue-500 pl-4 py-2">
                       <div className="text-sm text-gray-900">{activity.description || activity.activity_type}</div>
                       <div className="text-xs text-gray-500 mt-1">
                         {formatTimestamp(activity.timestamp)}
                       </div>
                     </div>
                   ))}
-              </div>
-            )}
+                </div>
+              )
+            })()}
           </div>
         </div>
 
@@ -476,7 +578,12 @@ function Dashboard() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="font-medium">Duration:</span>
-                          <span className="ml-2 text-orange-600 font-semibold">{formatBreakDuration(employee.last_coffee_break)}</span>
+                          <span className="ml-2 text-orange-600 font-semibold">
+                            {formatBreakDuration(employee.breakroom_entry_time || employee.last_coffee_break, true)}
+                            {employee.is_actually_on_break === false && (
+                              <span className="ml-2 text-xs text-gray-500 italic">(passing through)</span>
+                            )}
+                          </span>
                         </div>
                         <div className="flex items-center text-sm text-gray-700">
                           <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -484,7 +591,7 @@ function Dashboard() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
                           <span className="font-medium">Room:</span>
-                          <span className="ml-2">{(employee.current_room || 'Unknown').replace(/_/g, ' ').replace('breakroom', 'Breakroom')}</span>
+                          <span className="ml-2">{(employee.current_room || 'N/A').replace(/_/g, ' ').replace('breakroom', 'Breakroom')}</span>
                         </div>
                         <div className="flex items-center text-sm text-gray-700 mt-1">
                           <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -588,7 +695,7 @@ function Dashboard() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                <span>{(breakItem.room || 'Unknown').replace(/_/g, ' ').replace('breakroom', 'Breakroom')}</span>
+                                <span>{(breakItem.room || 'N/A').replace(/_/g, ' ').replace('breakroom', 'Breakroom')}</span>
                               </div>
                             </div>
                             <div className="text-xs text-gray-500 ml-4">
@@ -1007,16 +1114,162 @@ function Dashboard() {
           chats={chats}
           onChatsUpdate={async () => {
             try {
-              const response = await fetch('/api/chats?limit=500')
-              if (response.ok) {
-                const data = await response.json()
-                setChats(data || [])
-              }
+              const result = await apiGet('/api/chats?limit=500')
+              setChats(Array.isArray(result.data) ? result.data : [])
             } catch (error) {
               console.error('Error fetching chats:', error)
+              setChats([])
             }
           }}
         />
+      )}
+
+      {/* Training Tab Content */}
+      {activeTab === 'training' && (
+        <div className="space-y-6">
+          {trainingLoading ? (
+            <div className="text-center py-12">Loading training data...</div>
+          ) : (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-500">Total Sessions</div>
+                      <div className="mt-1 text-3xl font-bold text-blue-600">
+                        {trainingData?.total_sessions || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-500">Total Training Time</div>
+                      <div className="mt-1 text-3xl font-bold text-green-600">
+                        {trainingData?.total_hours || 0} hrs
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {trainingData?.total_minutes || 0} minutes
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-500">Employees Trained</div>
+                      <div className="mt-1 text-3xl font-bold text-purple-600">
+                        {trainingData?.unique_employees_trained || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-500">Active Sessions</div>
+                      <div className="mt-1 text-3xl font-bold text-orange-600">
+                        {trainingData?.active_sessions || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Currently in Training */}
+              {trainingData?.current_training && trainingData.current_training.length > 0 && (
+                <div className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Currently in Training</h3>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {trainingData.current_training.map((session) => (
+                        <div 
+                          key={session.employee_id} 
+                          className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md cursor-pointer transition-all"
+                          onClick={() => setSelectedTrainingEmployee({ id: session.employee_id, name: session.employee_name })}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-semibold text-gray-900">{session.employee_name}</div>
+                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                          <div className="text-sm text-gray-600 mt-1">Topic: {session.topic}</div>
+                          <div className="text-xs text-gray-500 mt-1">Room: {session.room}</div>
+                          {session.start_time && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Started: {new Date(session.start_time).toLocaleTimeString()}
+                            </div>
+                          )}
+                          <div className="text-xs text-blue-600 mt-2 font-medium">Click to view training details →</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Top Training Topics */}
+              {trainingData?.top_topics && trainingData.top_topics.length > 0 && (
+                <div className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Top Training Topics</h3>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="space-y-3">
+                      {trainingData.top_topics.map((topic, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">{topic.topic}</div>
+                              <div className="text-sm text-gray-500">{topic.count} session{topic.count !== 1 ? 's' : ''}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* Employee Suggestions Tab Content */}
@@ -1170,6 +1423,16 @@ function Dashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Training Detail Modal */}
+      {selectedTrainingEmployee && (
+        <TrainingDetailModal
+          employeeId={selectedTrainingEmployee.id}
+          employeeName={selectedTrainingEmployee.name}
+          isOpen={!!selectedTrainingEmployee}
+          onClose={() => setSelectedTrainingEmployee(null)}
+        />
       )}
     </div>
   )

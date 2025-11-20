@@ -12,7 +12,7 @@ Usage:
 
 Environment variables:
     SQLITE_DB_PATH: Path to SQLite database (default: backend/office.db)
-    DATABASE_URL: PostgreSQL connection string (default: postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db)
+    DATABASE_URL: PostgreSQL connection string (required)
 """
 import asyncio
 import aiosqlite
@@ -28,10 +28,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configuration
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", os.path.join(os.path.dirname(__file__), "office.db"))
-POSTGRESQL_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:843e2c46eea146588dbac98162a3835f@localhost:5432/office_db"
-)
+POSTGRESQL_URL = os.getenv("DATABASE_URL")
+if not POSTGRESQL_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is required. "
+        "Please set it in your .env file or environment variables. "
+        "Format: postgresql+asyncpg://user:password@host:port/database"
+    )
 
 # Parse PostgreSQL URL to get connection parameters
 def parse_postgresql_url(url: str) -> Dict[str, Any]:
@@ -42,9 +45,7 @@ def parse_postgresql_url(url: str) -> Dict[str, Any]:
         auth, rest = url.split("@", 1)
         user, password = auth.split(":", 1)
     else:
-        user = "postgres"
-        password = "843e2c46eea146588dbac98162a3835f"
-        rest = url
+        raise ValueError("Invalid DATABASE_URL format: missing authentication")
     
     if "/" in rest:
         host_port, database = rest.rsplit("/", 1)

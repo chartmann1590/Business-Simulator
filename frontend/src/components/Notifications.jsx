@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { apiGet, apiPost } from '../utils/api'
 
 function Notifications() {
   const [notifications, setNotifications] = useState([])
@@ -34,32 +35,31 @@ function Notifications() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('/api/notifications?limit=20&unread_only=true')
-      const data = await response.json()
+      const result = await apiGet('/api/notifications?limit=20&unread_only=true')
+      const data = result.data || {}
       // Handle both old format (array) and new format (object with notifications array)
       const notificationsData = Array.isArray(data) ? data : (data.notifications || [])
       // Filter out read notifications to only show unread ones
       setNotifications(notificationsData.filter(n => !n.read))
     } catch (error) {
       console.error('Error fetching notifications:', error)
+      setNotifications([])
     }
   }
 
   const fetchUnreadCount = async () => {
     try {
-      const response = await fetch('/api/notifications/unread-count')
-      const data = await response.json()
-      setUnreadCount(data.count || 0)
+      const result = await apiGet('/api/notifications/unread-count')
+      setUnreadCount(result.data?.count || 0)
     } catch (error) {
       console.error('Error fetching unread count:', error)
+      setUnreadCount(0)
     }
   }
 
   const markAsRead = async (notificationId) => {
     try {
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: 'POST'
-      })
+      await apiPost(`/api/notifications/${notificationId}/read`, {})
       // Remove the notification from the list immediately
       setNotifications(prev => prev.filter(n => n.id !== notificationId))
       fetchUnreadCount()
@@ -70,9 +70,7 @@ function Notifications() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
-        method: 'POST'
-      })
+      await apiPost('/api/notifications/read-all', {})
       // Remove all notifications from the list immediately
       setNotifications([])
       fetchUnreadCount()

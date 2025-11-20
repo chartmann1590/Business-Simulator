@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { apiGet } from '../utils/api'
 import { useParams, Link } from 'react-router-dom'
 import { getAvatarPath } from '../utils/avatarMapper'
 import EmployeeChatModal from '../components/EmployeeChatModal'
@@ -7,6 +8,19 @@ import EmployeeScreenModal from '../components/EmployeeScreenModal'
 import RecentFiles from '../components/RecentFiles'
 import { formatDate, formatTime, formatDateTime, formatDateWithWeekday, formatDateShort } from '../utils/timezone'
 
+// Helper function to format room names for display
+function formatRoomName(roomName) {
+  if (!roomName) return 'Unknown'
+  return roomName
+    .replace(/_/g, ' ')
+    .replace(/\s*floor\d+\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 function EmployeeDetail() {
   const { id } = useParams()
   const [employee, setEmployee] = useState(null)
@@ -14,6 +28,7 @@ function EmployeeDetail() {
   const [chats, setChats] = useState([])
   const [reviews, setReviews] = useState([])
   const [meetings, setMeetings] = useState([])
+  const [training, setTraining] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showChatModal, setShowChatModal] = useState(false)
   const [timeUntilReview, setTimeUntilReview] = useState(null)
@@ -21,6 +36,8 @@ function EmployeeDetail() {
   const [loadingThoughts, setLoadingThoughts] = useState(false)
   const [showAwardModal, setShowAwardModal] = useState(false)
   const [showScreenModal, setShowScreenModal] = useState(false)
+  const [showTrainingModal, setShowTrainingModal] = useState(false)
+  const [selectedTrainingSession, setSelectedTrainingSession] = useState(null)
 
   useEffect(() => {
     fetchEmployee()
@@ -60,40 +77,42 @@ function EmployeeDetail() {
   }, [id])
 
   const fetchEmployee = async () => {
+    setLoading(true)
     try {
-      const [employeeRes, emailsRes, chatsRes, reviewsRes, meetingsRes] = await Promise.all([
-        fetch(`/api/employees/${id}`),
-        fetch(`/api/employees/${id}/emails`),
-        fetch(`/api/employees/${id}/chats`),
-        fetch(`/api/employees/${id}/reviews`),
-        fetch(`/api/employees/${id}/meetings`)
+      const [employeeResult, emailsResult, chatsResult, reviewsResult, meetingsResult, trainingResult] = await Promise.all([
+        apiGet(`/api/employees/${id}`),
+        apiGet(`/api/employees/${id}/emails`),
+        apiGet(`/api/employees/${id}/chats`),
+        apiGet(`/api/employees/${id}/reviews`),
+        apiGet(`/api/employees/${id}/meetings`),
+        apiGet(`/api/employees/${id}/training`)
       ])
-      const employeeData = await employeeRes.json()
-      const emailsData = await emailsRes.json()
-      const chatsData = await chatsRes.json()
-      const reviewsData = await reviewsRes.json()
-      const meetingsDataRaw = await meetingsRes.json()
+      const employeeData = employeeResult.data || {}
+      const emailsData = Array.isArray(emailsResult.data) ? emailsResult.data : []
+      const chatsData = Array.isArray(chatsResult.data) ? chatsResult.data : []
+      const reviewsData = Array.isArray(reviewsResult.data) ? reviewsResult.data : []
+      const meetingsDataRaw = meetingsResult.data || []
       // Handle wrapped response (PowerShell/API might wrap arrays)
       const meetingsData = Array.isArray(meetingsDataRaw) ? meetingsDataRaw : (meetingsDataRaw?.value || meetingsDataRaw || [])
       // Debug: Check award status
       if (employeeData.has_performance_award) {
         console.log('Employee has award:', employeeData.name, employeeData.has_performance_award)
       }
-      // Debug: Check meetings
-      console.log(`Fetched ${meetingsData?.length || 0} meetings for employee ${id}:`, meetingsData)
-      console.log('Meetings data type:', typeof meetingsData, 'Is array:', Array.isArray(meetingsData))
       setEmployee(employeeData)
       setEmails(emailsData)
       setChats(chatsData)
-      setReviews(reviewsData || [])
-      setMeetings(meetingsData || [])
-      console.log('Set meetings state to:', meetingsData)
-      setLoading(false)
+      setReviews(reviewsData)
+      setMeetings(meetingsData)
+      setTraining(trainingResult.data || {})
     } catch (error) {
       console.error('Error fetching employee:', error)
-      // Set empty array for reviews if there's an error
+      // Set empty data to prevent stuck loading
+      setEmployee(null)
+      setEmails([])
+      setChats([])
       setReviews([])
       setMeetings([])
+    } finally {
       setLoading(false)
     }
   }
@@ -101,12 +120,11 @@ function EmployeeDetail() {
   const fetchThoughts = useCallback(async () => {
     setLoadingThoughts(true)
     try {
-      const response = await fetch(`/api/employees/${id}/thoughts`)
-      if (response.ok) {
-        const data = await response.json()
-        setThoughts(data.thoughts)
+      const result = await apiGet(`/api/employees/${id}/thoughts`)
+      if (result.ok && result.data) {
+        setThoughts(result.data.thoughts || [])
       } else {
-        console.error('Error fetching thoughts:', response.statusText)
+        console.error('Error fetching thoughts:', result.error)
         setThoughts("Unable to generate thoughts at this time.")
       }
     } catch (error) {
@@ -360,6 +378,143 @@ function EmployeeDetail() {
           )}
         </div>
 
+        {/* Training Section */}
+        <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Training History
+          </h3>
+          {training && (
+            <div className="space-y-4">
+              {/* Training Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="text-sm font-medium text-gray-600">Total Sessions</div>
+                  <div className="text-2xl font-bold text-blue-600 mt-1">
+                    {training.total_sessions || 0}
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <div className="text-sm font-medium text-gray-600">Total Time</div>
+                  <div className="text-2xl font-bold text-green-600 mt-1">
+                    {training.total_hours || 0} hrs
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {training.total_minutes || 0} minutes
+                  </div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <div className="text-sm font-medium text-gray-600">Topics Covered</div>
+                  <div className="text-2xl font-bold text-purple-600 mt-1">
+                    {training.unique_topics || 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Training Session */}
+              {training.current_session && (
+                <div 
+                  className="bg-orange-50 border-l-4 border-orange-500 rounded p-4 mb-4 hover:bg-orange-100 cursor-pointer transition-colors"
+                  onClick={() => {
+                    setSelectedTrainingSession(training.current_session)
+                    setShowTrainingModal(true)
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <div className="text-sm font-medium text-orange-800">Currently in Training</div>
+                        <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </div>
+                      <div className="text-lg font-semibold text-orange-900 mt-1">
+                        {training.current_session.topic}
+                      </div>
+                      <div className="text-xs text-orange-700 mt-1">
+                        Room: {training.current_session.room}
+                      </div>
+                      {training.current_session.start_time && (
+                        <div className="text-xs text-orange-700 mt-1">
+                          Started: {new Date(training.current_session.start_time).toLocaleString()}
+                        </div>
+                      )}
+                      <div className="text-xs text-orange-800 mt-2 font-medium">Click to view training material →</div>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="animate-pulse w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
+                      <span className="text-sm font-medium text-orange-800">In Progress</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Training Sessions */}
+              {training.recent_sessions && training.recent_sessions.length > 0 ? (
+                <div>
+                  <h4 className="text-md font-semibold text-gray-700 mb-3">Recent Training Sessions</h4>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {training.recent_sessions.map((session) => (
+                      <div 
+                        key={session.id} 
+                        className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md cursor-pointer transition-all"
+                        onClick={() => {
+                          setSelectedTrainingSession(session)
+                          setShowTrainingModal(true)
+                        }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center">
+                              {session.topic}
+                              <svg className="w-4 h-4 ml-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">
+                              Room: {session.room}
+                            </div>
+                            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                              {session.start_time && (
+                                <span>
+                                  {new Date(session.start_time).toLocaleDateString()} {new Date(session.start_time).toLocaleTimeString()}
+                                </span>
+                              )}
+                              {session.duration_minutes && (
+                                <span className="flex items-center">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  {session.duration_minutes} minutes
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-blue-600 mt-2 font-medium">Click to view training material →</div>
+                          </div>
+                          <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
+                            Completed
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                  <p className="text-sm">No training sessions yet</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* AI-Generated Thoughts - Only show for non-terminated employees */}
         {!employee.fired_at && employee.status !== 'fired' && (
           <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
@@ -397,6 +552,51 @@ function EmployeeDetail() {
             )}
           </div>
         )}
+
+        {/* Current Location & Activity Section */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Current Location & Activity
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-sm text-gray-600 font-medium">Current Location</span>
+              <p className="text-lg font-semibold text-gray-900 mt-1">
+                {employee.current_room 
+                  ? formatRoomName(employee.current_room) || 'Unknown'
+                  : employee.home_room 
+                    ? formatRoomName(employee.home_room) || 'Unknown'
+                    : 'Not assigned'}
+              </p>
+              {employee.floor && (
+                <p className="text-xs text-gray-500 mt-1">Floor {employee.floor}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-gray-600 font-medium">Activity</span>
+              <p className="text-lg font-semibold text-gray-900 mt-1 capitalize">
+                {employee.activity_state || 'idle'}
+              </p>
+              {employee.activity_state === 'walking' && employee.target_room && (
+                <p className="text-sm text-yellow-600 mt-1 font-medium">
+                  🚶 Walking to: {formatRoomName(employee.target_room)}
+                </p>
+              )}
+            </div>
+          </div>
+          {employee.home_room && employee.current_room !== employee.home_room && (
+            <div className="mt-4 pt-4 border-t border-blue-200">
+              <span className="text-sm text-gray-600 font-medium">Home Room</span>
+              <p className="text-sm text-gray-700 mt-1">
+                {formatRoomName(employee.home_room)}
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
@@ -808,6 +1008,20 @@ function EmployeeDetail() {
           employeeId={parseInt(id)}
           isOpen={showScreenModal}
           onClose={() => setShowScreenModal(false)}
+        />
+      )}
+
+      {/* Training Detail Modal */}
+      {showTrainingModal && employee && (
+        <TrainingDetailModal
+          employeeId={parseInt(id)}
+          employeeName={employee.name}
+          isOpen={showTrainingModal}
+          selectedSession={selectedTrainingSession}
+          onClose={() => {
+            setShowTrainingModal(false)
+            setSelectedTrainingSession(null)
+          }}
         />
       )}
     </div>

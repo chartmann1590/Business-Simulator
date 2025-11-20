@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getAvatarPath } from '../utils/avatarMapper'
+import { apiGet } from '../utils/api'
 
 function Employees() {
   const [employees, setEmployees] = useState([])
@@ -19,22 +20,20 @@ function Employees() {
   }, [])
 
   const fetchEmployees = async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/employees')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
+      const result = await apiGet('/api/employees')
+      const data = Array.isArray(result.data) ? result.data : []
       // Debug: Check for award holders
       const awardHolders = data.filter(emp => emp.has_performance_award === true)
       if (awardHolders.length > 0) {
         console.log('Award holders found:', awardHolders.map(e => ({ name: e.name, award: e.has_performance_award })))
       }
-      setEmployees(data || [])
-      setLoading(false)
+      setEmployees(data)
     } catch (error) {
       console.error('Error fetching employees:', error)
       setEmployees([])
+    } finally {
       setLoading(false)
     }
   }

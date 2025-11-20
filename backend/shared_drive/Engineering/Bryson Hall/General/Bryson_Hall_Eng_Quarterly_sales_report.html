@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Context</title>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            font-size: 18pt;
+            font-family: 'Times New Roman', serif;
+            text-decoration: underline;
+            margin-bottom: 10px;
+            color: #000000;
+            line-height: 2;
+        }
+        
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .header h2 {
+            font-size: 16pt;
+            margin-right: 10px;
+        }
+        
+        /* EXECUTIVE SUMMARY */
+        p.executive-summary {
+            font-size: 14pt;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .executive-summary ul {
+            list-style-type: decimal;
+        }
+        
+        .executive-summary li {
+            margin-bottom: 10px;
+            padding-left: 15px;
+        }
+        
+        /* MAIN SECTIONS */
+        h2.main-section {
+            font-size: 14pt;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #000000;
+        }
+        
+        p.main-section {
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+        
+        /* DATA SECTIONS */
+        table.data-section {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 12pt;
+            line-height: 1.5;
+            color: #000000;
+        }
+        
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ccc;
+        }
+        
+        /* CONCLUSION */
+        p.conclusion {
+            font-size: 14pt;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        /* FOOTER */
+        .footer {
+            padding: 10px;
+            background-color: #f7f7f7;
+            text-align: center;
+            font-size: 12pt;
+            line-height: 1.5;
+            color: #666;
+        }
+        
+        .footer ul {
+            list-style-type: decimal;
+            margin-left: -15px;
+        }
+    </style>
+</head>
+<body>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1 style="font-size: 18pt; font-family: 'Times New Roman', serif; text-decoration: underline;">Business Context</h1>
+        
+        <!-- HEADER -->
+        <div class="header">
+            <span style="font-weight: bold;">Date:</span>
+            <span>2023-02-20</span>
+            <span style="margin-left: 10px;">&nbsp;Bryson Hall</span>
+            <span style="margin-left: 10px;">&nbsp;Engineering</span>
+            <span style="font-size: 12pt; font-style: italic;">Confidential</span>
+        </div>
+        
+        <!-- EXECUTIVE SUMMARY -->
+        <p class="executive-summary">
+            The Business Context report provides an overview of the current state of our company. Our total revenue for the quarter is $848,324.28, with a profit margin of 42.67%. We have 1117 employees across various departments, with a focus on engineering and sales.
+        </p>
+        
+        <ul class="executive-summary">
+            <li>Revenue increased 15% QoQ compared to the previous quarter.</li>
+            <li>Active projects include API Infrastructure Upgrade ($100,000.00), Mobile App Development ($150,000.00), and Digital Transformation Project ($196,119.03).</li>
+        </ul>
+        
+        <!-- MAIN SECTIONS -->
+        <h2 class="main-section">Employee Information</h2>
+        <p class="main-section">
+            Bryson Hall is our Sales Manager with 14 years of experience in the industry.
+        </p>
+        <table class="data-section">
+            <tr style="background-color: #f0f0f0;">
+                <th>Category</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Name</td>
+                <td>Bryson Hall</td>
+            </tr>
+            <tr>
+                <td>Title</td>
+                <td>Sales Manager</td>
+            </tr>
+            <tr>
+                <td>Role</td>
+                <td>Manager</td>
+            </tr>
+            <tr>
+                <td>Department</td>
+                <td>Engineering</td>
+            </tr>
+        </table>
+        
+        <!-- MAIN SECTIONS -->
+        <h2 class="main-section">Business Metrics</h2>
+        <p class="main-section">
+            Our total revenue for the quarter is $848,324.28, with a profit margin of 42.67%.
+        </p>
+        <table class="data-section">
+            <tr style="background-color: #f0f0f0;">
+                <th>Category</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Total Revenue</td>
+                <td>$848,324.28</td>
+            </tr>
+            <tr>
+                <td>Total Profit</td>
+                <td>$361,970.04</td>
+            </tr>
+            <tr>
+                <td>Profit Margin</td>
+                <td>42.67%</td>
+            </tr>
+            <tr>
+                <td>Total Expenses</td>
+                <td>$486,354.24</td>
+            </tr>
+        </table>
+        
+        <!-- MAIN SECTIONS -->
+        <h2 class="main-section">Active Projects</h2>
+        <p class="main-section">
+            We have three active projects: API Infrastructure Upgrade ($100,000.00), Mobile App Development ($150,000.00), and Digital Transformation Project ($196,119.03).
+        </p>
+        <table class="data-section">
+            <tr style="background-color: #f0f0f0;">
+                <th>Project Name</th>
+                <th>Budget</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>API Infrastructure Upgrade</td>
+                <td>$100,000.00</td>
+                <td>Active</td>
+            </tr>
+            <tr>
+                <td>Mobile App Development</td>
+                <td>$150,000.00</td>
+                <td>Active</td>
+            </tr>
+            <tr>
+                <td>Digital Transformation Project</td>
+                <td>$196,119.03</td>
+                <td>Active</td>
+            </tr>
+        </table>
+        
+        <!-- MAIN SECTIONS -->
+        <h2 class="main-section">Department Distribution</h2>
+        <p class="main-section">
+            We have 51 employees in the Product department, 60 employees in Operations, 52 employees in HR, and 48 employees in IT.
+        </p>
+        <table class="data-section">
+            <tr style="background-color: #f0f0f0;">
+                <th>Department</th>
+                <th>Employees</th>
+            </tr>
+            <tr>
+                <td>Product</td>
+                <td>51</td>
+            </tr>
+            <tr>
+                <td>Operations</td>
+                <td>60</td>
+            </tr>
+            <tr>
+                <td HR</td>
+                <td>52</td>
+            </tr>
+            <tr>
+                <td>IT</td>
+                <td>48</td>
+            </tr>
+        </table>
+        
+        <!-- CONCLUSION -->
+        <p class="conclusion">
+            In conclusion, our company is performing well, with a focus on growth and expansion. We recommend continuing to invest in our active projects and exploring new opportunities.
+        </p>
+        
+        <!-- FOOTER -->
+        <div class="footer">
+            <ul style="list-style-type: decimal;">
+                <li>Page 1 of 2</li>
+                <li>Document Version: 1.0</li>
+                <li>&copy; 2023 Business Context Report.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

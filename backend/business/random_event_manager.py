@@ -77,6 +77,13 @@ class RandomEventManager:
                 }
             )
             self.db.add(activity)
+            await self.db.flush()
+            # Broadcast activity
+            try:
+                from business.activity_broadcaster import broadcast_activity
+                await broadcast_activity(activity, self.db, emp)
+            except:
+                pass  # Don't fail if broadcasting fails
         
         # Create notification with duplicate prevention
         from business.notification_helper import create_notification_if_not_duplicate

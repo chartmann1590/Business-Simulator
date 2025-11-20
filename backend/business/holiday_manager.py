@@ -113,8 +113,9 @@ class HolidayManager:
         self.db.add(celebration)
         
         # Move all attendees to the breakroom
+        # Mark as "break" so they're protected from being kicked out until party ends
         for attendee in attendees:
-            await update_employee_location(attendee, party_breakroom, "meeting", self.db)
+            await update_employee_location(attendee, party_breakroom, "break", self.db)
             attendee.floor = party_floor
         
         # Create activity for each attendee

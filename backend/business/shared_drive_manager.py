@@ -50,18 +50,83 @@ class SharedDriveManager:
         os.makedirs(dir_path, exist_ok=True)
         return os.path.join(dir_path, safe_file)
     
-    def _check_content_similarity(self, content1: str, content2: str, threshold: float = 0.85) -> bool:
-        """Check if two document contents are similar (to prevent duplicates)."""
+    def _validate_content_quality(self, content: str, file_type: str) -> tuple[bool, str]:
+        """Validate that content is high quality and not garbage.
+        Returns (is_valid, reason) tuple."""
+        if not content or not content.strip():
+            return False, "Content is empty"
+        
+        # Remove HTML tags to check actual text content
+        text_content = re.sub(r'<[^>]+>', '', content)
+        text_content = re.sub(r'\s+', ' ', text_content).strip()
+        
+        # Minimum length checks based on file type
+        min_lengths = {
+            "word": 500,      # Word documents should have substantial content
+            "spreadsheet": 200,  # Spreadsheets need at least some data
+            "powerpoint": 300   # Presentations need meaningful content
+        }
+        min_length = min_lengths.get(file_type, 300)
+        
+        if len(text_content) < min_length:
+            return False, f"Content too short ({len(text_content)} chars, need {min_length})"
+        
+        # Check for meaningful content (not just repeated characters or placeholders)
+        if len(set(text_content.lower())) < 10:  # Too few unique characters
+            return False, "Content lacks variety (too repetitive)"
+        
+        # Check for common garbage patterns
+        garbage_patterns = [
+            r'^test\s*$',
+            r'^placeholder\s*$',
+            r'^lorem\s+ipsum',
+            r'^sample\s+text',
+            r'^\[.*?placeholder.*?\]',
+            r'^\{.*?fill.*?\}',
+        ]
+        for pattern in garbage_patterns:
+            if re.match(pattern, text_content, re.IGNORECASE):
+                return False, f"Contains garbage pattern: {pattern}"
+        
+        # Check for too many repeated words (indicates low quality)
+        words = text_content.lower().split()
+        if len(words) > 20:
+            word_counts = {}
+            for word in words:
+                if len(word) > 3:  # Only count meaningful words
+                    word_counts[word] = word_counts.get(word, 0) + 1
+            if word_counts:
+                max_repeats = max(word_counts.values())
+                total_words = len([w for w in words if len(w) > 3])
+                if total_words > 0 and max_repeats / total_words > 0.5:  # More than 50% repetition
+                    return False, "Content has excessive word repetition"
+        
+        # Check for actual meaningful words (not just HTML structure)
+        meaningful_words = [w for w in words if len(w) > 4 and w.isalpha()]
+        if len(meaningful_words) < 10:
+            return False, "Not enough meaningful words"
+        
+        return True, "Quality check passed"
+    
+    def _check_content_similarity(self, content1: str, content2: str, threshold: float = 0.80) -> bool:
+        """Check if two document contents are similar (to prevent duplicates).
+        Improved with better similarity detection."""
         # Remove HTML tags and normalize whitespace for comparison
         import re
+        from difflib import SequenceMatcher
+        
         def normalize(text):
             # Remove HTML tags
             text = re.sub(r'<[^>]+>', '', text)
             # Normalize whitespace
             text = re.sub(r'\s+', ' ', text).strip().lower()
             # Remove common variable parts (dates, names that might differ)
-            text = re.sub(r'\d+', '', text)  # Remove numbers
-            return text[:1000]  # Compare first 1000 chars
+            # Keep numbers for spreadsheets but normalize them
+            text = re.sub(r'\b\d{4}-\d{2}-\d{2}\b', '[DATE]', text)  # Normalize dates
+            text = re.sub(r'\$\d+[.,]?\d*', '[AMOUNT]', text)  # Normalize currency
+            # Remove very short words and common stop words for better comparison
+            words = [w for w in text.split() if len(w) > 3]
+            return ' '.join(words)
         
         norm1 = normalize(content1)
         norm2 = normalize(content2)
@@ -69,36 +134,50 @@ class SharedDriveManager:
         if not norm1 or not norm2:
             return False
         
-        # Simple similarity check: if normalized content is very similar
-        if norm1 == norm2:
-            return True
+        # Use SequenceMatcher for better similarity detection
+        similarity_ratio = SequenceMatcher(None, norm1, norm2).ratio()
         
-        # Check if one is a substring of the other (with some tolerance)
-        if len(norm1) > 100 and len(norm2) > 100:
-            # Calculate simple character overlap
-            shorter = min(len(norm1), len(norm2))
-            longer = max(len(norm1), len(norm2))
-            matches = sum(1 for a, b in zip(norm1[:shorter], norm2[:shorter]) if a == b)
-            similarity = matches / longer if longer > 0 else 0
-            return similarity >= threshold
+        # Also check if one is a substantial substring of the other
+        if len(norm1) > 200 and len(norm2) > 200:
+            # Check if significant portion matches
+            if norm1 in norm2 or norm2 in norm1:
+                return True
+            
+            # Check word-level similarity
+            words1 = set(norm1.split())
+            words2 = set(norm2.split())
+            if len(words1) > 0 and len(words2) > 0:
+                word_overlap = len(words1 & words2) / max(len(words1), len(words2))
+                if word_overlap > threshold:
+                    return True
         
-        return False
+        return similarity_ratio >= threshold
     
     async def _check_duplicate_content(self, new_content: str, employee_id: int, file_type: str) -> bool:
-        """Check if similar content already exists for this employee."""
-        # Get all files of the same type for this employee
+        """Check if similar content already exists for this employee.
+        Enhanced to check across all file types and recent files."""
+        # Get all files for this employee (check across all types to prevent cross-type duplicates)
         result = await self.db.execute(
             select(SharedDriveFile).where(
-                SharedDriveFile.employee_id == employee_id,
-                SharedDriveFile.file_type == file_type
-            )
+                SharedDriveFile.employee_id == employee_id
+            ).order_by(desc(SharedDriveFile.updated_at))
         )
         existing_files = result.scalars().all()
         
-        # Check content similarity
-        for existing_file in existing_files:
-            if self._check_content_similarity(new_content, existing_file.content_html):
-                print(f"  ⚠️  Skipping duplicate: similar content already exists in '{existing_file.file_name}'")
+        # Prioritize checking same-type files first
+        same_type_files = [f for f in existing_files if f.file_type == file_type]
+        other_type_files = [f for f in existing_files if f.file_type != file_type]
+        
+        # Check same-type files first (most likely duplicates)
+        for existing_file in same_type_files:
+            if self._check_content_similarity(new_content, existing_file.content_html, threshold=0.80):
+                print(f"  ⚠️  Skipping duplicate: similar {file_type} content already exists in '{existing_file.file_name}'")
+                return True
+        
+        # Also check other types (to prevent creating same content as different types)
+        for existing_file in other_type_files[:5]:  # Check last 5 files of other types
+            if self._check_content_similarity(new_content, existing_file.content_html, threshold=0.85):
+                print(f"  ⚠️  Skipping duplicate: similar content exists in different type '{existing_file.file_name}' ({existing_file.file_type})")
                 return True
         
         return False
@@ -986,7 +1065,7 @@ Consider:
 - Current projects and tasks
 - What documents would be useful for their work
 - Business needs
-- EXISTING FILE COUNTS: Prioritize creating WORD documents if the employee has fewer word docs than other types
+- EXISTING FILE COUNTS: CRITICAL - Prioritize creating SPREADSHEETS or POWERPOINTS if they are underrepresented compared to Word documents. Ensure EQUAL distribution across all 3 types.
 
 Respond in JSON format:
 {{
@@ -996,14 +1075,16 @@ Respond in JSON format:
     ]
 }}
 
-IMPORTANT: 
-- If employee has fewer WORD documents than spreadsheets/powerpoints, prioritize creating a WORD document
-- Vary the document types based on what's missing
-- Spreadsheets for: financial data, budgets, analysis, metrics, tracking, calculations
-- PowerPoints for: presentations, proposals, reports, meetings, pitches, summaries
-- Word documents for: reports, memos, documentation, summaries, letters
+IMPORTANT - EQUAL DISTRIBUTION REQUIRED: 
+- If employee has fewer SPREADSHEET documents than word/powerpoint, prioritize creating a SPREADSHEET
+- If employee has fewer POWERPOINT documents than word/spreadsheet, prioritize creating a POWERPOINT
+- If all types are equal, rotate to ensure variety (prefer spreadsheet or powerpoint over word)
+- Spreadsheets for: financial data, budgets, analysis, metrics, tracking, calculations, data reports
+- PowerPoints for: presentations, proposals, reports, meetings, pitches, summaries, executive briefings
+- Word documents for: reports, memos, documentation, summaries, letters (use sparingly to maintain balance)
+- The goal is EQUAL distribution: Word, Spreadsheet, PowerPoint should be created equally
 
-Generate 1 document suggestion. Choose the MOST appropriate type based on the employee's work and existing files. Be realistic and relevant."""
+Generate 1 document suggestion. Choose the type that will help BALANCE the distribution. Prioritize spreadsheets and PowerPoints when they're underrepresented."""
 
         try:
             client = await self.llm_client._get_client()
@@ -1130,23 +1211,41 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     # For other roles, vary the type
                     preferred_type = random.choice(["word", "spreadsheet", "powerpoint"])
                 
-                # Check what types are missing or underrepresented
+                # Check what types are missing or underrepresented - PRIORITIZE SPREADSHEETS AND POWERPOINTS
                 word_count = existing_types.count("word")
                 spreadsheet_count = existing_types.count("spreadsheet")
                 powerpoint_count = existing_types.count("powerpoint")
                 
-                # Prioritize creating word documents if they're underrepresented
-                if word_count < spreadsheet_count and word_count < powerpoint_count:
-                    preferred_type = "word"
-                elif spreadsheet_count < word_count and spreadsheet_count < powerpoint_count:
+                # CRITICAL: Prioritize spreadsheets and PowerPoints when they're underrepresented
+                # This ensures equal distribution across all 3 types
+                if spreadsheet_count < word_count and spreadsheet_count < powerpoint_count:
+                    # Spreadsheets are most underrepresented
                     preferred_type = "spreadsheet"
                 elif powerpoint_count < word_count and powerpoint_count < spreadsheet_count:
+                    # PowerPoints are most underrepresented
                     preferred_type = "powerpoint"
+                elif word_count < spreadsheet_count and word_count < powerpoint_count:
+                    # Word is underrepresented, but only use if significantly behind
+                    if word_count + 2 <= spreadsheet_count or word_count + 2 <= powerpoint_count:
+                        preferred_type = "word"
+                    else:
+                        # Prefer spreadsheet or powerpoint to maintain balance
+                        preferred_type = random.choice(["spreadsheet", "powerpoint"])
+                elif spreadsheet_count == powerpoint_count and spreadsheet_count < word_count:
+                    # Both spreadsheet and powerpoint are equal but behind word - prefer them
+                    preferred_type = random.choice(["spreadsheet", "powerpoint"])
+                elif word_count == spreadsheet_count == powerpoint_count:
+                    # All equal - rotate to maintain balance (prefer spreadsheet/powerpoint)
+                    preferred_type = random.choice(["spreadsheet", "powerpoint"])
                 # If employee already has many of preferred type, try a different one
                 elif existing_types.count(preferred_type) >= 3:
                     other_types = ["word", "spreadsheet", "powerpoint"]
                     other_types.remove(preferred_type)
-                    preferred_type = random.choice(other_types)
+                    # Prefer spreadsheet or powerpoint when choosing alternatives
+                    if "spreadsheet" in other_types and "powerpoint" in other_types:
+                        preferred_type = random.choice(["spreadsheet", "powerpoint"])
+                    else:
+                        preferred_type = random.choice(other_types)
                 
                 # Create document based on type
                 if preferred_type == "spreadsheet":
@@ -1156,10 +1255,12 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                 else:
                     documents_to_create = [{"type": "word", "purpose": "report or summary"}]
             
-            # If employee has no files yet, prioritize word documents first
+            # If employee has no files yet, start with variety (not always word)
             if not existing_files and not documents_to_create:
-                # Start with word document for new employees
-                documents_to_create = [{"type": "word", "purpose": "initial work document"}]
+                # Start with spreadsheet or powerpoint to ensure variety from the beginning
+                import random
+                initial_type = random.choice(["spreadsheet", "powerpoint", "word"])
+                documents_to_create = [{"type": initial_type, "purpose": "initial work document"}]
             
             created_files = []
             # Limit documents to prevent overwhelming the system
@@ -1168,14 +1269,28 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     file_type = doc_spec.get("type", "word").lower().strip()
                     
                     # Normalize file type to ensure we get the right one
+                    # Support Excel, PowerPoint, and Word document types
                     if file_type not in ["word", "spreadsheet", "powerpoint"]:
                         # Try to infer from common variations
-                        if "excel" in file_type or "sheet" in file_type or "spread" in file_type:
-                            file_type = "spreadsheet"
-                        elif "power" in file_type or "point" in file_type or "ppt" in file_type or "presentation" in file_type:
+                        file_type_lower = file_type.lower()
+                        if "excel" in file_type_lower or "sheet" in file_type_lower or "spread" in file_type_lower or "xlsx" in file_type_lower:
+                            file_type = "spreadsheet"  # Excel files are spreadsheets
+                        elif "power" in file_type_lower or "point" in file_type_lower or "ppt" in file_type_lower or "presentation" in file_type_lower or "pptx" in file_type_lower:
                             file_type = "powerpoint"
-                        else:
+                        elif "word" in file_type_lower or "doc" in file_type_lower or "docx" in file_type_lower:
                             file_type = "word"
+                        else:
+                            # Default based on what's underrepresented to maintain balance
+                            existing_types = [f.file_type for f in existing_files]
+                            word_count = existing_types.count("word")
+                            spreadsheet_count = existing_types.count("spreadsheet")
+                            powerpoint_count = existing_types.count("powerpoint")
+                            if spreadsheet_count <= word_count and spreadsheet_count <= powerpoint_count:
+                                file_type = "spreadsheet"
+                            elif powerpoint_count <= word_count and powerpoint_count <= spreadsheet_count:
+                                file_type = "powerpoint"
+                            else:
+                                file_type = "word"
                     
                     # Generate file name
                     file_name = await self.generate_file_name(file_type, employee, current_project, current_task)
@@ -1195,6 +1310,12 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     
                     if not content or not content.strip():
                         print(f"  ⚠️  Warning: Empty content generated for {employee.name}, skipping...")
+                        continue
+                    
+                    # Validate content quality before creating
+                    is_valid, reason = self._validate_content_quality(content, file_type)
+                    if not is_valid:
+                        print(f"  ⚠️  Skipping low-quality document for {employee.name}: {reason}")
                         continue
                     
                     # Check for duplicate content before creating
@@ -1334,6 +1455,21 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
                     else:
                         new_content = await self.generate_word_document(employee, current_project, current_task, business_context)
                     
+                    # Validate updated content quality
+                    if not new_content or not new_content.strip():
+                        print(f"  ⚠️  Skipping update: empty content for {file.file_name}")
+                        continue
+                    
+                    is_valid, reason = self._validate_content_quality(new_content, file.file_type)
+                    if not is_valid:
+                        print(f"  ⚠️  Skipping update: low-quality content for {file.file_name}: {reason}")
+                        continue
+                    
+                    # Check if update would create a duplicate
+                    if await self._check_duplicate_content(new_content, employee.id, file.file_type):
+                        print(f"  ⚠️  Skipping update: would create duplicate content for {file.file_name}")
+                        continue
+                    
                     # Create version history
                     await self.create_new_version(file, new_content, employee)
                     
@@ -1386,25 +1522,53 @@ Generate 1 document suggestion. Choose the MOST appropriate type based on the em
         
         structure = {}
         for file in all_files:
-            dept = file.department or "General"
-            # Access employee name safely - already loaded
-            emp_name = file.employee.name if file.employee else "Shared"
-            proj_name = file.project.name if file.project else "General"
+            # Check if this is a training material
+            is_training = (
+                file.file_metadata and 
+                file.file_metadata.get("purpose") == "Training Material"
+            ) or (
+                file.employee_id is None and 
+                file.project_id is None and
+                "Training" in (file.file_path or "")
+            )
             
-            if dept not in structure:
-                structure[dept] = {}
-            if emp_name not in structure[dept]:
-                structure[dept][emp_name] = {}
-            if proj_name not in structure[dept][emp_name]:
-                structure[dept][emp_name][proj_name] = []
-            
-            structure[dept][emp_name][proj_name].append({
-                "id": file.id,
-                "file_name": file.file_name,
-                "file_type": file.file_type,
-                "current_version": file.current_version,
-                "updated_at": file.updated_at.isoformat() if file.updated_at else None
-            })
+            if is_training:
+                # Organize training materials under Training folder
+                dept = file.department or "General"
+                
+                if "Training" not in structure:
+                    structure["Training"] = {}
+                if dept not in structure["Training"]:
+                    structure["Training"][dept] = []
+                
+                structure["Training"][dept].append({
+                    "id": file.id,
+                    "file_name": file.file_name,
+                    "file_type": file.file_type,
+                    "current_version": file.current_version,
+                    "updated_at": file.updated_at.isoformat() if file.updated_at else None
+                })
+            else:
+                # Regular files organized by department -> employee -> project
+                dept = file.department or "General"
+                # Access employee name safely - already loaded
+                emp_name = file.employee.name if file.employee else "Shared"
+                proj_name = file.project.name if file.project else "General"
+                
+                if dept not in structure:
+                    structure[dept] = {}
+                if emp_name not in structure[dept]:
+                    structure[dept][emp_name] = {}
+                if proj_name not in structure[dept][emp_name]:
+                    structure[dept][emp_name][proj_name] = []
+                
+                structure[dept][emp_name][proj_name].append({
+                    "id": file.id,
+                    "file_name": file.file_name,
+                    "file_type": file.file_type,
+                    "current_version": file.current_version,
+                    "updated_at": file.updated_at.isoformat() if file.updated_at else None
+                })
         
         return structure
 

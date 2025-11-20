@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 function Projects() {
   const [projects, setProjects] = useState([])
@@ -13,20 +14,15 @@ function Projects() {
   }, [])
 
   const fetchProjects = async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/projects')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      console.log('Fetched projects:', JSON.stringify(data))
-      const projectsArray = Array.isArray(data) ? data : []
-      console.log('Setting projects:', projectsArray.length)
+      const result = await apiGet('/api/projects')
+      const projectsArray = Array.isArray(result.data) ? result.data : []
       setProjects(projectsArray)
-      setLoading(false)
     } catch (error) {
       console.error('Error fetching projects:', error)
       setProjects([])
+    } finally {
       setLoading(false)
     }
   }
