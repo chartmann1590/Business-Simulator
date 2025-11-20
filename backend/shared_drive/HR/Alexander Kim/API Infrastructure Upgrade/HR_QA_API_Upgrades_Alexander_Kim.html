@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Financial Dashboard</title>
+    <style>
+        /* Grid styling */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 8px;
+            font-size: 11pt;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        th {
+            background-color: #366092;
+            color: white;
+            border-bottom: 1px solid #d0d0d0;
+        }
+        
+        . TotalsRow {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #000000;
+        }
+        
+        /* Data styling */
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <td colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">API Infrastructure Upgrade Financial Dashboard</td>
+        </tr>
+        
+        <!-- Headers -->
+        <tr>
+            <th>Department</th>
+            <th>Name</th>
+            <th>Project</th>
+            <th>Budget</th>
+            <th>Revenue</th>
+            <th>Totals</th>
+            <th>Profit</th>
+            <th>Growth Rate</th>
+        </tr>
+        
+        <!-- Data Rows -->
+        <tr class=" TotalsRow">
+            <td colspan="8">Total</td>
+        </tr>
+        <tr>
+            <td>Marketing</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$100,000.00</td>
+            <td>$28,996.55</td>
+            <td>$848,324.28</td>
+            <td>$361,970.04</td>
+            <td>35.63%</td>
+        </tr>
+        <tr>
+            <td>Design</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$156,356.16</td>
+            <td>$17,080.48</td>
+            <td>$323,436.64</td>
+            <td>$181,975.18</td>
+            <td>-13.14%</td>
+        </tr>
+        <tr>
+            <td>HR</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$88,137.90</td>
+            <td>$10,036.51</td>
+            <td>$298,173.41</td>
+            <td>$210,035.81</td>
+            <td>-25.23%</td>
+        </tr>
+        <tr>
+            <td>Product</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$115,778.81</td>
+            <td>$43,994.25</td>
+            <td>$259,772.06</td>
+            <td>$143,787.77</td>
+            <td>-29.11%</td>
+        </tr>
+        <tr>
+            <td>Sales</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$55,020.72</td>
+            <td>$0.00</td>
+            <td>$550,040.44</td>
+            <td>$494,019.72</td>
+            <td>-10.01%</td>
+        </tr>
+        <tr>
+            <td>IT</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$53,192.90</td>
+            <td>$0.00</td>
+            <td>$533,191.80</td>
+            <td>$479,999.90</td>
+            <td>-9.91%</td>
+        </tr>
+        <tr>
+            <td>Operations</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$57,192.90</td>
+            <td>$0.00</td>
+            <td>$567,191.80</td>
+            <td>$510,999.90</td>
+            <td>-9.85%</td>
+        </tr>
+        <tr>
+            <td>Engineering</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$53,192.90</td>
+            <td>$0.00</td>
+            <td>$533,191.80</td>
+            <td>$479,999.90</td>
+            <td>-9.91%</td>
+        </tr>
+        <tr>
+            <td>Administration</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$63,192.90</td>
+            <td>$0.00</td>
+            <td>$633,191.80</td>
+            <td>$579,999.90</td>
+            <td>-8.87%</td>
+        </tr>
+        <tr>
+            <td>Executive</td>
+            <td>Alexander Kim</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$1,192.90</td>
+            <td>$0.00</td>
+            <td>$1,192,919.80</td>
+            <td>$1,190,727.90</td>
+            <td>-0.01%</td>
+        </tr>
+        
+        <!-- Calculated Columns -->
+        <tr class=" TotalsRow">
+            <th colspan="8">Total Summary</th>
+        </tr>
+        <tr>
+            <td>Revenue Growth Rate</td>
+            <td>35.63%</td>
+            <td>-13.14%</td>
+            <td>-25.23%</td>
+            <td>-29.11%</td>
+            <td>-10.01%</td>
+            <td>-9.91%</td>
+            <td>-8.87%</td>
+        </tr>
+        <tr class=" TotalsRow">
+            <th colspan="8">Profit Growth Rate</th>
+        </tr>
+        <tr>
+            <td>35.63%</td>
+            <td>-13.14%</td>
+            <td>-25.23%</td>
+            <td>-29.11%</td>
+            <td>-10.01%</td>
+            <td>-9.91%</td>
+            <td>-8.87%</td>
+            <td>-7.94%</td>
+        </tr>
+    </table>
+</body>
+</html>

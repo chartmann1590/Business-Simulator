@@ -122,7 +122,7 @@ function Communications() {
       {/* Content */}
       <div className="flex-1 overflow-hidden px-6 py-4">
         {activeTab === 'teams' ? (
-          <ChatView chats={chats} employees={employees} />
+          <ChatView chats={chats} employees={employees} onRefresh={fetchData} />
         ) : activeTab === 'outlook' ? (
           <EmailView emails={emails} employees={employees} />
         ) : activeTab === 'calendar' ? (

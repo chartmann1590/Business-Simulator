@@ -33,7 +33,7 @@ def get_room_capacity(room_id: str) -> int:
         ROOM_OPEN_OFFICE: 20,
         ROOM_CUBICLES: 15,
         ROOM_CONFERENCE_ROOM: 10,
-        ROOM_BREAKROOM: 8,
+        ROOM_BREAKROOM: 15,  # Updated to support birthday parties (15 people)
         ROOM_RECEPTION: 3,
         ROOM_IT_ROOM: 5,
         ROOM_MANAGER_OFFICE: 6,
@@ -43,7 +43,7 @@ def get_room_capacity(room_id: str) -> int:
         # Floor 2
         f"{ROOM_EXECUTIVE_SUITE}_floor2": 8,
         f"{ROOM_CUBICLES}_floor2": 20,
-        f"{ROOM_BREAKROOM}_floor2": 10,
+        f"{ROOM_BREAKROOM}_floor2": 15,  # Updated to support birthday parties (15 people)
         f"{ROOM_CONFERENCE_ROOM}_floor2": 12,
         f"{ROOM_TRAINING_ROOM}_floor2": 15,
         f"{ROOM_IT_ROOM}_floor2": 6,
@@ -62,6 +62,7 @@ def get_room_capacity(room_id: str) -> int:
         f"{ROOM_THEATER}_floor3": 20,
         f"{ROOM_HUDDLE}_floor3": 6,
         f"{ROOM_CORNER_EXEC}_floor3": 4,
+        f"{ROOM_BREAKROOM}_floor3": 15,  # Added to support birthday parties (15 people)
         # Floor 4 - Training overflow floor (5 training rooms and 5 cubicles)
         f"{ROOM_TRAINING_ROOM}_floor4": 20,  # Training Room 1
         f"{ROOM_CUBICLES}_floor4": 25,  # Cubicles 1

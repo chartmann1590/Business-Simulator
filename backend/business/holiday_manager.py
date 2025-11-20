@@ -73,8 +73,8 @@ class HolidayManager:
         
         # Choose a breakroom for the party (prefer larger ones)
         breakrooms = [
-            (f"{ROOM_BREAKROOM}_floor2", 2),  # Floor 2 breakroom (capacity 10)
-            (ROOM_BREAKROOM, 1),  # Floor 1 breakroom (capacity 8)
+            (f"{ROOM_BREAKROOM}_floor2", 2),  # Floor 2 breakroom (capacity 15)
+            (ROOM_BREAKROOM, 1),  # Floor 1 breakroom (capacity 15)
         ]
         party_breakroom, party_floor = random.choice(breakrooms)
         

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
+        
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            text-align: left;
+        }
+        
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 12px;
+        }
+        
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        tr:nth-child(odd) {
+            background: white;
+        }
+        
+        tfoot th, tfoot td {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 1px solid #d0d0d0;
+        }
+        
+        /* Conditional formatting */
+        .positive {
+            background-color: #C6F4D6;
+        }
+        
+        .negative {
+            background-color: #F2DEDE;
+        }
+        
+        .total {
+            background-color: #E7F3FF;
+        }
+    </style>
+</head>
+<body>
+
+<table border="0" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td colspan="10">Business Dashboard</td></tr>
+  <tr><th style="background: #366092; color: white; font-weight: bold; padding: 12px;">Date</th><th>Department</th><th>Project</th><th>Budget</th><th>Revenue</th><th>Profit</th><th>Expense</th></tr>
+  <tr style="background: #f2f2f2;">
+    <td>2023-02-28</td><td>Finance</td><td>Strategy</td><td>$100,000.00</td><td>$50,000.00</td><td>$30,000.00</td><td>$60,000.00</td>
+  </tr>
+  <tr style="background: #f2f2f2;">
+    <td>2023-02-28</td><td>Sales</td><td>Innovation</td><td>$50,000.00</td><td>$20,000.00</td><td>$10,000.00</td><td>$30,000.00</td>
+  </tr>
+  <tr style="background: #f2f2f2;">
+    <td>2023-02-28</td><td>Marketing</td><td>Digital</td><td>$75,000.00</td><td>$25,000.00</td><td>$10,000.00</td><td>$45,000.00</td>
+  </tr>
+  <tr style="background: #f2f2f2;">
+    <td>2023-02-28</td><td>Operations</td><td>Project X</td><td>$200,000.00</td><td>$50,000.00</td><td>$20,000.00</td><td>$120,000.00</td>
+  </tr>
+  <tfoot>
+    <tr>
+      <th style="background: #e7f3ff; font-weight: bold; padding: 8px;">Totals:</th>
+      <th colspan="5" style="padding: 8px;">$850,000.00</th>
+      <th>$60,000.00</th>
+      <th>$210,000.00</th>
+    </tr>
+  </tfoot>
+  <tr><td colspan="10">Assumptions and Notes:</td></tr>
+</table>
+
+</body>
+</html>

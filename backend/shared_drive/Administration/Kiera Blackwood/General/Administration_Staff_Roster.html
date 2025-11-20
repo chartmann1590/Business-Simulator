@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        .header-row {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+        }
+        
+        .data-row {
+            background-color: white;
+        }
+        
+        .alternating-row {
+            background-color: #f2f2f2;
+        }
+        
+        .totals-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+        }
+        
+        th:first-child, td:first-child {
+            text-align: left;
+        }
+        
+        th:last-child, td:last-child {
+            text-align: right;
+        }
+        
+        .green {
+            color: green;
+        }
+        
+        .red {
+            color: red;
+        }
+        
+        .blue {
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+
+<table>
+    <tr class="title-row">
+        <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td>
+    </tr>
+    <tr class="header-row">
+        <th>Employee Name</th>
+        <th>Title</th>
+        <th>Department</th>
+        <th>Revenue Growth Rate (%)</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Total Expenses ($)</th>
+    </tr>
+    <tr class="data-row">
+        <td>Kiera Blackwood</td>
+        <td>Receptionist</td>
+        <td>Administration</td>
+        <td>42.67%</td>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+    </tr>
+    <tr class="alternating-row">
+        <td>John Smith</td>
+        <td>Accountant</td>
+        <td>Finance</td>
+        <td>25%</td>
+        <td>$500,000.00</td>
+        <td>$125,000.00</td>
+        <td>$375,000.00</td>
+    </tr>
+    <!-- Add more data rows here -->
+    <tr class="totals-row">
+        <th>Totals:</th>
+        <th>Revenue Growth Rate (%)</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Total Expenses ($)</th>
+    </tr>
+    <tr class="data-row">
+        <td>$848,324.28</td>
+        <td>42.67%</td>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+    </tr>
+    <tr class="alternating-row">
+        <td>$500,000.00</td>
+        <td>25%</td>
+        <td>$500,000.00</td>
+        <td>$125,000.00</td>
+        <td>$375,000.00</td>
+    </tr>
+    <!-- Add more data rows here -->
+    <tr class="footer-row">
+        <td>Data Source:</td>
+        <td>Last Updated:</td>
+        <td>Notes:</td>
+    </tr>
+    <tr class="data-row">
+        <td>Actual Revenue Data</td>
+        <td>2023-02-28</td>
+        <td>Assumptions made for revenue projections.</td>
+    </tr>
+</table>
+
+</body>
+</html>

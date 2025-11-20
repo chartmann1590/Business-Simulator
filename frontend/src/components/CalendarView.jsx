@@ -160,16 +160,13 @@ function CalendarView({ employees = [] }) {
   }
 
   // Get all events (meetings + birthdays + holidays)
-  // Filter out birthday and holiday party meetings to avoid duplicates - we'll use birthday/holiday events instead
+  // Include birthday and holiday party meetings on the calendar
   const getAllEvents = () => {
     const birthdayEvents = getBirthdayEvents()
     const holidayEvents = getHolidayEvents()
-    // Filter out meetings that are birthday or holiday parties (we show them as events instead)
-    const regularMeetings = meetings.filter(m => {
-      const metadata = m.meeting_metadata || {}
-      return !metadata.is_birthday_party && !metadata.is_holiday_party
-    })
-    return [...regularMeetings, ...birthdayEvents, ...holidayEvents]
+    // Include all meetings, including birthday and holiday party meetings
+    // Birthday party meetings will show with their scheduled times
+    return [...meetings, ...birthdayEvents, ...holidayEvents]
   }
 
   const getMeetingsForRange = () => {

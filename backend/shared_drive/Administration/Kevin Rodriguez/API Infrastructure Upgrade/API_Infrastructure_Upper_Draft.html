@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Title Section */
+        .title-section {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        /* Header Row Styles */
+        th.header-row {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        /* Data Rows and Alternating */
+        tr.data-row {
+            background: white;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            font-size: 11pt;
+        }
+
+        .odd-data-row {
+            background-color: #f2f2f2;
+        }
+        
+        /* Totals Row Styles */
+        tr.totals-row {
+            background: #e7f3ff;
+            padding: 8px;
+            border-top: 2px solid #d0d0d0;
+            font-weight: bold;
+        }
+
+        /* Column Grouping and Subtotals */
+        th.group-header {
+            text-align: right;
+            font-size: 12pt;
+        }
+        
+        tr.group-footnote {
+            padding-bottom: 10px;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        /* Conditional Formatting */
+        td.green {
+            background-color: #C6F5EA; /* Green for positive values */
+        }
+
+        td.red {
+            background-color: #FF9696; /* Red for negative values */
+        }
+
+        td.blue {
+            background-color: #4567B7; /* Blue for totals */
+        }
+    </style>
+</head>
+<body>
+    <table border-collapse="collapse" cellpadding="0">
+        <tr class="title-section">
+            <td colspan="10"></td>
+        </tr>
+        <tr>
+            <th class="header-row">Employee Information</th>
+            <th>Current Project</th>
+            <th>Business Metrics</th>
+            <th>Active Projects</th>
+            <th>Department Data</th>
+            <th>Financial Analysis</th>
+        </tr>
+
+        <!-- Employee Information -->
+        <tr class="data-row">
+            <td>Kevin Rodriguez</td>
+            <td>Office Coordinator, Administration</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>Finance/Accounting</td>
+        </tr>
+
+        <!-- Current Project -->
+        <tr class="data-row">
+            <td colspan="5">API Infrastructure Upgrade</td>
+            <td>$100,000.00 Budget, $28,996.55 Revenue</td>
+            <td></td>
+            <td>Finance/Accounting</td>
+        </tr>
+
+        <!-- Business Metrics -->
+        <tr class="data-row">
+            <td colspan="5">Business Performance Summary</td>
+            <td>$848,324.28 Total Revenue, $361,970.04 Profit Margin</td>
+            <td></td>
+            <td>Finance/Accounting</td>
+        </tr>
+
+        <!-- Active Projects -->
+        <tr class="data-row">
+            <td colspan="5">Active Project List</td>
+            <td>$150,000.00 Budget, $32,045.32 Revenue (Mobile App Development)</td>
+            <td></td>
+            <td>Finance/Accounting</td>
+        </tr>
+
+        <!-- Department Data -->
+        <tr class="data-row">
+            <td colspan="5">Department Headcount Summary</td>
+            <td>Operations: 58 employees, Administration: 62 employees</td>
+            <td></td>
+            <td>Human Resources</td>
+        </tr>
+
+        <!-- Financial Analysis -->
+        <tr class="group-footnote">
+            <th class="group-header">Financial Analysis</th>
+            <th>Total Revenue:</th>
+            <th>Total Profit:</th>
+            <th>Total Expenses:</th>
+            <th>Profit Margin (%):</th>
+            <th>Active Projects:</th>
+            <th>Total Employees:</th>
+        </tr>
+
+        <tr class="group-footnote">
+            <td colspan="8">($848,324.28) ($361,970.04) ($486,354.24) (42.67%) 15</td>
+        </tr>
+
+        <!-- Department Performance -->
+        <tr class="data-row">
+            <th>Department Performance Summary</th>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <!-- Project ROI Analysis -->
+        <tr class="group-footnote">
+            <th>Project ROI Analysis</th>
+            <th>Mobile App Development:</th>
+            <th>Digital Transformation Project:</th>
+            <th>Strategic Partnership Development:</th>
+            <th>Customer Experience Enhancement:</th>
+            <th>Customer Experience Enhancement:</th>
+        </tr>
+
+        <tr class="group-footnote">
+            <td colspan="8">$32,045.32 ($150,000.00) $70,675.89 ($196,119.03) $17,080.48 ($156,356.16) $43,994.25 ($115,778.81)</td>
+        </tr>
+
+    </table>
+</body>
+</html>

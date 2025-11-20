@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+table {
+border-collapse: collapse;
+}
+
+th {
+background: #366092;
+color: white;
+font-weight: bold;
+padding: 8px; border: 1px solid #d0d0d0;
+text-align: left;
+}
+td {
+padding: 8px; border: 1px solid #d0d0d0; background: white;
+}
+
+th:nth-child(2) {text-align: right;}
+th:nth-child(3) {text-align: center;}
+th:nth-child(4) {text-align: center;}
+
+th:nth-child(2), th:nth-child(5) {
+background: white; border-bottom: 1px solid #d0d0d0;
+}
+
+th:nth-child(6) {
+background: #f2f2f2;
+}
+
+th:nth-child(7) {
+background: #f2f2f2;
+}
+
+th:nth-child(8), th:nth-child(9) {
+background: white; border-bottom: 1px solid #d0d0d0;
+}
+
+td:nth-child(even) {background: #f2f2f2;}
+
+th:nth-child(3), td:nth-child(7) {font-size: 12pt;}
+th:nth-child(4), td:nth-child(8) {font-size: 11pt;}
+th:nth-child(5), td:nth-child(9) {font-size: 11pt;}
+
+th:nth-child(2):first-child, th:nth-child(6):last-child {background: #366092; border-bottom: none; color: white;}
+
+td:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+th {
+  font-family: Arial, sans-serif;
+}
+th:first-child,
+th:last-child {
+  border-top-width: 1px;
+  padding-bottom: 5px;
+  color: white; }
+td {
+  text-align: right;
+}
+
+td:nth-child(even) {
+  background-color: #f2f2f2;
+}
+
+</style>
+</head>
+<body>
+
+<table style="border-collapse: collapse; width:100%; height: auto;">
+  <tr>
+    <th colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Metrics Dashboard
+</th></tr>
+  </table>
+
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width:100%; height: auto;">
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Department</th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Total Revenue (USD)</th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Profit Margin (%)</th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Active Projects</th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Total Employees</th>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Design</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$23,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">42.33%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">57</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">HR</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$14,231,890.27</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">40.67%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">54</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Product</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$40,567,890.12</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">45.23%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">48</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Sales</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$62,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">50.00%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">48</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">IT</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$35,567,890.12</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">48.23%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">52</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Operations</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$21,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">42.33%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">57</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Engineering</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$25,567,890.12</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">48.23%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">55</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Marketing</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$28,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">50.00%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">65</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Administration</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$12,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">40.67%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">62</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Executive</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">$5,421,124.52</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">50.00%</td>
+    <td style="background: white; border-bottom: 1px solid #d0d0d0;">15</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">1</td>
+  </tr>
+
+  <tr>
+    <th style="background: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Quarterly Breakdown</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Quarter Revenue (USD)</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Quarter Profit (USD)</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Quarter Growth Rate (%)</th>
+  </tr>
+
+  <tr>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">Q1</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$62,421,124.52</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$31,210,987.12</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">50.00%</td>
+  </tr>
+
+  <tr>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">Q2</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$25,421,124.52</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$12,510,987.12</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">50.00%</td>
+  </tr>
+
+  <tr>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">Q3</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$18,421,124.52</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$9,210,987.12</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">50.00%</td>
+  </tr>
+
+  <tr>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">Q4</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$15,421,124.52</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$7,510,987.12</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">50.00%</td>
+  </tr>
+
+  <tr>
+    <th style="background: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Project Breakdown</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Budget (USD)</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Revenue (USD)</th>
+    <th style="padding: 8px; border: 1px solid #d0d0d0;">Profit Margin (%)</th>
+  </tr>
+
+  <tr>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">Digital Transformation Project</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$196,119.03</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$70,675.89</td>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">42.67%</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">API Infrastructure Upgrade</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$100,000.00</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$28,996.55</td>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">42.67%</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Mobile App Development</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$150,000.00</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$32,045.32</td>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">42.67%</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Customer Experience Enhancement</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$115,778.81</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$43,994.25</td>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">42.67%</td>
+  </tr>
+
+  <tr>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Strategic Partnership Development</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$156,356.16</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$17,080.48</td>
+    <td style="background: white; padding: 8px; border: 1px solid #d0d0d0;">42.67%</td>
+  </tr>
+
+</table>

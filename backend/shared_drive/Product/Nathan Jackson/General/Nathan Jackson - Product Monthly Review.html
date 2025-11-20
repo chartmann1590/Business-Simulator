@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+            overflow: hidden;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            text-align: left;
+        }
+
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 12px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        tr.total-row {
+            background-color: #e7f3ff;
+            border-top: 2px solid black;
+            font-weight: bold;
+        }
+
+        /* Font Styles */
+        .font-arial {
+            font-family: Arial, sans-serif;
+        }
+
+        /* Number Formats */
+        .currency {
+            color: green;
+        }
+
+        /* Conditional Formatting */
+        .positive {
+            background-color: #c6efce;
+        }
+
+        .negative {
+            background-color: #ffc6c6;
+        }
+    </style>
+</head>
+
+<body>
+    <table style="width: 100%;">
+        <tr>
+            <td colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+                Financial Dashboard
+            </td>
+        </tr>
+        <tr>
+            <th style="background-color: #366092; color: white; font-weight: bold; padding: 8px;">Financials</th>
+            <th style="padding: 8px;">Operations</th>
+            <th style="padding: 8px;">HR</th>
+            <th style="padding: 8px;">Sales/Marketing</th>
+            <th style="padding: 8px;">Management</th>
+        </tr>
+
+        <tr class="header-row">
+            <td style="background-color: #366092; color: white; font-weight: bold; padding: 8px;">Total Revenue ($)</td>
+            <td style="padding: 8px;">Revenue Growth Rate (%)</td>
+            <td style="padding: 8px;">Average Employee Salary ($) </td>
+            <td style="padding: 8px;">Net Promoter Score (NPS) </td>
+            <td style="padding: 8px;">Employee Turnover Rate (%) </td>
+        </tr>
+
+        <tr class="total-row">
+            <td style="background-color: #e7f3ff; font-weight: bold; padding: 8px;">$848,324.28</td>
+            <td style="padding: 8px;">42.67%</td>
+            <td style="padding: 8px;">$60,000.00 </td>
+            <td style="padding: 8px;">25%</td>
+            <td style="padding: 8px;">15%</td>
+        </tr>
+
+        <tr>
+            <th style="padding: 8px;">Revenue by Department ($)</th>
+            <th style="padding: 8px;">Productivity Metrics</th>
+            <th style="padding: 8px;">Employee Satisfaction Rate (%)</th>
+            <th style="padding: 8px;">New Hire Success Rate (%) </th>
+        </tr>
+
+        <tr>
+            <td style="padding: 8px;">$200,000.00 Marketing</td>
+            <td style="padding: 8px;">95%</td>
+            <td style="padding: 8px;">80%</td>
+            <td style="padding: 8px;">75%</td>
+        </tr>
+
+        <tr>
+            <td style="padding: 8px;">$150,000.00 Design</td>
+            <td style="padding: 8px;">90%</td>
+            <td style="padding: 8px;">85%</td>
+            <td style="padding: 8px;">70%</td>
+        </tr>
+
+        <tr>
+            <td style="padding: 8px;">$75,000.00 Product</td>
+            <td style="padding: 8px;">92%</td>
+            <td style="padding: 8px;">88%</td>
+            <td style="padding: 8px;">65%</td>
+        </tr>
+
+        <!-- Add more data as needed -->
+    </table>
+</body>
+</html>

@@ -545,6 +545,323 @@ Keep each message to 1-2 sentences maximum."""
                 ]
             }
     
+    async def generate_home_conversation(
+        self,
+        employee_name: str,
+        employee_title: str,
+        employee_personality: List[str],
+        employee_hobbies: List[str],
+        family_member_name: str,
+        family_member_relationship: str,
+        family_member_age: int,
+        family_member_personality: List[str],
+        family_member_interests: List[str],
+        family_member_occupation: str = None,
+        time_of_day: str = "evening",
+        has_pets: bool = False,
+        home_type: str = "city"
+    ) -> Dict[str, str]:
+        """Generate a home conversation between an employee and a family member."""
+        employee_personality_str = ", ".join(employee_personality) if employee_personality else "balanced"
+        family_personality_str = ", ".join(family_member_personality) if family_member_personality else "balanced"
+        employee_hobbies_str = ", ".join(employee_hobbies) if employee_hobbies else "various interests"
+        family_interests_str = ", ".join(family_member_interests) if family_member_interests else "various interests"
+        
+        # Build context about the family member
+        family_context = f"{family_member_name} is the employee's {family_member_relationship}"
+        if family_member_age:
+            family_context += f", age {family_member_age}"
+        if family_member_occupation:
+            family_context += f", works as {family_member_occupation}"
+        
+        # Determine conversation topics based on time of day and relationship
+        topic_guidance = ""
+        if time_of_day == "evening":
+            topic_guidance = "They might discuss dinner plans, how their day went, evening activities, or plans for the weekend."
+        elif time_of_day == "night":
+            topic_guidance = "They might discuss the day, plans for tomorrow, or wind down with casual conversation."
+        elif time_of_day == "morning":
+            topic_guidance = "They might discuss breakfast, plans for the day, or morning routines."
+        else:  # afternoon
+            topic_guidance = "They might discuss lunch, afternoon plans, or how their day is going."
+        
+        # Add pet context if applicable
+        pet_context = ""
+        if has_pets:
+            pet_context = " They have pets at home, so pet-related topics might come up naturally."
+        
+        # Mix home life with occasional work mentions (about 20% chance)
+        import random
+        work_mention = ""
+        if random.random() < 0.2:
+            work_mention = " The conversation might briefly mention work (like a project or colleague), but should quickly return to home life topics."
+        
+        prompt = f"""Generate a brief, natural home conversation between an employee and their family member.
+
+Employee: {employee_name}, {employee_title}
+Personality: {employee_personality_str}
+Hobbies/Interests: {employee_hobbies_str}
+
+Family Member: {family_context}
+Personality: {family_personality_str}
+Interests: {family_interests_str}
+
+Time of Day: {time_of_day}
+Home Type: {home_type}
+{topic_guidance}{pet_context}{work_mention}
+
+The conversation should:
+1. Be brief (2-4 exchanges total)
+2. Sound natural and conversational, like real family members talking
+3. Match each person's personality
+4. Focus on home life topics (dinner, activities, plans, family time)
+5. Occasionally mention work (but keep it brief and natural)
+6. Feel warm and authentic, like a real family conversation
+7. Be appropriate for the relationship type ({family_member_relationship})
+
+Format the response as JSON with this structure:
+{{
+  "message1": {{
+    "speaker": "{employee_name if random.random() < 0.5 else family_member_name}",
+    "text": "first message"
+  }},
+  "message2": {{
+    "speaker": "{family_member_name if random.random() < 0.5 else employee_name}",
+    "text": "response"
+  }},
+  "message3": {{
+    "speaker": "{employee_name}",
+    "text": "optional follow-up"
+  }},
+  "message4": {{
+    "speaker": "{family_member_name}",
+    "text": "optional final response"
+  }}
+}}
+
+Only include message1 and message2 as required. Add message3 and message4 only if the conversation naturally continues.
+Keep each message to 1-2 sentences maximum. Make it feel like a real family conversation at home."""
+
+        try:
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Try to parse JSON
+            try:
+                conversation = json.loads(response_text)
+                # Validate structure
+                messages = []
+                for key in ["message1", "message2", "message3", "message4"]:
+                    if key in conversation and conversation[key]:
+                        msg = conversation[key]
+                        if "speaker" in msg and "text" in msg:
+                            messages.append({
+                                "speaker": msg["speaker"],
+                                "text": msg["text"]
+                            })
+                
+                if len(messages) >= 2:
+                    return {"messages": messages}
+                else:
+                    raise ValueError("Not enough valid messages")
+            except (json.JSONDecodeError, ValueError) as e:
+                # Fallback: create a simple conversation
+                print(f"Error parsing home conversation JSON: {e}, response: {response_text[:200]}")
+                return {
+                    "messages": [
+                        {"speaker": employee_name, "text": f"Hey {family_member_name.split()[0]}, how was your day?"},
+                        {"speaker": family_member_name, "text": "It was good! How about yours?"}
+                    ]
+                }
+        except Exception as e:
+            print(f"Error generating home conversation: {e}")
+            # Fallback conversation
+            return {
+                "messages": [
+                    {"speaker": employee_name, "text": f"Hey {family_member_name.split()[0]}, what do you want for dinner?"},
+                    {"speaker": family_member_name, "text": "I'm not sure, what sounds good to you?"}
+                ]
+            }
+    
+    async def generate_family_conversation(
+        self,
+        family_member1_name: str,
+        family_member1_relationship: str,
+        family_member1_age: int,
+        family_member1_personality: List[str],
+        family_member1_interests: List[str],
+        family_member2_name: str,
+        family_member2_relationship: str,
+        family_member2_age: int,
+        family_member2_personality: List[str],
+        family_member2_interests: List[str],
+        family_member1_occupation: str = None,
+        family_member2_occupation: str = None,
+        employee_name: str = None,
+        time_of_day: str = "evening",
+        has_pets: bool = False,
+        home_type: str = "city"
+    ) -> Dict[str, str]:
+        """Generate a home conversation between two family members."""
+        fm1_personality_str = ", ".join(family_member1_personality) if family_member1_personality else "balanced"
+        fm2_personality_str = ", ".join(family_member2_personality) if family_member2_personality else "balanced"
+        fm1_interests_str = ", ".join(family_member1_interests) if family_member1_interests else "various interests"
+        fm2_interests_str = ", ".join(family_member2_interests) if family_member2_interests else "various interests"
+        
+        # Build context about family members
+        fm1_context = f"{family_member1_name} is {employee_name}'s {family_member1_relationship}" if employee_name else f"{family_member1_name} is a {family_member1_relationship}"
+        if family_member1_age:
+            fm1_context += f", age {family_member1_age}"
+        if family_member1_occupation:
+            fm1_context += f", {family_member1_occupation}"
+        
+        fm2_context = f"{family_member2_name} is {employee_name}'s {family_member2_relationship}" if employee_name else f"{family_member2_name} is a {family_member2_relationship}"
+        if family_member2_age:
+            fm2_context += f", age {family_member2_age}"
+        if family_member2_occupation:
+            fm2_context += f", {family_member2_occupation}"
+        
+        # Determine conversation topics based on time of day
+        topic_guidance = ""
+        if time_of_day == "evening":
+            topic_guidance = "They might discuss dinner plans, how their day went, evening activities, or plans for the weekend."
+        elif time_of_day == "night":
+            topic_guidance = "They might discuss the day, plans for tomorrow, or wind down with casual conversation."
+        elif time_of_day == "morning":
+            topic_guidance = "They might discuss breakfast, plans for the day, or morning routines."
+        else:  # afternoon
+            topic_guidance = "They might discuss lunch, afternoon plans, or how their day is going."
+        
+        # Add pet context if applicable
+        pet_context = ""
+        if has_pets:
+            pet_context = " They have pets at home, so pet-related topics might come up naturally."
+        
+        # Add employee context if employee is at work
+        employee_context = ""
+        if employee_name:
+            employee_context = f" {employee_name} is currently at work, so they're having this conversation while the employee is away."
+        
+        import random
+        # Mix home life with occasional mention of the employee (if applicable)
+        employee_mention = ""
+        if employee_name and random.random() < 0.3:
+            employee_mention = " They might briefly mention the employee (who is at work), but should focus on their own conversation."
+        
+        prompt = f"""Generate a brief, natural home conversation between two family members.
+
+Family Member 1: {fm1_context}
+Personality: {fm1_personality_str}
+Interests: {fm1_interests_str}
+
+Family Member 2: {fm2_context}
+Personality: {fm2_personality_str}
+Interests: {fm2_interests_str}
+
+Time of Day: {time_of_day}
+Home Type: {home_type}
+{topic_guidance}{pet_context}{employee_context}{employee_mention}
+
+The conversation should:
+1. Be brief (2-4 exchanges total)
+2. Sound natural and conversational, like real family members talking
+3. Match each person's personality
+4. Focus on home life topics (dinner, activities, plans, family time)
+5. Feel warm and authentic, like a real family conversation
+6. Be appropriate for the relationship types ({family_member1_relationship} and {family_member2_relationship})
+
+Format the response as JSON with this structure:
+{{
+  "message1": {{
+    "speaker": "{family_member1_name if random.random() < 0.5 else family_member2_name}",
+    "text": "first message"
+  }},
+  "message2": {{
+    "speaker": "{family_member2_name if random.random() < 0.5 else family_member1_name}",
+    "text": "response"
+  }},
+  "message3": {{
+    "speaker": "{family_member1_name}",
+    "text": "optional follow-up"
+  }},
+  "message4": {{
+    "speaker": "{family_member2_name}",
+    "text": "optional final response"
+  }}
+}}
+
+Only include message1 and message2 as required. Add message3 and message4 only if the conversation naturally continues.
+Keep each message to 1-2 sentences maximum. Make it feel like a real family conversation at home."""
+
+        try:
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up the response (remove markdown formatting if present)
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            # Try to parse JSON
+            try:
+                conversation = json.loads(response_text)
+                # Validate structure
+                messages = []
+                for key in ["message1", "message2", "message3", "message4"]:
+                    if key in conversation and conversation[key]:
+                        msg = conversation[key]
+                        if "speaker" in msg and "text" in msg:
+                            messages.append({
+                                "speaker": msg["speaker"],
+                                "text": msg["text"]
+                            })
+                
+                if len(messages) >= 2:
+                    return {"messages": messages}
+                else:
+                    raise ValueError("Not enough valid messages")
+            except (json.JSONDecodeError, ValueError) as e:
+                # Fallback: create a simple conversation
+                print(f"Error parsing family conversation JSON: {e}, response: {response_text[:200]}")
+                return {
+                    "messages": [
+                        {"speaker": family_member1_name, "text": f"Hey {family_member2_name.split()[0]}, how was your day?"},
+                        {"speaker": family_member2_name, "text": "It was good! How about yours?"}
+                    ]
+                }
+        except Exception as e:
+            print(f"Error generating family conversation: {e}")
+            # Fallback conversation
+            return {
+                "messages": [
+                    {"speaker": family_member1_name, "text": f"Hey {family_member2_name.split()[0]}, what do you want for dinner?"},
+                    {"speaker": family_member2_name, "text": "I'm not sure, what sounds good to you?"}
+                ]
+            }
+    
     async def generate_email(
         self,
         sender_name: str,
@@ -1273,3 +1590,132 @@ Make the content realistic and relevant to their current task and project. Use a
         if self._client is not None:
             await self._client.aclose()
 
+    async def generate_initial_business_message(
+        self,
+        sender_name: str,
+        sender_title: str,
+        sender_role: str,
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        communication_type: str,  # "email" or "chat"
+        business_context: Dict
+    ) -> Dict[str, str]:
+        """Generate an initial business message (email or chat) between two employees."""
+        
+        # Build business context section
+        business_context_section = ""
+        if business_context:
+            business_parts = []
+            if business_context.get("revenue"):
+                business_parts.append(f"Company revenue: ${business_context['revenue']:,.2f}")
+            if business_context.get("active_projects"):
+                business_parts.append(f"Active projects: {business_context['active_projects']}")
+            if business_parts:
+                business_context_section = f"\nCompany status: {', '.join(business_parts)}"
+        
+        prompt = f"""Generate a realistic internal business {communication_type} from one employee to another.
+
+Sender: {sender_name}, {sender_title} ({sender_role})
+Recipient: {recipient_name}, {recipient_title} ({recipient_role})
+{business_context_section}
+
+The message should be about a specific work-related topic relevant to their roles (e.g., project update, request for information, meeting follow-up, strategy discussion, resource allocation).
+
+Format the response as JSON:
+{{
+    "subject": "Subject line (only for email, empty string for chat)",
+    "body": "The message content"
+}}
+
+For chat: Keep it brief (1-3 sentences), informal but professional.
+For email: Standard business email format, professional tone, 2-4 paragraphs.
+"""
+
+        try:
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                }
+            )
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            # Clean up and parse JSON
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+            
+            try:
+                data = json.loads(response_text)
+                return data
+            except json.JSONDecodeError:
+                # Fallback if JSON fails
+                return {
+                    "subject": "Work Update" if communication_type == "email" else "",
+                    "body": f"Hi {recipient_name.split()[0]}, just wanted to touch base on the current project status. Let me know if you have any updates."
+                }
+                
+        except Exception as e:
+            print(f"Error generating business message: {e}")
+            return {
+                "subject": "Quick Question" if communication_type == "email" else "",
+                "body": f"Hi {recipient_name.split()[0]}, do you have a moment to chat about the upcoming deadline?"
+            }
+
+    async def generate_business_reply(
+        self,
+        sender_name: str,
+        sender_title: str,
+        sender_role: str,
+        recipient_name: str,
+        recipient_title: str,
+        recipient_role: str,
+        original_message: str,
+        original_subject: str,
+        communication_type: str,  # "email" or "chat"
+        business_context: Dict
+    ) -> str:
+        """Generate a reply to a business message."""
+        
+        prompt = f"""You are {sender_name}, {sender_title} ({sender_role}).
+You received a {communication_type} from {recipient_name} ({recipient_title}).
+
+Original Message:
+{f'Subject: {original_subject}' if original_subject else ''}
+{original_message}
+
+Write a response.
+For chat: Brief (1-3 sentences), conversational.
+For email: Professional, clear, addressing the points raised.
+
+Write ONLY the response body.
+"""
+
+        try:
+            response = await self._make_request_with_fallback(
+                "/api/generate",
+                {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            result = response.json()
+            response_text = result.get("response", "").strip()
+            
+            if response_text.startswith("```"):
+                import re
+                response_text = re.sub(r'```[^\n]*\n', '', response_text)
+                response_text = re.sub(r'\n```', '', response_text)
+                
+            return response_text
+            
+        except Exception as e:
+            print(f"Error generating business reply: {e}")
+            return f"Thanks {recipient_name.split()[0]}, I'll look into it and get back to you."

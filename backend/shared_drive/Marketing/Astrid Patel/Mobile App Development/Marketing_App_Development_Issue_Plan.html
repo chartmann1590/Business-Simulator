@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Styles for the entire table */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: #f0f0f0;
+        }
+
+        /* Header row styles */
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* Data row styles */
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        /* Totals row styles */
+        tr:nth-child(12) {
+            background-color: #e7f3ff;
+            border-top: 2px solid #d0d0d0;
+        }
+
+        /* Financial formatting */
+        .currency {
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        .percentage {
+            margin-left: 8px;
+        }
+
+        /* Conditional formatting */
+        .green {
+            background-color: #c6efce;
+        }
+        .red {
+            background-color: #ffcccc;
+        }
+        .blue {
+            background-color: #add8e6;
+        }
+
+        /* Column groupings and subtotals */
+        .column-group {
+            display: inline-block;
+            width: 25%;
+            vertical-align: top;
+            text-align: right;
+        }
+        .subtotal {
+            padding-top: 8px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<table>
+    <tr>
+        <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+    </tr>
+    <tr>
+        <th>Financial Metrics</th>
+        <th>Department</th>
+        <th>Project</th>
+        <th>Budget</th>
+        <th>Revenue</th>
+        <th>Profit</th>
+        <th>Expenses</th>
+        <th>Margin%</th>
+    </tr>
+    <tr class="header">
+        <td>Total Revenue:</td>
+        <td></td>
+        <td></td>
+        <td>$848,324.28</td>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    <tr class="totals">
+        <th colspan="7">Totals:</th>
+        <th></th>
+    </tr>
+    <tr>
+        <td class="subtotal">Total Revenue:</td>
+        <td></td>
+        <td></td>
+        <td>$848,324.28</td>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <td class="subtotal">Total Profit:</td>
+        <td></td>
+        <td></td>
+        <td>$361,970.04</td>
+        <td></td>
+        <td>$361,970.04</td>
+        <td></td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <td class="subtotal">Total Expenses:</td>
+        <td></td>
+        <td></td>
+        <td>$486,354.24</td>
+        <td></td>
+        <td></td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <td class="subtotal">Margin%:</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td>42.67%</td>
+        <td></td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <th>Active Projects</th>
+        <th>Department</th>
+        <th>Project</th>
+        <th>Budget</th>
+        <th>Revenue</th>
+    </tr>
+    <tr class="green">
+        <td>Mobile App Development</td>
+        <td>Marketing</td>
+        <td>$150,000.00</td>
+        <td>$32,045.32</td>
+        <td></td>
+    </tr>
+    <tr class="red">
+        <td>Digital Transformation Project</td>
+        <td>IT</td>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>Strategic Partnership Development</td>
+        <td>Sales</td>
+        <td>$156,356.16</td>
+        <td>$17,080.48</td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>Customer Experience Enhancement (1)</td>
+        <td>Sales</td>
+        <td>$115,778.81</td>
+        <td>$43,994.25</td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>Customer Experience Enhancement (2)</td>
+        <td>Sales</td>
+        <td>$88,137.90</td>
+        <td>$10,036.51</td>
+        <td></td>
+    </tr>
+    <tr>
+        <th>Total Employees:</th>
+        <th>Department</th>
+        <th>Total</th>
+        <th></th>
+        <th></th>
+    </tr>
+    <tr class="blue">
+        <td>1322</td>
+        <td>Total</td>
+        <td>1322</td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <th>Department Performance</th>
+        <th>Total Employees</th>
+        <th>Percentage of Total:</th>
+        <th></th>
+        <th></th>
+    </tr>
+    <tr class="green">
+        <td>Marketing</td>
+        <td>64</td>
+        <td>4.83%</td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr class="red">
+        <td>IT</td>
+        <td>53</td>
+        <td>4.00%</td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <th>Project ROI Analysis:</th>
+        <th>Total Revenue</th>
+        <th>Return on Investment (ROI):</th>
+        <th></th>
+        <th></th>
+    </tr>
+    <tr class="green">
+        <td>Mobile App Development</td>
+        <td>$32,045.32</td>
+        <td>21.44%</td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr class="blue">
+        <td>Digital Transformation Project</td>
+        <td>$70,675.89</td>
+        <td>16.95%</td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <th></th>
+        <th></th>
+        <th></th>
+        <th class="subtotal">Total ROI:</td>
+        <td>$98,721.21</td>
+    </tr>
+    <tr>
+        <th></th>
+        <th></th>
+        <th></th>
+        <th class="subtotal">Percentage of Total Revenue:</td>
+        <td>11.63%</td>
+    </tr>
+</table>
+
+</body>
+</html>

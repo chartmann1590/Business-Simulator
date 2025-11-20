@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Title Row */
+        tr.title-row {
+            background-color: #366092;
+            color: white;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #d0d0d0;
+        }
+        
+        /* Header Row */
+        tr.header-row {
+            background-color: #f2f2f2;
+            font-size: 11pt;
+            font-weight: bold;
+            padding: 8px;
+            border-top: 1px solid #d0d0d0;
+        }
+        
+        /* Data Rows */
+        tr.data-row {
+            background-color: #f2f2f2;
+            padding: 8px;
+            border-bottom: 1px solid #d0d0d0;
+            position: relative;
+        }
+        
+        /* Totals Row */
+        tr.totals-row {
+            background-color: #e7f3ff;
+            font-size: 11pt;
+            font-weight: bold;
+            padding: 8px;
+            border-top: 2px solid #d0d0d0;
+            display: inline-block;
+        }
+        
+        /* Alternating */
+        tr.alternate-row {
+            background-color: #f2f2f2;
+        }
+        
+        /* Colors */
+        .positive {
+            color: green;
+        }
+        .negative {
+            color: red;
+        }
+        .total {
+            border-bottom: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <table style="border-collapse: collapse; width: 100%;">
+        <tr class="title-row">
+            <td colspan="10" style="text-align: center;">Financial Dashboard</td>
+        </tr>
+        
+        <tr class="header-row">
+            <th>Employee Name</th>
+            <th>Title</th>
+            <th>Department</th>
+            <th>Current Project</th>
+            <th>Budget</th>
+            <th>Revenue</th>
+            <th>Profit Margin</th>
+            <th>Active Projects</th>
+            <th>Total Employees</th>
+        </tr>
+        
+        <tr class="data-row">
+            <td>Kalliope Kuznetsov</td>
+            <td>Product Manager</td>
+            <td>Marketing</td>
+            <td>Mobile App Development</td>
+            <td>$150,000.00</td>
+            <td>$32,045.32</td>
+            <td>42.67%</td>
+            <td>1</td>
+            <td>1329</td>
+        </tr>
+        
+        <!-- Add more data rows here -->
+        
+        <tr class="totals-row">
+            <th>Total Revenue:</th>
+            <th>$848,324.28</th>
+        </tr>
+        
+        <tr class="data-row">
+            <th>Departmental Revenue</th>
+            <th>$<span style="font-weight: bold; color: green;">848,324.28</span></th>
+        </tr>
+        
+        <tr class="alternatet-row" id="department-56">
+            <th>Design</th>
+            <td>56 employees</td>
+            <th><a href="#" onclick="alert('Department 56')">View Details</a></th>
+        </tr>
+        
+        <!-- Add more department rows here -->
+        
+        <tr class="totals-row">
+            <th>Total Employees:</th>
+            <th><span style="font-weight: bold; color: green;">1329</span></th>
+        </tr>
+    </table>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+            color: #333;
+        }
+        
+        /* Table Styles */
+        table {
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+        }
+        
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        tr:nth-child(odd) {
+            background: white;
+        }
+        
+        td.numbers {
+            text-align: right;
+            font-size: 12pt;
+            color: #6c6c6c;
+        }
+        
+        td.percentages {
+            text-align: center;
+            font-size: 12pt;
+            color: #4CAF50;
+        }
+        
+        td.growthRates {
+            text-align: center;
+            font-size: 12pt;
+            color: #FF0000;
+        }
+        
+        th.headerColumns {
+            background: #366092;
+            color: white;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <!-- Title Row -->
+        <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+            <td colspan="10" style="padding: 12px;">Financial Dashboard</td>
+        </tr>
+        
+        <!-- Header Row -->
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;" colspan="3">Business Metrics</th>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Total Revenue</th>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Total Profit</th>
+        </tr>
+        
+        <!-- Data Rows -->
+        <tr>
+            <td style="padding: 8px;">$848,324.28</td>
+            <td style="padding: 8px;">$361,970.04</td>
+            <td class="percentages">42.67%</td>
+        </tr>
+        
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Active Projects</th>
+            <td style="padding: 8px;">15</td>
+            <td style="padding: 8px;">Total Employees</td>
+            <td style="padding: 8px;">1319</td>
+        </tr>
+        
+        <tr>
+            <td style="padding: 8px;">Digital Transformation Project</td>
+            <td class="numbers">$196,119.03</td>
+            <td class="numbers">Revenue $70,675.89</td>
+        </tr>
+        
+        <tr>
+            <td style="padding: 8px;">Strategic Partnership Development</td>
+            <td class="numbers">$156,356.16</td>
+            <td class="numbers">Revenue $17,080.48</td>
+        </tr>
+        
+        <tr>
+            <td style="padding: 8px;">Customer Experience Enhancement</td>
+            <td class="numbers">$88,137.90</td>
+            <td class="numbers">Revenue $10,036.51</td>
+        </tr>
+        
+        <tr>
+            <td style="padding: 8px;">Customer Experience Enhancement</td>
+            <td class="numbers">$115,778.81</td>
+            <td class="numbers">Revenue $43,994.25</td>
+        </tr>
+        
+        <tr>
+            <td style="padding: 8px;">Market Expansion Initiative</td>
+            <td class="numbers">$55,020.72</td>
+            <td class="numbers">Revenue $0.00</td>
+        </tr>
+    </table>
+
+    <!-- Summary Section -->
+    <table>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Summary Metrics</th>
+            <td style="padding: 8px;">Total Revenue Growth Rate:</td>
+            <td class="numbers">42.67%</td>
+        </tr>
+        
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Revenue Breakdown</th>
+            <td style="padding: 8px;">Digital Transformation Project:</td>
+            <td class="numbers">$70,675.89 / $196,119.03 (36.07% of total revenue)</td>
+        </tr>
+    </table>
+
+    <!-- Footer -->
+    <p style="margin-top: 12px; font-size: 10pt;">
+        Data Source: Actual business data provided
+        Last Updated: [Insert Date]
+        Notes: Assumptions made for calculation purposes only.
+    </p>
+</body>
+</html>

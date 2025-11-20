@@ -8,7 +8,7 @@ from employees.room_assigner import ROOM_TRAINING_ROOM
 import json
 import os
 import re
-from config import now as local_now
+from config import now as local_now, now_naive
 
 class TrainingManager:
     def __init__(self):
@@ -49,12 +49,13 @@ class TrainingManager:
         )
         
         # Create new training session
+        # Use now_naive() to ensure timezone-naive datetime for database consistency
         session = TrainingSession(
             employee_id=employee.id,
             training_room=training_room,
             training_topic=training_topic,
             training_material_id=training_material.id if training_material else None,
-            start_time=datetime.now(),
+            start_time=now_naive(),
             status="in_progress"
         )
         
@@ -78,12 +79,16 @@ class TrainingManager:
         session = result.scalar_one_or_none()
         
         if session:
-            session.end_time = datetime.now()
+            # Use now_naive() for consistency with start_time
+            session.end_time = now_naive()
             session.status = "completed"
             
             # Calculate duration in minutes
             if session.start_time and session.end_time:
-                duration = session.end_time - session.start_time
+                # Ensure both are naive for comparison
+                start = session.start_time.replace(tzinfo=None) if session.start_time.tzinfo else session.start_time
+                end = session.end_time.replace(tzinfo=None) if session.end_time.tzinfo else session.end_time
+                duration = end - start
                 session.duration_minutes = int(duration.total_seconds() / 60)
             
             await db_session.flush()
@@ -298,67 +303,96 @@ This training provides a foundation in {topic} that can be applied to improve jo
     ) -> int:
         """Check for training sessions that have exceeded 30 minutes and end them."""
         from datetime import datetime, timedelta
-        from sqlalchemy import select, and_
+        from sqlalchemy import select, and_, func
+        from config import now_naive
         
-        # Find all in-progress sessions that started more than 30 minutes ago
-        thirty_minutes_ago = datetime.now() - timedelta(minutes=30)
+        # Use timezone-naive datetime for comparison (consistent with how sessions are created)
+        now = now_naive()
+        thirty_minutes_ago = now - timedelta(minutes=30)
         
+        # Find all in-progress sessions
         result = await db_session.execute(
             select(TrainingSession)
             .where(
                 and_(
                     TrainingSession.status == "in_progress",
-                    TrainingSession.start_time <= thirty_minutes_ago
+                    TrainingSession.start_time.isnot(None)
                 )
             )
         )
-        expired_sessions = result.scalars().all()
+        all_sessions = result.scalars().all()
+        
+        expired_sessions = []
+        for session in all_sessions:
+            if session.start_time:
+                # Normalize start_time to timezone-naive for comparison
+                start_time = session.start_time
+                if start_time.tzinfo:
+                    # Convert to naive datetime for comparison
+                    start_time = start_time.replace(tzinfo=None)
+                
+                # Check if more than 30 minutes have passed
+                time_diff = (now - start_time).total_seconds() / 60
+                if time_diff >= 30:
+                    expired_sessions.append(session)
         
         ended_count = 0
         for session in expired_sessions:
-            # End the session
-            session.end_time = datetime.now()
-            session.status = "completed"
-            
-            # Calculate duration (should be around 30 minutes)
-            if session.start_time and session.end_time:
-                duration = session.end_time - session.start_time
-                session.duration_minutes = int(duration.total_seconds() / 60)
-            
-            # Get the employee and move them out of training room
-            employee_result = await db_session.execute(
-                select(Employee).where(Employee.id == session.employee_id)
-            )
-            employee = employee_result.scalar_one_or_none()
-            
-            if employee:
-                # Check if employee is still in a training room
-                from employees.room_assigner import ROOM_TRAINING_ROOM
-                is_in_training_room = (
-                    employee.current_room == ROOM_TRAINING_ROOM or
-                    employee.current_room and employee.current_room.startswith(f"{ROOM_TRAINING_ROOM}_floor")
-                )
+            try:
+                # End the session
+                session.end_time = now
+                session.status = "completed"
                 
-                if is_in_training_room:
-                    # Move employee to their home room or a suitable alternative
-                    from engine.movement_system import update_employee_location
-                    target_room = employee.home_room
-                    if not target_room:
-                        # Fallback to cubicles or open office
-                        from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
-                        employee_floor = getattr(employee, 'floor', 1)
-                        target_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                # Calculate duration (should be around 30 minutes)
+                if session.start_time and session.end_time:
+                    # Both should be naive now
+                    start = session.start_time.replace(tzinfo=None) if session.start_time.tzinfo else session.start_time
+                    end = now  # Already naive
+                    duration = end - start
+                    session.duration_minutes = int(duration.total_seconds() / 60)
+                
+                # Get the employee and move them out of training room
+                employee_result = await db_session.execute(
+                    select(Employee).where(Employee.id == session.employee_id)
+                )
+                employee = employee_result.scalar_one_or_none()
+                
+                if employee:
+                    # Check if employee is still in a training room
+                    from employees.room_assigner import ROOM_TRAINING_ROOM
+                    is_in_training_room = (
+                        employee.current_room == ROOM_TRAINING_ROOM or
+                        (employee.current_room and employee.current_room.startswith(f"{ROOM_TRAINING_ROOM}_floor"))
+                    )
                     
-                    try:
-                        await update_employee_location(employee, target_room, "working", db_session)
-                        await db_session.flush()
-                    except Exception as e:
-                        print(f"Error moving employee {employee.name} out of training room: {e}")
-            
-            ended_count += 1
+                    if is_in_training_room:
+                        # Move employee to their home room or a suitable alternative
+                        from engine.movement_system import update_employee_location
+                        target_room = employee.home_room
+                        if not target_room:
+                            # Fallback to cubicles or open office
+                            from employees.room_assigner import ROOM_CUBICLES, ROOM_OPEN_OFFICE
+                            employee_floor = getattr(employee, 'floor', 1)
+                            target_room = f"{ROOM_CUBICLES}_floor{employee_floor}" if employee_floor > 1 else ROOM_CUBICLES
+                        
+                        try:
+                            await update_employee_location(employee, target_room, "working", db_session)
+                            print(f"✅ Moved {employee.name} out of training room after {session.duration_minutes} minutes")
+                        except Exception as e:
+                            print(f"Error moving employee {employee.name} out of training room: {e}")
+                            import traceback
+                            traceback.print_exc()
+                
+                ended_count += 1
+            except Exception as e:
+                print(f"Error ending training session {session.id}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
         
         if ended_count > 0:
             await db_session.flush()
+            print(f"✅ Ended {ended_count} expired training sessions")
         
         return ended_count
     

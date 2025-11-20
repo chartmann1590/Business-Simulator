@@ -45,6 +45,8 @@ async def get_business_context(db: AsyncSession) -> dict:
 class OfficeSimulator:
     def __init__(self):
         self.llm_client = OllamaClient()
+        from business.communication_manager import CommunicationManager
+        self.communication_manager = CommunicationManager()
         self.running = False
         self.websocket_connections: Set = set()
         self.review_tick_counter = 0  # Counter for periodic reviews
@@ -124,6 +126,13 @@ class OfficeSimulator:
     
     async def fix_idle_employees(self):
         """IMMEDIATELY fix ALL employees stuck in idle state - they should be working!"""
+        from config import is_work_hours
+
+        # Only fix idle employees during work hours
+        # During non-work hours (7pm-7am), employees should be at home, not working
+        if not is_work_hours():
+            return  # Skip fixing idle employees when they should be at home
+
         try:
             async with async_session_maker() as db:
                 # Get ALL idle employees
@@ -134,18 +143,18 @@ class OfficeSimulator:
                     )
                 )
                 idle_employees = result.scalars().all()
-                
+
                 if not idle_employees:
                     return
-                
+
                 fixed_count = 0
-                
-                # Fix ALL idle employees immediately
+
+                # Fix ALL idle employees immediately (only during work hours)
                 for employee in idle_employees:
                     try:
                         await db.refresh(employee, ["current_room", "home_room", "activity_state"])
-                        
-                        # Set them to working - they should NEVER be idle
+
+                        # Set them to working - they should NEVER be idle during work hours
                         employee.activity_state = "working"
                         fixed_count += 1
                         await db.flush()
@@ -454,9 +463,58 @@ class OfficeSimulator:
             import traceback
             traceback.print_exc()
     
+    async def update_employee_locations_based_on_time(self):
+        """Update employee locations based on current time (7pm-7am home, 7am-7pm office)."""
+        from config import is_work_hours, should_be_at_home
+        from database.models import Employee
+        from sqlalchemy import select
+
+        try:
+            async with async_session_maker() as db:
+                # Get all active employees
+                result = await db.execute(
+                    select(Employee).where(Employee.status == "active")
+                )
+                employees = result.scalars().all()
+
+                if should_be_at_home():
+                    # It's 7pm-7am: employees should be at home
+                    # Update employees who are currently not marked as being at home
+                    for employee in employees:
+                        # Only update if employee is currently not marked as being at home
+                        if employee.activity_state not in ["at_home", "sleeping"]:
+                            employee.activity_state = "at_home"
+                            employee.current_room = None  # Clear office room
+                            employee.target_room = None  # Clear office target
+                            employee.floor = None  # Clear office floor
+                else:
+                    # It's 7am-7pm: employees should be at office
+                    # Update employees who are currently at home to be at office
+                    for employee in employees:
+                        if employee.activity_state in ["at_home", "sleeping"]:
+                            # Transition employee to office
+                            if employee.home_room:
+                                # Send them to their home room (office desk/workspace)
+                                employee.current_room = employee.home_room
+                                employee.floor = 1  # Default to floor 1
+                            else:
+                                # No home room assigned, put them in a common area
+                                employee.current_room = "Open Workspace"
+                                employee.floor = 1
+
+                            employee.activity_state = "working"
+                            employee.target_room = None
+
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error updating employee locations based on time: {e}", exc_info=True)
+
     async def simulation_tick(self):
         """Execute one simulation tick."""
-        # FIRST: Fix ALL idle employees immediately - they should be working!
+        # FIRST: Update employee locations based on time (7pm-7am home, 7am-7pm office)
+        await self.update_employee_locations_based_on_time()
+
+        # SECOND: Fix ALL idle employees immediately - they should be working!
         await self.fix_idle_employees()
         
         # Second: Fix employees walking without a destination - CRITICAL FIX
@@ -676,7 +734,9 @@ class OfficeSimulator:
                 print(f"❌ Error publishing newsletter: {e}")
         
         # Move pets occasionally (every 50 ticks = ~6.5 minutes)
-        if self.quick_wins_counter % 50 == 0:
+        # Only move pets during work hours
+        from config import is_work_hours
+        if self.quick_wins_counter % 50 == 0 and is_work_hours():
             try:
                 async with async_session_maker() as pet_db:
                     from business.pet_manager import PetManager
@@ -690,7 +750,8 @@ class OfficeSimulator:
                 print(f"❌ Error moving pets: {e}")
         
         # Check for pet interactions (every 5 ticks = ~40 seconds) - MUCH MORE FREQUENT
-        if self.quick_wins_counter % 5 == 0:
+        # Only check for interactions during work hours
+        if self.quick_wins_counter % 5 == 0 and is_work_hours():
             try:
                 async with async_session_maker() as pet_interaction_db:
                     from business.pet_manager import PetManager
@@ -704,7 +765,8 @@ class OfficeSimulator:
                 traceback.print_exc()
         
         # Check for pets needing care and provide AI-powered care (every 10 ticks = ~1.3 minutes) - MUCH MORE FREQUENT
-        if self.quick_wins_counter % 10 == 0:
+        # Only provide care during work hours
+        if self.quick_wins_counter % 10 == 0 and is_work_hours():
             try:
                 async with async_session_maker() as pet_care_db:
                     from business.pet_manager import PetManager
@@ -715,6 +777,19 @@ class OfficeSimulator:
                         print(f"🐾 AI provided care for {len(care_logs)} pet(s)")
             except Exception as e:
                 print(f"❌ Error providing AI pet care: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Run Communication Manager (every 10 ticks = ~1.3 minutes)
+        if self.quick_wins_counter % 10 == 0:
+            try:
+                async with async_session_maker() as comm_db:
+                    # Re-initialize with DB session
+                    self.communication_manager.db = comm_db
+                    business_context = await get_business_context(comm_db)
+                    await self.communication_manager.run_cycle(comm_db, business_context)
+            except Exception as e:
+                print(f"❌ Error in communication manager: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -3094,58 +3169,58 @@ Return ONLY the termination reason text, nothing else."""
             await asyncio.sleep(wait_time)
     
     async def check_and_respond_to_messages_periodically(self):
-        """Background task to check and respond to messages for all employees every 30 seconds."""
-        print("💬 Starting message response background task (every 30 seconds)...")
-        
+        """Background task to check and respond to messages for all employees every 20 seconds."""
+        print("💬 Starting message response background task (every 20 seconds - BALANCED)...")
+
         # Wait a bit on startup to let system stabilize
         await asyncio.sleep(5)
-        
+
         while self.running:
             try:
                 async with async_session_maker() as message_db:
                     from employees.roles import create_employee_agent
                     from sqlalchemy import select
-                    
+
                     # Get all active employees
                     result = await message_db.execute(
                         select(Employee).where(Employee.status == "active")
                     )
                     employees = result.scalars().all()
-                    
+
                     if not employees:
                         print("ℹ️  No active employees to check messages for")
                     else:
                         # Get business context
                         business_context = await self.get_business_context(message_db)
-                        
+
                         responses_count = 0
                         for employee in employees:
                             try:
                                 # Create employee agent
                                 agent = create_employee_agent(employee, message_db, self.llm_client)
-                                
+
                                 # Check and respond to messages
                                 await agent._check_and_respond_to_messages(business_context)
-                                
+
                                 responses_count += 1
                             except Exception as e:
                                 print(f"❌ Error checking messages for {employee.name}: {e}")
                                 import traceback
                                 traceback.print_exc()
                                 continue
-                        
+
                         await message_db.commit()
                         logger.info(f"💬 Message response check completed for {responses_count} employee(s)")
                         print(f"💬 Message response check completed for {responses_count} employee(s)")
-                        
+
             except Exception as e:
                 logger.error(f"[-] Error in message response background task: {e}", exc_info=True)
                 import traceback
                 traceback.print_exc()
-            
-            # Wait 30 seconds before next check (much more frequent for faster responses)
+
+            # Wait 20 seconds before next check (balanced for performance and DB load)
             if self.running:
-                await asyncio.sleep(30)
+                await asyncio.sleep(20)
     
     async def generate_communications_periodically(self):
         """Background task to generate spontaneous communications between employees every 5 minutes."""
@@ -3276,6 +3351,59 @@ Return ONLY the termination reason text, nothing else."""
             wait_time = random.randint(30, 60)
             await asyncio.sleep(wait_time)
     
+    async def process_clock_events_periodically(self):
+        """Background task to process employee clock in/out events every 2 minutes."""
+        while self.running:
+            try:
+                async with async_session_maker() as db:
+                    from business.clock_manager import ClockManager
+                    clock_manager = ClockManager(db)
+
+                    # Process end-of-day departures (6:45pm-7:15pm)
+                    departure_stats = await clock_manager.process_end_of_day_departures()
+                    if departure_stats["departed"] > 0:
+                        logger.info(f"[CLOCK OUT] {departure_stats['message']}")
+
+                    # Process commuting employees (transition leaving_work -> at_home)
+                    commute_stats = await clock_manager.process_commuting_employees()
+                    if commute_stats["arrived_home"] > 0:
+                        logger.info(f"[ARRIVED HOME] {commute_stats['message']}")
+
+                    # Process morning arrivals (6:45am-7:45am)
+                    arrival_stats = await clock_manager.process_morning_arrivals()
+                    if arrival_stats["arrived"] > 0:
+                        logger.info(f"[CLOCK IN] {arrival_stats['message']}")
+
+            except Exception as e:
+                logger.error(f"Error in clock event processing: {e}", exc_info=True)
+
+            # Run every 2 minutes (120 seconds)
+            await asyncio.sleep(120)
+
+    async def process_sleep_schedules_periodically(self):
+        """Background task to process sleep schedules (bedtime 10pm-12am, wake 5:30am-9am)."""
+        while self.running:
+            try:
+                async with async_session_maker() as db:
+                    from business.sleep_manager import SleepManager
+                    sleep_manager = SleepManager(db)
+
+                    # Process bedtime (10pm-12am)
+                    bedtime_stats = await sleep_manager.process_bedtime()
+                    if bedtime_stats["went_to_sleep"] > 0:
+                        logger.info(f"[BEDTIME] {bedtime_stats['message']}")
+
+                    # Process wake-ups (employees 5:30am-6:45am, family 7:30am-9am)
+                    wakeup_stats = await sleep_manager.process_wake_up()
+                    if wakeup_stats["woke_employees"] > 0 or wakeup_stats["woke_family"] > 0:
+                        logger.info(f"[WAKE UP] {wakeup_stats['message']}")
+
+            except Exception as e:
+                logger.error(f"Error in sleep schedule processing: {e}", exc_info=True)
+
+            # Run every 2 minutes (120 seconds)
+            await asyncio.sleep(120)
+
     async def run(self):
         """Run the simulation loop."""
         self.running = True
@@ -3309,14 +3437,22 @@ Return ONLY the termination reason text, nothing else."""
         employee_management_task = asyncio.create_task(self.manage_employees_periodically())
         logger.info(f"[+] Created employee management background task (every 30-60 seconds): {employee_management_task}")
         
-        # Start the message response task in the background (every 30 seconds)
+        # Start the message response task in the background (every 20 seconds - BALANCED)
         message_response_task = asyncio.create_task(self.check_and_respond_to_messages_periodically())
-        logger.info(f"[+] Created message response background task (every 30 seconds): {message_response_task}")
+        logger.info(f"[+] Created message response background task (every 20 seconds - BALANCED): {message_response_task}")
         
         # Start the periodic communication generation task (every 5 minutes for spontaneous communications)
         communication_task = asyncio.create_task(self.generate_communications_periodically())
         logger.info(f"[+] Created periodic communication generation background task (every 5 minutes): {communication_task}")
-        
+
+        # Start the clock in/out processing task (every 2 minutes for arrivals/departures)
+        clock_task = asyncio.create_task(self.process_clock_events_periodically())
+        logger.info(f"[+] Created clock in/out processing background task (every 2 minutes): {clock_task}")
+
+        # Start the sleep schedule processing task (every 2 minutes for bedtime/wake-up)
+        sleep_task = asyncio.create_task(self.process_sleep_schedules_periodically())
+        logger.info(f"[+] Created sleep schedule processing background task (every 2 minutes): {sleep_task}")
+
         while self.running:
             try:
                 await self.simulation_tick()

@@ -1,152 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Report</title>
-    <style>
-        body {
-            font-family: 'Times New Roman', serif;
-            font-size: 12pt;
-            margin: 1in;
-            line-height: 1.5;
-            color: #000000;
-            background: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        h1 {
-            text-align: center;
-            font-size: 18pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-decoration: underline;
-        }
-        
-        h2 {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-top: 0;
-            margin-bottom: 5px;
-        }
-        
-        p {
-            line-height: 1.5;
-            margin-bottom: 12pt;
-        }
-        
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        
-        th, td {
-            border: 1px solid #000000;
-            padding: 4pt;
-            text-align: left;
-        }
-        
-        .bold {
-            font-weight: bold;
-        }
-        
-        .italic {
-            font-style: italic;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Infrastructure Upgrade Project Report</title>
+  <style>
+    /* FANCY TITLE */
+    h1 {
+      font-size: 18pt;
+      font-weight: bold;
+      text-decoration: underline;
+      margin-left: 50px;
+      margin-right: 50px;
+    }
+    
+    /* HEADER */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 30px;
+      background-color: #ffffff;
+      padding: 10px;
+      border-bottom: 1px solid #000000;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    
+    /* EXECUTIVE SUMMARY */
+    section {
+      margin-top: 50px;
+    }
+    
+    p {
+      line-height: 1.5;
+      margin-bottom: 12pt;
+    }
+    
+    section h2 {
+      font-size: 14pt;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    
+    /* DATA SECTIONS */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    
+    th, td {
+      border: 1px solid #000000;
+      padding: 8px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #ffffff;
+      font-weight: bold;
+    }
+    
+    /* FOOTER */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 30px;
+      background-color: #ffffff;
+      padding: 10px;
+      border-top: 1px solid #000000;
+      font-size: 14pt;
+    }
+    
+    /* OTHER */
+    body {
+      font-family: 'Times New Roman', serif;
+      font-size: 12pt;
+      margin: 1in;
+      line-height: 1.5;
+      color: #000000;
+      background: #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .center {
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-    <div style="text-align: center;">
-        <h1>Business Report</h1>
-        <hr style="border: 0.5px solid #000000; margin-top: -10pt;">
-    </div>
+  <!-- FANCY TITLE -->
+  <h1 style="text-decoration: underline;">API Infrastructure Upgrade Project Report</h1>
 
-    <!-- Header -->
-    <div style="margin-bottom: 20pt;">
-        <p>Date:</p>
-        <p>Alethea Navarro</p>
-        <p>Operations Department</p>
-        <p>Document Classification: Strategic Report</p>
-    </div>
+  <!-- HEADER -->
+  <header>
+    <p>Document Classification: Confidential</p>
+    <p>Date: March 10, 2023</p>
+    <p>Alethea Navarro</p>
+    <p>Operations Department</p>
+  </header>
 
-    <!-- Executive Summary -->
+  <!-- EXECUTIVE SUMMARY -->
+  <section>
     <h2>Executive Summary</h2>
-    <p>The current project, API Infrastructure Upgrade, is active and has a budget of $100,000.00. Revenue from this project stands at $28,996.55. Our business metrics indicate a total revenue of $848,324.28, with a profit margin of 42.67%.</p>
-    <p>We have 15 active projects, with the Digital Transformation Project, Strategic Partnership Development, and Customer Experience Enhancement being notable examples. The distribution of employees across departments reveals an imbalance in Marketing and Product, with 63 and 50 employees respectively.</p>
+    <p>The API Infrastructure Upgrade project is currently active, with a budget of $100,000.00 and projected revenue of $28,996.55.</p>
+    <p>Our team has made significant progress on the project, including additional work on the API Infrastructure Upgrade.</p>
+  </section>
 
-    <!-- Current Projects -->
-    <h2>Current Projects</h2>
-    <table style="border-collapse: collapse;">
-        <tr>
-            <th style="width: 20%; text-align: left;">Project Name</th>
-            <th style="width: 40%; text-align: left;">Status/Budget</th>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">API Infrastructure Upgrade</td>
-            <td style="background-color: #f7f7f7;">Active ($100,000.00)</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Digital Transformation Project</td>
-            <td style="background-color: #f7f7f7;">Active ($196,119.03)</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Strategic Partnership Development</td>
-            <td style="background-color: #f7f7f7;">Active ($156,356.16)</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Customer Experience Enhancement</td>
-            <td style="background-color: #f7f7f7;">Active ($88,137.90)</td>
-        </tr>
+  <!-- CURRENT PROJECT -->
+  <section>
+    <h2>Current Project</h2>
+    <table>
+      <tr>
+        <th>Project Name</th>
+        <th>Status</th>
+        <th>Budget</th>
+      </tr>
+      <tr>
+        <td>API Infrastructure Upgrade</td>
+        <td>Active</td>
+        <td>$100,000.00</td>
+      </tr>
     </table>
+  </section>
 
-    <!-- Department Distribution -->
+  <!-- ACTIVE PROJECTS -->
+  <section>
+    <h2>Active Projects</h2>
+    <ul>
+      <li>Digital Transformation Project ($196,119.03 budget, active status)</li>
+      <li>Strategic Partnership Development ($156,356.16 budget, active status)</li>
+      <li>Customer Experience Enhancement ($88,137.90 budget, active status)</li>
+    </ul>
+  </section>
+
+  <!-- DEPARTMENT DISTRIBUTION -->
+  <section>
     <h2>Department Distribution</h2>
-    <p>The distribution of employees across departments reveals an imbalance in Marketing and Product.</p>
-    <table style="border-collapse: collapse;">
-        <tr>
-            <th style="width: 40%; text-align: left;">Department</th>
-            <th style="width: 60%; text-align: left;">Employee Count</th>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Marketing</td>
-            <td style="background-color: #f7f7f7;">63 employees</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Design</td>
-            <td style="background-color: #f7f7f7;">56 employees</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">HR</td>
-            <td style="background-color: #f7f7f7;">55 employees</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Product</td>
-            <td style="background-color: #f7f7f7;">50 employees</td>
-        </tr>
-        <tr>
-            <td style="background-color: #f7f7f7;">Sales</td>
-            <td style="background-color: #f7f7f7;">48 employees</td>
-        </tr>
+    <table>
+      <tr>
+        <th>Department</th>
+        <th>Employees</th>
+      </tr>
+      <tr>
+        <td>Marketing</td>
+        <td>63</td>
+      </tr>
+      <tr>
+        <td>Design</td>
+        <td>55</td>
+      </tr>
+      <tr>
+        <td>HR</td>
+        <td>56</td>
+      </tr>
+      <tr>
+        <td>Product</td>
+        <td>50</td>
+      </tr>
+      <tr>
+        <td>Sales</td>
+        <td>47</td>
+      </tr>
     </table>
+  </section>
 
-    <!-- Business Metrics -->
+  <!-- BUSINESS METRICS -->
+  <section>
     <h2>Business Metrics</h2>
     <p>Total Revenue: $848,324.28</p>
     <p>Total Profit: $361,970.04</p>
     <p>Profit Margin: 42.67%</p>
     <p>Total Expenses: $486,354.24</p>
     <p>Active Projects: 15</p>
+    <p>Total Employees: 1266</p>
+  </section>
 
-    <!-- Conclusion -->
+  <!-- CRITICAL REQUIREMENTS -->
+  <section>
+    <h2>Critical Requirements</h2>
+    <ul>
+      <li>Document Type: Create a realistic business document based on the employee's role.</li>
+      <li>Premium Styling: Use white background with subtle shadows, and professional typography.</li>
+      <li>Document Structure: Include FANCY TITLE, HEADER, EXECUTIVE SUMMARY, MAIN SECTIONS, DATA SECTIONS, CONCLUSION, FOOTER.</li>
+    </ul>
+  </section>
+
+  <!-- CONCLUSION -->
+  <section>
     <h2>Conclusion</h2>
-    <p>In conclusion, the current project and business metrics indicate a strong financial position. However, further analysis is required to identify areas for improvement.</p>
+    <p>The API Infrastructure Upgrade project is critical to our company's success. We recommend continuing to invest in this project and exploring new opportunities for growth.</p>
+  </section>
 
-    <!-- Footer -->
-    <div style="margin-top: -20pt;">
-        <p Page 1 of 5</p>
-        <p>Document Version: 1.0</p>
-        <p>Confidentiality Notice: This document contains confidential information and is intended only for authorized personnel.</p>
-    </div>
+  <!-- FOOTER -->
+  <footer>
+    <p>Document Version: 1.0</p>
+    <p>Page Numbers: [insert page numbers]</p>
+    <p>Confidentiality Notice: This document contains confidential information and is not intended for distribution without permission.</p>
+  </footer>
 
+  <!-- CENTERING FOOTER TEXT -->
+  <div class="center">
+    <p>Copyright &copy; 2023. All rights reserved.</p>
+  </div>
 </body>
 </html>

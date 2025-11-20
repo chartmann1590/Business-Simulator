@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Financial Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+            font-size: 11pt;
+            font-family: Arial;
+            text-align: left; /* text */
+            text-align: right; /* numbers */
+            text-align: center; /* dates */
+        }
+        
+        th {
+            background: #366092;
+            color: white;
+            border-bottom: 1px solid #d0d0d0;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        tr:last-child td:first-child, tr:last-child th:first-child {
+            background: #e7f3ff;
+            border-bottom: 2px solid #d0d0d0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<table>
+    <tr>
+        <th colspan="8">Financial Dashboard</th>
+    </tr>
+    <tr>
+        <td style="background: #366092; color: white;">**Employee Information**</td>
+        <td>Alejandro Navarro</td>
+        <td>Marketing Manager</td>
+        <td>Product</td>
+    </tr>
+    <tr>
+        <th colspan="8">Business Metrics</th>
+    </tr>
+    <tr>
+        <th style="background: #366092; color: white;">**Metrics**</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Total Expenses ($)</th>
+        <th>Profit Margin (%)</th>
+        <th>Active Projects</th>
+        <th>Total Employees</th>
+    </tr>
+    <tr>
+        <td>Alejandro Navarro - $848,324.28 ($361,970.04 profit margin: 42.67%)</td>
+        <td>$848,324.28</td>
+        <td>$486,354.24</td>
+        <td>$0.00</td>
+        <td>100%</td>
+        <td>15</td>
+        <td>1377</td>
+    </tr>
+    <tr>
+        <th colspan="8">**Active Projects**</th>
+    </tr>
+    <tr>
+        <th style="background: #366092; color: white;">**Project Name**</th>
+        <th>Budget ($)</th>
+        <th>Revenue ($)</th>
+    </tr>
+    <tr>
+        <td align="center">Customer Portal Redesign</td>
+        <td>$75,000.00</td>
+        <td>$25,831.02</td>
+    </tr>
+    <tr>
+        <td align="center">API Infrastructure Upgrade</td>
+        <td>$100,000.00</td>
+        <td>$28,996.55</td>
+    </tr>
+    <tr>
+        <td align="center">Mobile App Development</td>
+        <td>$150,000.00</td>
+        <td>$32,045.32</td>
+    </tr>
+    <tr>
+        <td align="center">Digital Transformation Project</td>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+    </tr>
+    <tr>
+        <td align="center">Strategic Partnership Development</td>
+        <td>$156,356.16</td>
+        <td>$17,080.48</td>
+    </tr>
+</table>
+
+</body>
+</html>

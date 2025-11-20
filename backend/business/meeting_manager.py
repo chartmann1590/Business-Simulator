@@ -575,6 +575,50 @@ Respond in JSON format:
                             pass
                     
                     print(f"🎉 Sent birthday party notifications for {birthday_name}'s party in {room_name} on Floor {party_floor}")
+                    
+                    # Enforce attendance - move all attendees to the breakroom
+                    try:
+                        from engine.movement_system import update_employee_location
+                        from employees.room_assigner import ROOM_BREAKROOM
+                        from database.models import BirthdayCelebration
+                        from sqlalchemy import func
+                        
+                        party_room = metadata.get("party_room", ROOM_BREAKROOM)
+                        party_floor = metadata.get("party_floor", 1)
+                        
+                        # Get or create birthday celebration
+                        celebration_result = await self.db.execute(
+                            select(BirthdayCelebration)
+                            .where(BirthdayCelebration.employee_id == birthday_employee_id)
+                            .where(func.date(BirthdayCelebration.celebration_date) == now.date())
+                        )
+                        celebration = celebration_result.scalar_one_or_none()
+                        
+                        # Get all attendees from meeting
+                        attendee_ids = meeting.attendee_ids or []
+                        if birthday_employee_id and birthday_employee_id not in attendee_ids:
+                            attendee_ids.append(birthday_employee_id)
+                        
+                        # Move all attendees to breakroom
+                        attendees_result = await self.db.execute(
+                            select(Employee).where(Employee.id.in_(attendee_ids))
+                        )
+                        attendees = attendees_result.scalars().all()
+                        
+                        for attendee in attendees:
+                            await update_employee_location(attendee, party_room, "break", self.db)
+                            attendee.floor = party_floor
+                        
+                        # Update celebration party_time if not set
+                        if celebration and not celebration.party_time:
+                            celebration.party_time = meeting.start_time
+                        
+                        print(f"🎉 Moved {len(attendees)} employees to {room_name} on Floor {party_floor} for birthday party")
+                    except Exception as e:
+                        print(f"❌ Error enforcing birthday party attendance: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    
                 except Exception as e:
                     print(f"❌ Error sending birthday party notifications: {e}")
                     import traceback

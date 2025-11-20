@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 function TaskDetail() {
   const { id } = useParams()
@@ -20,15 +21,12 @@ function TaskDetail() {
 
   const fetchTask = async () => {
     try {
-      const response = await fetch(`/api/tasks/${id}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      setTask(data)
-      setLoading(false)
+      const result = await apiGet(`/api/tasks/${id}`)
+      setTask(result.data || null)
     } catch (error) {
       console.error('Error fetching task:', error)
+      setTask(null)
+    } finally {
       setLoading(false)
     }
   }
@@ -36,13 +34,11 @@ function TaskDetail() {
   const fetchActivities = async () => {
     setLoadingActivities(true)
     try {
-      const response = await fetch(`/api/tasks/${id}/activities`)
-      if (response.ok) {
-        const data = await response.json()
-        setActivities(data || [])
-      }
+      const result = await apiGet(`/api/tasks/${id}/activities`)
+      setActivities(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching task activities:', error)
+      setActivities([])
     } finally {
       setLoadingActivities(false)
     }

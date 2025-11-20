@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            text-align: left;
+        }
+        
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        tr.total-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #000;
+        }
+        
+        .finance-header {
+            color: green;
+        }
+        
+        .losses-header {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<table>
+    <tr>
+        <td colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Employee Name</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Title</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Department</th>
+    </tr>
+    
+    <tr class="total-row">
+        <td colspan="3">Lily Hall</td>
+        <td colspan="2">Office Coordinator</td>
+        <td>Administration</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Finance/Accounting</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Sales/Marketing</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Management</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Operations</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">HR</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$848,324.28 ($361,970.04)</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$848,324.28 ($361,970.04)</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$486,354.24</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$487,210.19</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$484,910.18</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$485,210.19</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Digital Transformation Project</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Strategic Partnership Development</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Customer Experience Enhancement</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Product Innovation Program</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$70,675.89 ($0)</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$17,080.48 ($0)</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">$10,036.51 ($43,994.25)</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">($147,567.09)</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Marketing</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Design</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">HR</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">63 employees</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">56 employees</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">55 employees</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Operations</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Engineering</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">56 employees</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">54 employees</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Profit Margin</th>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Active Projects</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">42.67%</td>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">15 projects</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Total Employees</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">1273 employees</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Last Updated:</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">2023-12-31</td>
+    </tr>
+    
+    <tr>
+        <th style="background: #f2f2f2; padding: 8px; border: 1px solid #d0d0d0;">Notes:</th>
+    </tr>
+    
+    <tr>
+        <td style="padding: 8px; border: 1px solid #d0d0d0; background: white;">Data accuracy is crucial.</td>
+    </tr>
+</table>
+
+</body>
+</html>

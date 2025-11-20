@@ -18,7 +18,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
   useEffect(() => {
     if (meeting?.id) {
       fetchMeetingDetails()
-      const interval = setInterval(fetchMeetingDetails, 1000) // Refresh every 1 second for live updates
+      const interval = setInterval(fetchMeetingDetails, 5000) // Reduced from 1s to 5s to prevent timeouts
       return () => clearInterval(interval)
     }
   }, [meeting?.id])
@@ -77,14 +77,14 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
 
     // Create a unique ID for this message (use message content + timestamp to make it unique)
     const messageId = `${lastMessage.sender_id}-${lastMessage.timestamp}-${lastMessage.message?.substring(0, 20)}`
-    
+
     // Only update timestamp if this is a NEW message we haven't seen before
     if (!seenMessageIdsRef.current.has(messageId)) {
       seenMessageIdsRef.current.add(messageId)
-      
+
       const senderId = lastMessage.sender_id
       const now = Date.now()
-      
+
       // Update timestamp for this speaker's bubble using UI time (ONLY when we first see it)
       // IMPORTANT: Only update if we don't already have a timestamp, or if the existing one is old
       setBubbleTimestamps(prev => {
@@ -101,7 +101,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
         console.log(`Keeping existing bubble timestamp for ${senderId} (age: ${((now - existingTimestamp) / 1000).toFixed(2)}s)`)
         return prev
       })
-      
+
       // Set active speaker to the person who just spoke
       setActiveSpeaker(senderId)
     }
@@ -111,12 +111,12 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const now = Date.now()
-      
+
       setBubbleTimestamps(prev => {
         const updated = { ...prev }
         let changed = false
         let hasActiveBubbles = false
-        
+
         // Remove bubbles older than 6.5 seconds (based on UI timestamp)
         Object.keys(updated).forEach(senderId => {
           const timestamp = updated[senderId]
@@ -129,32 +129,32 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
             hasActiveBubbles = true
           }
         })
-        
+
         // Always trigger re-render if there are active bubbles (to update opacity smoothly)
         if (hasActiveBubbles) {
           setRenderTrigger(renderTrigger => renderTrigger + 1)
         }
-        
+
         // Update active speaker - clear if bubble is older than 8 seconds
         setActiveSpeaker(currentSpeaker => {
           if (currentSpeaker === null) return null
-          
+
           const bubbleTimestamp = updated[currentSpeaker]
           if (!bubbleTimestamp) {
             return null
           }
-          
+
           const age = (now - bubbleTimestamp) / 1000
           if (age > 8) {
             return null
           }
           return currentSpeaker
         })
-        
+
         return changed ? updated : prev
       })
     }, 100) // Check every 100ms
-    
+
     return () => clearInterval(cleanupInterval)
   }, [])
 
@@ -165,7 +165,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
       if (response.ok) {
         const data = await response.json()
         setMeetingData(data)
-        
+
         // Update live messages from metadata - handle both array and string cases
         let messages = []
         if (data.meeting_metadata?.live_messages) {
@@ -182,14 +182,14 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
           }
         }
         setLiveMessages(messages)
-        
+
         // Also update from live_transcript if available (for backwards compatibility)
         if (data.live_transcript && messages.length === 0) {
           // Parse transcript to extract messages if live_messages is empty
           const transcriptLines = data.live_transcript.split('\n').filter(line => line.trim())
           const parsedMessages = []
           const meetingStartTime = data.start_time ? new Date(data.start_time) : new Date()
-          
+
           transcriptLines.forEach(line => {
             // Match pattern like [16:52:42] Quinn Garcia: message text
             const match = line.match(/\[(\d{2}):(\d{2}):(\d{2})\]\s+([^:]+):\s+(.+)/)
@@ -202,7 +202,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                 transcriptTime.setHours(parseInt(hours, 10))
                 transcriptTime.setMinutes(parseInt(minutes, 10))
                 transcriptTime.setSeconds(parseInt(seconds, 10))
-                
+
                 parsedMessages.push({
                   sender_id: attendee.id,
                   sender_name: attendee.name,
@@ -254,7 +254,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
   }
 
   const attendees = meetingData.attendees || []
-  
+
   // Filter attendees based on view mode
   let displayedAttendees = attendees
   if (viewMode === 'speaker') {
@@ -266,7 +266,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
       displayedAttendees = attendees
     }
   }
-  
+
   const gridCols = getGridCols(displayedAttendees.length)
 
   return (
@@ -293,22 +293,20 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
             <div className="flex items-center gap-2 bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('all')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'all'
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'all'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-300 hover:text-white'
-                }`}
+                  }`}
                 title="View all attendees"
               >
                 All
               </button>
               <button
                 onClick={() => setViewMode('speaker')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'speaker'
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'speaker'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-300 hover:text-white'
-                }`}
+                  }`}
                 title="View only the active speaker"
               >
                 Speaker
@@ -334,13 +332,12 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
               const isSpeaking = activeSpeaker === attendee.id
               // Get avatar path using the utility function
               const avatarUrl = getAvatarPath(attendee)
-              
+
               return (
                 <div
                   key={attendee.id}
-                  className={`relative bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center transition-all ${
-                    isSpeaking ? 'ring-4 ring-green-500 ring-opacity-75' : ''
-                  }`}
+                  className={`relative bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center transition-all ${isSpeaking ? 'ring-4 ring-green-500 ring-opacity-75' : ''
+                    }`}
                 >
                   {/* Profile Photo/Video Tile */}
                   <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
@@ -362,22 +359,20 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                       className="w-full h-full rounded-lg flex items-center justify-center text-6xl font-bold absolute inset-0"
                       style={{
                         display: 'none',
-                        background: `linear-gradient(135deg, ${
-                          ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'][attendee.id % 6]
-                        } 0%, ${
-                          ['#1D4ED8', '#7C3AED', '#DB2777', '#D97706', '#059669', '#DC2626'][attendee.id % 6]
-                        } 100%)`
+                        background: `linear-gradient(135deg, ${['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'][attendee.id % 6]
+                          } 0%, ${['#1D4ED8', '#7C3AED', '#DB2777', '#D97706', '#059669', '#DC2626'][attendee.id % 6]
+                          } 100%)`
                       }}
                     >
                       {attendee.name.charAt(0).toUpperCase()}
                     </div>
-                    
+
                     {/* Name Overlay */}
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                       <p className="text-sm font-semibold text-white">{attendee.name}</p>
                       <p className="text-xs text-gray-300">{attendee.title}</p>
                     </div>
-                    
+
                     {/* Microphone Indicator */}
                     <div className="absolute top-3 right-3 flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${isSpeaking ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
@@ -387,7 +382,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                         </span>
                       )}
                     </div>
-                    
+
                     {/* Speaking Indicator - Animated Border */}
                     {isSpeaking && (
                       <div className="absolute inset-0 border-4 border-green-400 rounded-lg animate-pulse pointer-events-none"></div>
@@ -398,22 +393,22 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                   {(() => {
                     const bubbleTimestamp = bubbleTimestamps[attendee.id]
                     if (!latestMessage || !bubbleTimestamp) return null
-                    
+
                     const now = Date.now()
                     const age = (now - bubbleTimestamp) / 1000
-                    
+
                     // Don't show bubble if older than 6.5 seconds
                     if (age > 6.5) return null
-                    
+
                     // Calculate opacity: fade out between 5.5 and 6.5 seconds
                     let opacity = 1
                     if (age > 5.5) {
                       // Fade out over 1 second (from 5.5 to 6.5)
                       opacity = 1 - ((age - 5.5) / 1.0)
                     }
-                    
+
                     return (
-                      <div 
+                      <div
                         className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-20"
                         style={{
                           opacity: opacity,
@@ -421,9 +416,8 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                           pointerEvents: opacity < 0.1 ? 'none' : 'auto'
                         }}
                       >
-                        <div className={`bg-white text-gray-900 rounded-lg px-4 py-3 shadow-2xl max-w-xs border-2 ${
-                          isSpeaking ? 'border-green-400' : 'border-gray-300'
-                        }`}>
+                        <div className={`bg-white text-gray-900 rounded-lg px-4 py-3 shadow-2xl max-w-xs border-2 ${isSpeaking ? 'border-green-400' : 'border-gray-300'
+                          }`}>
                           <div className="text-sm font-medium mb-1 text-blue-600 flex items-center gap-2">
                             {isSpeaking && (
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -456,7 +450,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
           </div>
 
           {/* Transcript Content */}
-          <div 
+          <div
             ref={transcriptContainerRef}
             className="flex-1 overflow-y-auto p-4 bg-gray-950"
           >
@@ -465,7 +459,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                 const attendee = getAttendeeById(msg.sender_id)
                 const attendeeName = attendee?.name || msg.sender_name || 'Unknown'
                 const timestamp = msg.timestamp ? formatTimeTZ(msg.timestamp, true) : ''
-                
+
                 return (
                   <div key={index} className="text-sm animate-fade-in">
                     <div className="flex items-center gap-2 mb-1">
@@ -480,7 +474,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                   </div>
                 )
               })}
-              
+
               {/* Fallback: Show live_transcript if live_messages is empty but transcript exists */}
               {liveMessages.length === 0 && meetingData.live_transcript && (() => {
                 // Calculate meeting start time once for stable timestamps
@@ -502,7 +496,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                         transcriptTime.setMinutes(parseInt(minutes, 10))
                         transcriptTime.setSeconds(parseInt(seconds, 10))
                         const staticTimestamp = formatTimeTZ(transcriptTime, true)
-                        
+
                         return (
                           <div key={index} className="text-sm animate-fade-in">
                             <div className="flex items-center gap-2 mb-1">
@@ -528,7 +522,7 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                   </div>
                 )
               })()}
-              
+
               {liveMessages.length === 0 && !meetingData.live_transcript && (
                 <div className="text-center text-gray-500 py-8 text-sm">
                   Waiting for discussion to begin...
@@ -546,9 +540,9 @@ function LiveMeetingView({ meeting, onClose, employees = [] }) {
                 <span>All participants are connected</span>
               </div>
               <div className="text-gray-500">
-                {liveMessages.length > 0 
+                {liveMessages.length > 0
                   ? `${liveMessages.length} message${liveMessages.length !== 1 ? 's' : ''} in transcript`
-                  : meetingData.live_transcript 
+                  : meetingData.live_transcript
                     ? `${meetingData.live_transcript.split('\n').filter(l => l.trim() && !l.includes('Meeting started')).length} message${meetingData.live_transcript.split('\n').filter(l => l.trim() && !l.includes('Meeting started')).length !== 1 ? 's' : ''} in transcript`
                     : '0 messages in transcript'
                 }

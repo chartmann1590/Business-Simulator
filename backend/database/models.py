@@ -46,7 +46,9 @@ class Employee(Base):
     birthday_day = Column(Integer, nullable=True)  # Day of birthday (1-31)
     hobbies = Column(JSON, default=list)  # List of hobbies/interests
     last_coffee_break = Column(DateTime(timezone=True), nullable=True)  # Last coffee break time
-    
+    online_status = Column(String, default="online")  # online, offline, away, busy - for Teams presence
+    sleep_state = Column(String, default="awake")  # awake, sleeping, in_bed - for tracking sleep schedule (10pm-7am)
+
     tasks = relationship("Task", back_populates="employee", foreign_keys="Task.employee_id")
     decisions = relationship("Decision", back_populates="employee")
     activities = relationship("Activity", back_populates="employee")
@@ -56,6 +58,10 @@ class Employee(Base):
     received_chats = relationship("ChatMessage", foreign_keys="ChatMessage.recipient_id", back_populates="recipient")
     reviews_received = relationship("EmployeeReview", foreign_keys="EmployeeReview.employee_id", back_populates="employee")
     reviews_given = relationship("EmployeeReview", foreign_keys="EmployeeReview.manager_id", back_populates="manager")
+    home_settings = relationship("HomeSettings", back_populates="employee", uselist=False)
+    family_members = relationship("FamilyMember", back_populates="employee")
+    home_pets = relationship("HomePet", back_populates="employee")
+    clock_events = relationship("ClockInOut", back_populates="employee")
 
 class Project(Base):
     __tablename__ = "projects"
@@ -523,4 +529,70 @@ class TrainingMaterial(Base):
     usage_count = Column(Integer, default=0)  # How many times this material has been used
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class HomeSettings(Base):
+    __tablename__ = "home_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, unique=True)
+    home_type = Column(String, nullable=False)  # "city" or "country"
+    home_layout_exterior = Column(String, nullable=False)  # Image filename for exterior (e.g., "city_home01.png")
+    home_layout_interior = Column(String, nullable=False)  # Image filename for interior (e.g., "city_home_interior_1.png")
+    living_situation = Column(String, nullable=False)  # "alone", "with_family", "with_roommate"
+    home_address = Column(String, nullable=True)  # Generated home address for flavor
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    employee = relationship("Employee", back_populates="home_settings")
+
+class FamilyMember(Base):
+    __tablename__ = "family_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    relationship_type = Column(String, nullable=False)  # "spouse", "child", "parent", "sibling"
+    age = Column(Integer, nullable=False)
+    gender = Column(String, nullable=True)  # "male", "female", "non-binary"
+    avatar_path = Column(String, nullable=True)  # Avatar image from avatars folder
+    personality_traits = Column(JSON, default=dict)  # Similar to employee personality
+    occupation = Column(String, nullable=True)  # What they do (for spouses/parents)
+    interests = Column(JSON, default=list)  # Hobbies and interests
+    current_location = Column(String, default="inside")  # "inside" or "outside"
+    sleep_state = Column(String, default="awake")  # awake, sleeping, in_bed - for tracking sleep schedule
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    employee = relationship("Employee", back_populates="family_members")
+
+class HomePet(Base):
+    __tablename__ = "home_pets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    pet_type = Column(String, nullable=False)  # "dog", "cat", "bird", "fish", etc.
+    avatar_path = Column(String, nullable=False)  # Avatar image from avatars folder (animal avatars)
+    breed = Column(String, nullable=True)  # Specific breed
+    age = Column(Integer, nullable=True)  # Pet age in years
+    personality = Column(String, nullable=True)  # Brief personality description
+    current_location = Column(String, default="inside")  # "inside" or "outside"
+    sleep_state = Column(String, default="awake")  # awake, sleeping - for tracking sleep schedule
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    employee = relationship("Employee", back_populates="home_pets")
+
+class ClockInOut(Base):
+    __tablename__ = "clock_in_out"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String, nullable=False)  # "clock_in", "clock_out", "arrived_home", "left_home"
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    location = Column(String, nullable=True)  # "office" or "home"
+    notes = Column(String, nullable=True)  # Additional context (e.g., "End of work day", "Morning arrival")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee", back_populates="clock_events")
 

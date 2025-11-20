@@ -38,6 +38,7 @@ function EmployeeDetail() {
   const [showScreenModal, setShowScreenModal] = useState(false)
   const [showTrainingModal, setShowTrainingModal] = useState(false)
   const [selectedTrainingSession, setSelectedTrainingSession] = useState(null)
+  const [clockHistory, setClockHistory] = useState([])
 
   useEffect(() => {
     fetchEmployee()
@@ -79,13 +80,14 @@ function EmployeeDetail() {
   const fetchEmployee = async () => {
     setLoading(true)
     try {
-      const [employeeResult, emailsResult, chatsResult, reviewsResult, meetingsResult, trainingResult] = await Promise.all([
+      const [employeeResult, emailsResult, chatsResult, reviewsResult, meetingsResult, trainingResult, clockHistoryResult] = await Promise.all([
         apiGet(`/api/employees/${id}`),
         apiGet(`/api/employees/${id}/emails`),
         apiGet(`/api/employees/${id}/chats`),
         apiGet(`/api/employees/${id}/reviews`),
         apiGet(`/api/employees/${id}/meetings`),
-        apiGet(`/api/employees/${id}/training`)
+        apiGet(`/api/employees/${id}/training`),
+        apiGet(`/api/employees/${id}/clock-history?days=7`)
       ])
       const employeeData = employeeResult.data || {}
       const emailsData = Array.isArray(emailsResult.data) ? emailsResult.data : []
@@ -94,6 +96,7 @@ function EmployeeDetail() {
       const meetingsDataRaw = meetingsResult.data || []
       // Handle wrapped response (PowerShell/API might wrap arrays)
       const meetingsData = Array.isArray(meetingsDataRaw) ? meetingsDataRaw : (meetingsDataRaw?.value || meetingsDataRaw || [])
+      const clockHistoryData = Array.isArray(clockHistoryResult.data) ? clockHistoryResult.data : []
       // Debug: Check award status
       if (employeeData.has_performance_award) {
         console.log('Employee has award:', employeeData.name, employeeData.has_performance_award)
@@ -104,6 +107,7 @@ function EmployeeDetail() {
       setReviews(reviewsData)
       setMeetings(meetingsData)
       setTraining(trainingResult.data || {})
+      setClockHistory(clockHistoryData)
     } catch (error) {
       console.error('Error fetching employee:', error)
       // Set empty data to prevent stuck loading
@@ -905,6 +909,48 @@ function EmployeeDetail() {
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Files</h3>
         <RecentFiles employeeId={parseInt(id)} />
       </div>
+
+      {/* Clock In/Out History */}
+      {clockHistory && clockHistory.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Clock In/Out History (Last 7 Days)</h3>
+          <div className="space-y-2">
+            {clockHistory.map((event) => (
+              <div key={event.id} className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-center space-x-3">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    event.event_type === 'clock_in'
+                      ? 'bg-green-100 text-green-800'
+                      : event.event_type === 'clock_out'
+                      ? 'bg-orange-100 text-orange-800'
+                      : event.event_type === 'arrived_home'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {event.event_type === 'clock_in' && '🏢 Clocked In'}
+                    {event.event_type === 'clock_out' && '👋 Clocked Out'}
+                    {event.event_type === 'arrived_home' && '🏠 Arrived Home'}
+                    {event.event_type === 'left_home' && '🚶 Left Home'}
+                  </span>
+                  {event.location && (
+                    <span className="text-sm text-gray-600">
+                      at {event.location}
+                    </span>
+                  )}
+                  {event.notes && (
+                    <span className="text-sm text-gray-500">
+                      · {event.notes}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {formatDateTime(event.timestamp)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activities */}
       {employee.activities && employee.activities.length > 0 && (

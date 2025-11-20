@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 0;
+            padding: 0;
+        }
+
+        .title-row {
+            background-color: #366092;
+            color: white;
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+        }
+
+        .header-row {
+            background-color: #d0d0d0;
+            border-bottom: 1px solid #d0d0d0;
+            padding: 8px;
+        }
+
+        .data-row {
+            background: white;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        .data-row:nth-child(odd) {
+            background-color: #f2f2f2;
+        }
+
+        .totals-row {
+            background-color: #e7f3ff;
+            color: black;
+            padding: 8px;
+            border-bottom: 2px solid #d0d0d0;
+            font-weight: bold;
+        }
+
+        .font Arial, sans-serif;
+
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            vertical-align: top;
+            border-top: 1px solid #d0d0d0;
+        }
+    </style>
+</head>
+
+<body>
+    <table style="border-collapse: collapse; width: 100%;">
+        <tr class="title-row">
+            <td colspan="10" style="text-align: center;">Employee Performance Dashboard</td>
+        </tr>
+        <tr class="header-row">
+            <th>Business Metrics</th>
+            <th>Department Headcount</th>
+            <th>Active Projects</th>
+            <th>Department Revenue</th>
+            <th>Total Expenses</th>
+            <th>Profit Margin</th>
+            <th>Total Employees</th>
+        </tr>
+
+        <!-- DATA ROWS -->
+        <tr class="data-row">
+            <td>Total Revenue: $848,324.28</td>
+            <td>1340 employees</td>
+            <td>15 projects</td>
+            <td>$361,970.04 / Department</td>
+            <td>$486,354.24 / Department</td>
+            <td>42.67%</td>
+            <td></td>
+        </tr>
+
+        <!-- CALCULATED COLUMNS -->
+        <tr class="data-row">
+            <td>Totals: $848,324.28</td>
+            <td></td>
+            <td></td>
+            <td>$361,970.04 / Department x 9 Departments = $3,258,740.36</td>
+            <td>$486,354.24 / Department x 9 Departments = $4,385,226.96</td>
+            <td>42.67% (rounded)</td>
+            <td></td>
+        </tr>
+
+        <!-- SUMMARY SECTION -->
+        <tr class="data-row">
+            <td><span style="font-weight: bold;">Summary:</span> Total Revenue: $848,324.28, Profit: $361,970.04</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr class="data-row">
+            <td colspan="7" style="text-align: center;">Last Updated: March 2023</td>
+        </tr>
+    </table>
+</body>
+</html>

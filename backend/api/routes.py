@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_, case
 from sqlalchemy.orm import selectinload
-from database.database import get_db
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion, TrainingSession, TrainingMaterial
+from database.database import get_db, async_session_maker
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion, TrainingSession, TrainingMaterial, HomeSettings, FamilyMember, HomePet
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
@@ -738,38 +738,80 @@ async def get_employee_screen_view(employee_id: int, db: AsyncSession = Depends(
             }
             # Get the latest version content if available
             if f.id:
-                result = await db.execute(
-                    select(SharedDriveFileVersion)
-                    .where(SharedDriveFileVersion.file_id == f.id)
-                    .order_by(desc(SharedDriveFileVersion.version_number))
-                    .limit(1)
-                )
-                latest_version = result.scalar_one_or_none()
-                if latest_version and latest_version.content:
-                    file_data["content"] = latest_version.content[:5000]  # Limit to 5000 chars
+                try:
+                    result = await db.execute(
+                        select(SharedDriveFileVersion)
+                        .where(SharedDriveFileVersion.file_id == f.id)
+                        .order_by(desc(SharedDriveFileVersion.version_number))
+                        .limit(1)
+                    )
+                    latest_version = result.scalar_one_or_none()
+                    if latest_version:
+                        # Ensure we access content_html, not content
+                        if hasattr(latest_version, 'content_html') and latest_version.content_html:
+                            file_data["content"] = latest_version.content_html[:5000]  # Limit to 5000 chars
+                        else:
+                            print(f"Warning: SharedDriveFileVersion {latest_version.id} has no content_html")
+                except AttributeError as ae:
+                    print(f"AttributeError accessing content for file {f.id}: {ae}")
+                    # Continue without content
+                except Exception as e:
+                    print(f"Error fetching version content for file {f.id}: {e}")
+                    # Continue without content
             files_data.append(file_data)
     
         # Get business context
         business_context = await get_business_context(db)
         
-        # Generate screen activity using Ollama
+        # Generate screen activity using Ollama with timeout
+        # Send comprehensive data for realistic AI-driven screen view
+        import asyncio
+        import time
         llm_client = OllamaClient()
         try:
-            screen_activity = await llm_client.generate_screen_activity(
-                employee_name=emp.name,
-                employee_title=emp.title,
-                employee_role=emp.role,
-                personality_traits=emp.personality_traits or [],
-                current_task=current_task,
-                project_name=project_name,
-                project_description=project_description,
-                recent_emails=emails_data,
-                recent_chats=chats_data,
-                shared_drive_files=files_data,
-                business_context=business_context
+            print(f"[SCREEN-VIEW] Generating comprehensive screen activity for employee {emp.name} (ID: {employee_id})")
+            start_time = time.time()
+            
+            # Increase timeout to 60 seconds to allow for processing comprehensive data
+            # This matches the httpx client timeout in OllamaClient
+            screen_activity = await asyncio.wait_for(
+                llm_client.generate_screen_activity(
+                    employee_name=emp.name,
+                    employee_title=emp.title,
+                    employee_role=emp.role,
+                    personality_traits=emp.personality_traits or [],
+                    current_task=current_task,
+                    project_name=project_name,
+                    project_description=project_description,
+                    recent_emails=emails_data,  # Full email data
+                    recent_chats=chats_data,    # Full chat data
+                    shared_drive_files=files_data,  # Full file data with content
+                    business_context=business_context
+                ),
+                timeout=60.0  # 60 second timeout to allow comprehensive AI generation
             )
+            
+            elapsed = time.time() - start_time
+            print(f"[SCREEN-VIEW] Screen activity generated in {elapsed:.2f}s")
+            
+        except asyncio.TimeoutError:
+            print(f"[SCREEN-VIEW] LLM timeout after 60s for employee {emp.name}")
+            # Return fallback activity on timeout
+            screen_activity = {
+                "application": "outlook",
+                "action": "viewing",
+                "content": {
+                    "subject": "Work Update",
+                    "recipient": "Team",
+                    "body": f"{emp.name} is reviewing emails and working on {current_task or 'current tasks'}."
+                },
+                "mouse_position": {"x": 50, "y": 50},
+                "window_state": "active"
+            }
         except Exception as e:
-            print(f"Error generating screen activity: {e}")
+            print(f"[SCREEN-VIEW] Error generating screen activity: {e}")
+            import traceback
+            traceback.print_exc()
             # Return fallback activity
             screen_activity = {
                 "application": "outlook",
@@ -3341,6 +3383,10 @@ async def send_chat_message(request: SendChatRequest, db: AsyncSession = Depends
         # We'll use 0 in the thread_id generation for consistency
         thread_id = generate_thread_id(0, request.employee_id)
         
+        # Always generate a reply when manager sends a message
+        # The manager is sending TO the employee, so the employee should respond
+        # This ensures proper back-and-forth: Manager -> Employee -> Manager -> Employee
+        
         # Save the user's message
         user_chat = ChatMessage(
             sender_id=None,  # None represents messages from the user/manager
@@ -3351,6 +3397,7 @@ async def send_chat_message(request: SendChatRequest, db: AsyncSession = Depends
         db.add(user_chat)
         await db.flush()  # Flush to get the timestamp
         
+        # Always generate a reply - manager sends to employee, employee responds
         # Get employee's work context
         project_context = None
         task_description = None
@@ -3400,7 +3447,7 @@ async def send_chat_message(request: SendChatRequest, db: AsyncSession = Depends
             project_context=work_context_str,
             business_context=business_context
         )
-        
+            
         # Save employee's response
         employee_response = ChatMessage(
             sender_id=employee.id,
@@ -3808,7 +3855,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": ROOM_BREAKROOM,
                 "name": "Breakroom",
                 "image_path": "/office_layout/layout04_breakroom.png",
-                "capacity": 8,
+                "capacity": 15,  # Updated to support birthday parties (15 people)
                 "floor": 1
             },
             {
@@ -3875,7 +3922,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": f"{ROOM_BREAKROOM}_floor2",
                 "name": "Breakroom",
                 "image_path": "/office_layout/floor2_room03_breakroom.png",
-                "capacity": 10,
+                "capacity": 15,  # Updated to support birthday parties (15 people)
                 "floor": 2
             },
             {
@@ -4130,10 +4177,18 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
         active_tasks = result.scalars().all()
         employee_tasks = {task.employee_id: task for task in active_tasks if task.employee_id}
         
+        # Check if it's work hours - employees should only be at office during work hours
+        from config import is_work_hours
+        is_work_time = is_work_hours()
+        
         # Group active employees by floor and room (only include those with a room assigned)
         employees_by_room = {}
         active_with_rooms = []
         for employee in active_employees:
+            # During non-work hours, employees should be at home, not in the office
+            if not is_work_time:
+                continue  # Skip this employee - they should be at home
+            
             # Safely get room fields (they might not exist in old database)
             current_room = getattr(employee, 'current_room', None)
             home_room = getattr(employee, 'home_room', None)
@@ -7148,5 +7203,783 @@ async def get_timezone_config():
         print(f"Error in get_timezone_config: {e}")
         return {
             "timezone": "America/New_York"
+        }
+
+# ========================================
+# HOME VIEW ENDPOINTS
+# ========================================
+
+@router.get("/home/employees")
+async def get_home_employees():
+    """Get all active employees with their home settings."""
+    async with async_session_maker() as db:
+        # Optimized query: Load employees with home settings in one query
+        result = await db.execute(
+            select(Employee)
+            .where(Employee.status == "active")
+            .options(selectinload(Employee.home_settings))
+            .order_by(Employee.name)
+        )
+        employees = result.scalars().all()
+
+        # Get family counts for all employees in one query
+        family_counts_result = await db.execute(
+            select(FamilyMember.employee_id, func.count(FamilyMember.id))
+            .group_by(FamilyMember.employee_id)
+        )
+        family_counts = dict(family_counts_result.all())
+
+        # Get pet counts for all employees in one query
+        pet_counts_result = await db.execute(
+            select(HomePet.employee_id, func.count(HomePet.id))
+            .group_by(HomePet.employee_id)
+        )
+        pet_counts = dict(pet_counts_result.all())
+
+        # Build response with loaded data
+        employee_data = []
+        for employee in employees:
+            home_settings = employee.home_settings
+            
+            employee_data.append({
+                "id": employee.id,
+                "name": employee.name,
+                "title": employee.title,
+                "department": employee.department,
+                "avatar_path": employee.avatar_path,
+                "activity_state": employee.activity_state,
+                "home_settings": {
+                    "home_type": home_settings.home_type if home_settings else None,
+                    "home_layout_exterior": home_settings.home_layout_exterior if home_settings else None,
+                    "home_layout_interior": home_settings.home_layout_interior if home_settings else None,
+                    "living_situation": home_settings.living_situation if home_settings else None,
+                    "home_address": home_settings.home_address if home_settings else None,
+                } if home_settings else None,
+                "family_count": family_counts.get(employee.id, 0),
+                "pet_count": pet_counts.get(employee.id, 0)
+            })
+
+        return employee_data
+
+@router.get("/home/employees/{employee_id}")
+async def get_employee_home(employee_id: int):
+    """Get detailed home information for a specific employee."""
+    async with async_session_maker() as db:
+        # Get employee
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        # Get home settings
+        home_result = await db.execute(
+            select(HomeSettings).where(HomeSettings.employee_id == employee_id)
+        )
+        home_settings = home_result.scalar_one_or_none()
+
+        # Get family members
+        family_result = await db.execute(
+            select(FamilyMember).where(FamilyMember.employee_id == employee_id)
+        )
+        family_members = family_result.scalars().all()
+
+        # Get home pets
+        pet_result = await db.execute(
+            select(HomePet).where(HomePet.employee_id == employee_id)
+        )
+        home_pets = pet_result.scalars().all()
+
+        return {
+            "employee": {
+                "id": employee.id,
+                "name": employee.name,
+                "title": employee.title,
+                "department": employee.department,
+                "avatar_path": employee.avatar_path,
+                "activity_state": employee.activity_state,
+                "hobbies": employee.hobbies,
+                "personality_traits": employee.personality_traits,
+            },
+            "home_settings": {
+                "home_type": home_settings.home_type,
+                "home_layout_exterior": home_settings.home_layout_exterior,
+                "home_layout_interior": home_settings.home_layout_interior,
+                "living_situation": home_settings.living_situation,
+                "home_address": home_settings.home_address,
+            } if home_settings else None,
+            "family_members": [
+                {
+                    "id": fm.id,
+                    "name": fm.name,
+                    "relationship_type": fm.relationship_type,
+                    "age": fm.age,
+                    "gender": fm.gender,
+                    "avatar_path": fm.avatar_path,
+                    "occupation": fm.occupation,
+                    "personality_traits": fm.personality_traits,
+                    "interests": fm.interests,
+                    "current_location": fm.current_location or "inside",
+                } for fm in family_members
+            ],
+            "home_pets": [
+                {
+                    "id": pet.id,
+                    "name": pet.name,
+                    "pet_type": pet.pet_type,
+                    "avatar_path": pet.avatar_path,
+                    "breed": pet.breed,
+                    "age": pet.age,
+                    "personality": pet.personality,
+                    "current_location": pet.current_location or "inside",
+                } for pet in home_pets
+            ]
+        }
+
+@router.get("/home/employees/{employee_id}/family")
+async def get_employee_family(employee_id: int):
+    """Get all family members for a specific employee."""
+    async with async_session_maker() as db:
+        # Verify employee exists
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        # Get family members
+        family_result = await db.execute(
+            select(FamilyMember).where(FamilyMember.employee_id == employee_id)
+        )
+        family_members = family_result.scalars().all()
+
+        return [
+            {
+                "id": fm.id,
+                "name": fm.name,
+                "relationship_type": fm.relationship_type,
+                "age": fm.age,
+                "gender": fm.gender,
+                "avatar_path": fm.avatar_path,
+                "occupation": fm.occupation,
+                "personality_traits": fm.personality_traits,
+                "interests": fm.interests,
+            } for fm in family_members
+        ]
+
+@router.get("/home/employees/{employee_id}/pets")
+async def get_employee_home_pets(employee_id: int):
+    """Get all home pets for a specific employee."""
+    async with async_session_maker() as db:
+        # Verify employee exists
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        # Get home pets
+        pet_result = await db.execute(
+            select(HomePet).where(HomePet.employee_id == employee_id)
+        )
+        home_pets = pet_result.scalars().all()
+
+        return [
+            {
+                "id": pet.id,
+                "name": pet.name,
+                "pet_type": pet.pet_type,
+                "avatar_path": pet.avatar_path,
+                "breed": pet.breed,
+                "age": pet.age,
+                "personality": pet.personality,
+            } for pet in home_pets
+        ]
+
+@router.get("/home/layouts")
+async def get_home_layouts():
+    """Get available home layout images."""
+    import os
+
+    home_layout_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "home_layout")
+
+    if not os.path.exists(home_layout_dir):
+        return {
+            "city_exteriors": [],
+            "country_exteriors": [],
+            "city_interiors": [],
+            "country_interiors": []
+        }
+
+    files = os.listdir(home_layout_dir)
+
+    return {
+        "city_exteriors": [f for f in files if f.startswith("city_home") and not "interior" in f],
+        "country_exteriors": [f for f in files if f.startswith("home") and not f.startswith("home_layout") and not "interior" in f],
+        "city_interiors": [f for f in files if "city_home_interior" in f],
+        "country_interiors": [f for f in files if "country_home_interior" in f]
+    }
+
+@router.get("/home/layout/{employee_id}")
+async def get_home_layout(employee_id: int, view: str = "interior"):
+    """Get home layout data for a specific employee including all occupants and their positions."""
+    async with async_session_maker() as db:
+        # Get employee
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        # Get home settings
+        home_result = await db.execute(
+            select(HomeSettings).where(HomeSettings.employee_id == employee_id)
+        )
+        home_settings = home_result.scalar_one_or_none()
+
+        if not home_settings:
+            raise HTTPException(status_code=404, detail="Home settings not found for this employee")
+
+        # Get family members
+        family_result = await db.execute(
+            select(FamilyMember).where(FamilyMember.employee_id == employee_id)
+        )
+        family_members = family_result.scalars().all()
+
+        # Get home pets
+        pet_result = await db.execute(
+            select(HomePet).where(HomePet.employee_id == employee_id)
+        )
+        home_pets = pet_result.scalars().all()
+
+        # Check if it's work hours - employees should not be at home during work hours
+        from config import is_work_hours
+        is_work_time = is_work_hours()
+
+        # Select layout image based on view type
+        if view == "exterior":
+            layout_image = home_settings.home_layout_exterior
+            view_location = "outside"
+        else:
+            layout_image = home_settings.home_layout_interior
+            view_location = "inside"
+
+        # Generate positions for occupants with sleep-aware positioning
+        import random
+        occupants = []
+
+        # Bedroom positioning for sleeping people:
+        # Master bedroom (top-right area): Employees and spouses
+        # Children's room (top-left area): Children and pets
+        # Living areas (center/bottom): Awake people
+
+        master_bedroom_x = (65, 85)  # Right side
+        master_bedroom_y = (15, 35)  # Top
+
+        children_room_x = (15, 35)   # Left side
+        children_room_y = (15, 35)   # Top
+
+        living_area_x = (20, 80)     # Center
+        living_area_y = (40, 80)     # Bottom/middle
+
+        # Track sleeping spouses for positioning together
+        sleeping_spouse_position = None
+
+        # Add employee ONLY if it's not work hours (employees are at office during work hours)
+        if not is_work_time and view_location == "inside":  # Only show in interior view
+            employee_sleep_state = getattr(employee, 'sleep_state', 'awake')
+
+            # Position employee based on sleep state
+            if employee_sleep_state == "sleeping":
+                # Employee sleeps in master bedroom
+                position = {
+                    "x": random.uniform(*master_bedroom_x),
+                    "y": random.uniform(*master_bedroom_y)
+                }
+                sleeping_spouse_position = position  # Save for spouse
+            else:
+                # Employee awake - in living area
+                position = {
+                    "x": random.uniform(*living_area_x),
+                    "y": random.uniform(*living_area_y)
+                }
+
+            occupants.append({
+                "id": employee.id,
+                "name": employee.name,
+                "type": "employee",
+                "avatar_path": employee.avatar_path,
+                "title": employee.title,
+                "role": employee.role,
+                "department": employee.department,
+                "sleep_state": employee_sleep_state,
+                "position": position
+            })
+
+        # Add family members with sleep-aware positioning
+        children = []  # Track children for room sharing
+
+        for fm in family_members:
+            fm_location = fm.current_location or "inside"
+            fm_sleep_state = getattr(fm, 'sleep_state', 'awake')
+
+            # Only show in matching view location
+            if fm_location == view_location:
+                # Position based on relationship and sleep state
+                if fm_sleep_state == "sleeping":
+                    if fm.relationship_type == "spouse":
+                        # Spouse sleeps next to employee in master bedroom
+                        if sleeping_spouse_position:
+                            # Position near employee
+                            position = {
+                                "x": sleeping_spouse_position["x"] + random.uniform(-5, 5),
+                                "y": sleeping_spouse_position["y"] + random.uniform(-3, 3)
+                            }
+                        else:
+                            # Employee not sleeping, spouse sleeps alone
+                            position = {
+                                "x": random.uniform(*master_bedroom_x),
+                                "y": random.uniform(*master_bedroom_y)
+                            }
+                    elif fm.relationship_type == "child":
+                        # Children sleep in children's room (will group together)
+                        children.append(fm)
+                        position = {
+                            "x": random.uniform(*children_room_x),
+                            "y": random.uniform(*children_room_y)
+                        }
+                    else:
+                        # Other family (parents, siblings) sleep in guest area
+                        position = {
+                            "x": random.uniform(40, 60),
+                            "y": random.uniform(20, 40)
+                        }
+                else:
+                    # Awake - in living area
+                    position = {
+                        "x": random.uniform(*living_area_x),
+                        "y": random.uniform(*living_area_y)
+                    }
+
+                occupants.append({
+                    "id": fm.id,
+                    "name": fm.name,
+                    "type": "family",
+                    "relationship_type": fm.relationship_type,
+                    "avatar_path": fm.avatar_path,
+                    "sleep_state": fm_sleep_state,
+                    "position": position
+                })
+
+        # Add pets with sleep-aware positioning (pets sleep with children)
+        for pet in home_pets:
+            pet_location = pet.current_location or "inside"
+            pet_sleep_state = getattr(pet, 'sleep_state', 'awake')
+
+            if pet_location == view_location:
+                if pet_sleep_state == "sleeping":
+                    # Pets sleep in children's room
+                    position = {
+                        "x": random.uniform(*children_room_x),
+                        "y": random.uniform(*children_room_y)
+                    }
+                else:
+                    # Awake pets roam living area
+                    position = {
+                        "x": random.uniform(*living_area_x),
+                        "y": random.uniform(*living_area_y)
+                    }
+
+                occupants.append({
+                    "id": pet.id,
+                    "name": pet.name,
+                    "type": "pet",
+                    "pet_type": pet.pet_type,
+                    "avatar_path": pet.avatar_path,
+                    "sleep_state": pet_sleep_state,
+                    "position": position
+                })
+        
+        # Determine what locations are present (for display purposes)
+        locations_present = set()
+        if not is_work_time:
+            locations_present.add(view_location)  # Employee is in the current view if not work hours
+        for fm in family_members:
+            locations_present.add(fm.current_location or "inside")
+        for pet in home_pets:
+            locations_present.add(pet.current_location or "inside")
+
+        return {
+            "employee_id": employee_id,
+            "view": view,
+            "view_location": view_location,
+            "is_work_hours": is_work_time,
+            "layout_image": layout_image,
+            "home_type": home_settings.home_type,
+            "home_address": home_settings.home_address,
+            "occupants": occupants,
+            "locations_present": list(locations_present)
+        }
+
+class HomeLocationUpdateRequest(BaseModel):
+    employee_id: int
+    location: str  # "inside" or "outside"
+
+@router.post("/home/locations")
+async def update_home_locations(request: HomeLocationUpdateRequest, db: AsyncSession = Depends(get_db)):
+    """Update locations for all family members and pets in an employee's home."""
+    # Verify location is valid
+    if request.location not in ["inside", "outside"]:
+        raise HTTPException(status_code=400, detail="Location must be 'inside' or 'outside'")
+    
+    # Get employee
+    result = await db.execute(
+        select(Employee).where(Employee.id == request.employee_id, Employee.status == "active")
+    )
+    employee = result.scalar_one_or_none()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # Get all family members and pets
+    family_result = await db.execute(
+        select(FamilyMember).where(FamilyMember.employee_id == request.employee_id)
+    )
+    family_members = family_result.scalars().all()
+
+    pet_result = await db.execute(
+        select(HomePet).where(HomePet.employee_id == request.employee_id)
+    )
+    home_pets = pet_result.scalars().all()
+
+    # Update all family members to the same location
+    for fm in family_members:
+        fm.current_location = request.location
+
+    # Update all pets to the same location
+    for pet in home_pets:
+        pet.current_location = request.location
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "employee_id": request.employee_id,
+        "location": request.location,
+        "family_members_updated": len(family_members),
+        "pets_updated": len(home_pets)
+    }
+
+class HomeConversationRequest(BaseModel):
+    employee_id: int
+
+@router.post("/home/conversations")
+async def generate_home_conversations(
+    request: HomeConversationRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate home conversations between employee and family members, or between family members if employee is at work."""
+    try:
+        # Get employee
+        result = await db.execute(
+            select(Employee).where(Employee.id == request.employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        # Get family members
+        family_result = await db.execute(
+            select(FamilyMember).where(FamilyMember.employee_id == request.employee_id)
+        )
+        family_members = family_result.scalars().all()
+
+        if len(family_members) == 0:
+            return {"conversations": []}
+
+        # Get home pets for context
+        pet_result = await db.execute(
+            select(HomePet).where(HomePet.employee_id == request.employee_id)
+        )
+        home_pets = pet_result.scalars().all()
+
+        # Get home settings for context
+        home_result = await db.execute(
+            select(HomeSettings).where(HomeSettings.employee_id == request.employee_id)
+        )
+        home_settings = home_result.scalar_one_or_none()
+
+        # Check if it's work hours
+        from config import is_work_hours
+        is_work_time = is_work_hours()
+
+        # Generate conversations
+        from llm.ollama_client import OllamaClient
+        llm_client = OllamaClient()
+        conversations = []
+
+        # Get current time for context
+        from config import now
+        current_time = now()
+        time_of_day = "evening" if 18 <= current_time.hour < 22 else "night" if 22 <= current_time.hour or current_time.hour < 6 else "morning" if 6 <= current_time.hour < 12 else "afternoon"
+
+        import random
+
+        if is_work_time:
+            # Employee is at work - generate conversations between family members
+            if len(family_members) >= 2:
+                # Generate 1-2 conversations between family members
+                num_conversations = min(2, len(family_members) // 2)
+                available_family = family_members.copy()
+                
+                for _ in range(num_conversations):
+                    if len(available_family) < 2:
+                        break
+                    
+                    # Pick two different family members
+                    pair = random.sample(available_family, 2)
+                    fm1, fm2 = pair
+                    
+                    # Remove them from available pool
+                    available_family.remove(fm1)
+                    available_family.remove(fm2)
+                    
+                    # Generate conversation between family members
+                    conversation_data = await llm_client.generate_family_conversation(
+                        family_member1_name=fm1.name,
+                        family_member1_relationship=fm1.relationship_type,
+                        family_member1_age=fm1.age,
+                        family_member1_personality=fm1.personality_traits or [],
+                        family_member1_interests=fm1.interests or [],
+                        family_member1_occupation=fm1.occupation,
+                        family_member2_name=fm2.name,
+                        family_member2_relationship=fm2.relationship_type,
+                        family_member2_age=fm2.age,
+                        family_member2_personality=fm2.personality_traits or [],
+                        family_member2_interests=fm2.interests or [],
+                        family_member2_occupation=fm2.occupation,
+                        employee_name=employee.name,
+                        time_of_day=time_of_day,
+                        has_pets=len(home_pets) > 0,
+                        home_type=home_settings.home_type if home_settings else "city"
+                    )
+                    
+                    conversations.append({
+                        "family_member1_id": fm1.id,
+                        "family_member1_name": fm1.name,
+                        "family_member2_id": fm2.id,
+                        "family_member2_name": fm2.name,
+                        "employee_id": None,  # Employee not involved
+                        "employee_name": None,
+                        "messages": conversation_data.get("messages", [])
+                    })
+        else:
+            # Employee is home - generate conversations between employee and family members
+            # Select 1-2 family members to have conversations with
+            num_conversations = min(2, len(family_members))
+            selected_family = random.sample(family_members, num_conversations)
+
+            for family_member in selected_family:
+                # Generate conversation between employee and family member
+                conversation_data = await llm_client.generate_home_conversation(
+                    employee_name=employee.name,
+                    employee_title=employee.title,
+                    employee_personality=employee.personality_traits or [],
+                    employee_hobbies=employee.hobbies or [],
+                    family_member_name=family_member.name,
+                    family_member_relationship=family_member.relationship_type,
+                    family_member_age=family_member.age,
+                    family_member_personality=family_member.personality_traits or [],
+                    family_member_interests=family_member.interests or [],
+                    family_member_occupation=family_member.occupation,
+                    time_of_day=time_of_day,
+                    has_pets=len(home_pets) > 0,
+                    home_type=home_settings.home_type if home_settings else "city"
+                )
+
+                conversations.append({
+                    "employee_id": employee.id,
+                    "employee_name": employee.name,
+                    "family_member_id": family_member.id,
+                    "family_member_name": family_member.name,
+                    "family_member1_id": None,
+                    "family_member1_name": None,
+                    "family_member2_id": None,
+                    "family_member2_name": None,
+                    "messages": conversation_data.get("messages", [])
+                })
+            
+            # Also generate conversations between family members if there are 2+ family members
+            if len(family_members) >= 2:
+                # Generate 1 conversation between family members
+                available_family = [fm for fm in family_members if fm.id not in [f.id for f in selected_family]]
+                if len(available_family) >= 2:
+                    pair = random.sample(available_family, 2)
+                    fm1, fm2 = pair
+                    
+                    conversation_data = await llm_client.generate_family_conversation(
+                        family_member1_name=fm1.name,
+                        family_member1_relationship=fm1.relationship_type,
+                        family_member1_age=fm1.age,
+                        family_member1_personality=fm1.personality_traits or [],
+                        family_member1_interests=fm1.interests or [],
+                        family_member1_occupation=fm1.occupation,
+                        family_member2_name=fm2.name,
+                        family_member2_relationship=fm2.relationship_type,
+                        family_member2_age=fm2.age,
+                        family_member2_personality=fm2.personality_traits or [],
+                        family_member2_interests=fm2.interests or [],
+                        family_member2_occupation=fm2.occupation,
+                        employee_name=employee.name,
+                        time_of_day=time_of_day,
+                        has_pets=len(home_pets) > 0,
+                        home_type=home_settings.home_type if home_settings else "city"
+                    )
+                    
+                    conversations.append({
+                        "family_member1_id": fm1.id,
+                        "family_member1_name": fm1.name,
+                        "family_member2_id": fm2.id,
+                        "family_member2_name": fm2.name,
+                        "employee_id": None,
+                        "employee_name": None,
+                        "messages": conversation_data.get("messages", [])
+                    })
+
+        return {"conversations": conversations}
+    except Exception as e:
+        print(f"Error generating home conversations: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"conversations": []}
+
+# ========================================
+# CLOCK IN/OUT ENDPOINTS
+# ========================================
+
+@router.get("/clock-events/today")
+async def get_clock_events_today():
+    """Get all clock in/out events for today."""
+    async with async_session_maker() as db:
+        from business.clock_manager import ClockManager
+        clock_manager = ClockManager(db)
+
+        events = await clock_manager.get_all_clock_events_today()
+
+        # Get employee details for each event
+        result_data = []
+        for event in events:
+            emp_result = await db.execute(
+                select(Employee).where(Employee.id == event.employee_id)
+            )
+            employee = emp_result.scalar_one_or_none()
+
+            if employee:
+                result_data.append({
+                    "id": event.id,
+                    "employee": {
+                        "id": employee.id,
+                        "name": employee.name,
+                        "title": employee.title,
+                        "department": employee.department,
+                        "avatar_path": employee.avatar_path,
+                    },
+                    "event_type": event.event_type,
+                    "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                    "location": event.location,
+                    "notes": event.notes,
+                })
+
+        return result_data
+
+@router.get("/employees/{employee_id}/clock-history")
+async def get_employee_clock_history(employee_id: int, days: int = 7):
+    """Get clock in/out history for a specific employee."""
+    async with async_session_maker() as db:
+        # Verify employee exists
+        result = await db.execute(
+            select(Employee).where(Employee.id == employee_id, Employee.status == "active")
+        )
+        employee = result.scalar_one_or_none()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        from business.clock_manager import ClockManager
+        clock_manager = ClockManager(db)
+
+        events = await clock_manager.get_employee_clock_history(employee_id, days=days)
+
+        return [
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                "location": event.location,
+                "notes": event.notes,
+            } for event in events
+        ]
+
+@router.get("/clock-events/stats")
+async def get_clock_stats():
+    """Get clock in/out statistics for today."""
+    async with async_session_maker() as db:
+        from config import now
+        today_start = now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Get all active employees
+        emp_result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        total_employees = len(emp_result.scalars().all())
+
+        # Count clock ins today
+        clock_in_result = await db.execute(
+            select(ClockInOut).where(
+                and_(
+                    ClockInOut.event_type == "clock_in",
+                    ClockInOut.timestamp >= today_start
+                )
+            )
+        )
+        clocked_in_count = len(clock_in_result.scalars().all())
+
+        # Count clock outs today
+        clock_out_result = await db.execute(
+            select(ClockInOut).where(
+                and_(
+                    ClockInOut.event_type == "clock_out",
+                    ClockInOut.timestamp >= today_start
+                )
+            )
+        )
+        clocked_out_count = len(clock_out_result.scalars().all())
+
+        # Get employees currently at work (clocked in but not clocked out)
+        currently_at_work_result = await db.execute(
+            select(Employee).where(
+                and_(
+                    Employee.status == "active",
+                    Employee.activity_state.notin_(["at_home", "sleeping", "leaving_work", "commuting_home"])
+                )
+            )
+        )
+        currently_at_work = len(currently_at_work_result.scalars().all())
+
+        return {
+            "total_employees": total_employees,
+            "clocked_in_today": clocked_in_count,
+            "clocked_out_today": clocked_out_count,
+            "currently_at_work": currently_at_work,
+            "currently_at_home": total_employees - currently_at_work
         }
 

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    table {
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+      text-align: left;
+    }
+
+    th {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+      border-top-width: 2px;
+    }
+
+    th:first-child, td:first-child {
+      text-align: center;
+    }
+
+    tr:nth-child(odd) {
+      background-color: white;
+    }
+
+    tr:last-child {
+      border-bottom: 1px solid #d0d0d0;
+    }
+
+    tr:hover {
+      background-color: #f2f2f2;
+    }
+
+    th:last-child, td:last-child {
+      text-align: right;
+    }
+
+    tr.total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top-width: 2px;
+    }
+    
+    .green {
+      color: green;
+    }
+    
+    .red {
+      color: red;
+    }
+    
+    .blue {
+      color: blue;
+    }
+  </style>
+</head>
+<body>
+
+<table style="width:100%; margin: auto; padding: 12px;">
+  <tr>
+    <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Employee Dashboard</td>
+  </tr>
+  <tr>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">Name</th>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">Title</th>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">Department</th>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">Employee Count</th>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">KPIs</th>
+    <th style="background-color: #366092; color: white; font-weight: bold; border-top-width: 2px;">Actions</th>
+  </tr>
+  <tr class="total-row" style="font-size: 10pt;">
+    <td colspan="6">Total:</td>
+    <td colspan="4"></td>
+  </tr>
+
+  <!-- Employee Information -->
+  <tr>
+    <td style="background-color: white;">Elena Nelson</td>
+    <td style="background-color: white;">Sales Manager</td>
+    <td style="background-color: white;">Sales</td>
+    <td style="background-color: white;">1356</td>
+    <td style="background-color: white;"></td>
+    <td style="background-color: white;">
+      <a href="#" class="green">View Details</a> | 
+      <a href="#" class="red">Edit Profile</a>
+    </td>
+  </tr>
+
+  <!-- Business Metrics -->
+  <tr>
+    <td style="background-color: white;">$848,324.28</td>
+    <td style="background-color: white;">$361,970.04</td>
+    <td style="background-color: white;">($486,354.24)</td>
+    <td style="background-color: white;">42.67%</td>
+    <td style="background-color: white;"></td>
+    <td style="background-color: white;">
+      <a href="#" class="green">View Summary</a> | 
+      <a href="#" class="red">Edit Metrics</a>
+    </td>
+  </tr>
+
+  <!-- Active Projects Data -->
+  <tr>
+    <th style="background-color: #f2f2f2;">Project Name</th>
+    <th style="background-color: #f2f2f2;">Budget</th>
+    <th style="background-color: #f2f2f2;">Revenue</th>
+  </tr>
+  <tr>
+    <td style="background-color: white;">Customer Portal Redesign</td>
+    <td style="background-color: white;$88,137.90</td>
+    <td style="background-color: white;$10,036.51</td>
+  </tr>
+
+  <tr>
+    <th style="background-color: #f2f2f2;">API Infrastructure Upgrade</th>
+    <th style="background-color: #f2f2f2;$100,000.00</th>
+    <th style="background-color: #f2f2f2;$28,996.55</th>
+  </tr>
+
+  <!-- ... other projects data ... -->
+
+  <!-- Department Data -->
+  <tr>
+    <th style="background-color: #f2f2f2;">Department Name</th>
+    <th style="background-color: #f2f2f2;">Employee Count</th>
+    <th style="background-color: #f2f2f2;">Total Employees</th>
+  </tr>
+  <tr>
+    <td style="background-color: white;">Sales</td>
+    <td style="background-color: white;">47</td>
+    <td style="background-color: white;">1356</td>
+  </tr>
+
+  <!-- ... other departments data ... -->
+
+  <!-- Summary Section -->
+  <tr class="total-row" style="font-size: 10pt;">
+    <th colspan="5">Summary:</th>
+    <th colspan="2"></th>
+  </tr>
+  <tr>
+    <td style="background-color: white;">Total Revenue</td>
+    <td style="background-color: white;$848,324.28</td>
+    <td style="background-color: white;">Total Expenses</td>
+    <td style="background-color: white;$486,354.24</td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td colspan="10">Data Source: Business Intelligence Dashboard | Last Updated: March 2023 | Notes:</td>
+  </tr>
+</table>
+
+</body>
+</html>

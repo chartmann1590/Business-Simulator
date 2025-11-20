@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Report</title>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-family: 'Times New Roman', serif;
+            text-decoration: underline;
+            margin-top: -20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* HEADER */
+        .header {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            width: calc(100% - 20px);
+            height: 40px;
+            background-color: #fff;
+            border-bottom: 1px solid #ccc;
+            padding: 5px;
+        }
+        
+        .header span {
+            font-size: 14pt;
+        }
+        
+        /* EXECUTIVE SUMMARY */
+        .summary {
+            margin-top: 20px;
+        }
+        
+        .summary p {
+            font-size: 16pt;
+            margin-bottom: 10px;
+        }
+        
+        /* MAIN SECTIONS */
+        section {
+            margin-top: 20px;
+        }
+        
+        h2 {
+            font-weight: bold;
+            font-size: 14pt;
+            margin-bottom: 5px;
+        }
+        
+        p {
+            font-size: 12pt;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+        
+        /* DATA SECTIONS */
+        .data-section {
+            border-top: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th, td {
+            border: 1px solid #ccc;
+            padding: 5px;
+            text-align: left;
+        }
+        
+        /* CONCLUSION */
+        .conclusion {
+            margin-top: 20px;
+        }
+        
+        .conclusion p {
+            font-size: 16pt;
+            margin-bottom: 10px;
+        }
+        
+        /* FOOTER */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: calc(100% - 20px);
+            height: 40px;
+            background-color: #fff;
+            padding: 5px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        footer span {
+            font-size: 14pt;
+        }
+    </style>
+</head>
+<body>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1 style="text-align: center;">Business Report</h1>
+        <div class="header">
+            <span>Document Classification:</span> HR Report
+            <span>Department:</span> Engineering
+            <span>Date:</span> 2023-02-20
+            <span>Employee Name:</span> Juliana Navarro
+        </div>
+        
+        <p style="text-align: center;">This report is confidential and not for distribution.</p>
+        
+        <section>
+            <h2>Executive Summary</h2>
+            <p>The company has achieved significant revenue growth, with a total revenue of $848,324.28 and a profit margin of 42.67%. However, we must address the challenges posed by increasing expenses and active projects.</p>
+            <p>Our primary objectives are to optimize resource allocation, enhance project management, and explore opportunities for cost reduction.</p>
+        </section>
+        
+        <section>
+            <h2>Business Metrics</h2>
+            <table>
+                <tr>
+                    <th>Total Revenue</th>
+                    <td>$848,324.28</td>
+                </tr>
+                <tr>
+                    <th>Total Profit</th>
+                    <td>$361,970.04</td>
+                </tr>
+                <tr>
+                    <th>Profit Margin</th>
+                    <td>42.67%</td>
+                </tr>
+                <tr>
+                    <th>Total Expenses</th>
+                    <td>$486,354.24</td>
+                </tr>
+            </table>
+        </section>
+        
+        <section>
+            <h2>Active Projects</h2>
+            <ul>
+                <li>C customer experience enhancement ($115,778.81)</li>
+                <li>P product innovation program ($147,567.09)</li>
+                <li>D digital transformation project ($196,119.03)</li>
+            </ul>
+        </section>
+        
+        <section class="data-section">
+            <h2>Department Distribution</h2>
+            <table>
+                <tr>
+                    <th>Department</th>
+                    <th>Employees</th>
+                </tr>
+                <tr>
+                    <td>Marketing</td>
+                    <td>64</td>
+                </tr>
+                <tr>
+                    <td>Design</td>
+                    <td>56</td>
+                </tr>
+                <tr>
+                    <td>HR</td>
+                    <td>55</td>
+                </tr>
+                <tr>
+                    <td>Product</td>
+                    <td>49</td>
+                </tr>
+                <tr>
+                    <td>Sales</td>
+                    <td>48</td>
+                </tr>
+            </table>
+        </section>
+        
+        <section class="data-section">
+            <h2>Critical Requirements</h2>
+            <p>Based on our analysis, we recommend the following steps to address the current challenges:</p>
+            <ul>
+                <li>Optimize resource allocation by streamlining project management and enhancing collaboration among teams.</li>
+                <li>Explore opportunities for cost reduction through process documentation and efficiency analysis.</li>
+                <li>Maintain a focus on customer experience enhancement, product innovation program, and digital transformation project.</li>
+            </ul>
+        </section>
+        
+        <section class="conclusion">
+            <p>In conclusion, we have presented a comprehensive report outlining our business metrics, department distribution, active projects, and critical requirements. We recommend continued optimization of resource allocation and cost reduction to achieve long-term sustainability.</p>
+        </section>
+        
+        <footer>
+            <span>Document Version: 1.0</span>
+            <span>Date Created: 2023-02-20</span>
+        </footer>
+    </div>
+</body>
+</html>

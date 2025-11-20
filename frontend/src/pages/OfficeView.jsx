@@ -536,14 +536,53 @@ function OfficeView() {
             {birthdayParties.map((party) => {
               const partyDate = new Date(party.party_time || party.celebration_date)
               const isToday = partyDate.toDateString() === new Date().toDateString()
-              const isHappening = isToday && partyDate <= new Date()
+              // Party duration is 1 hour, so check if current time is between start and end
+              const partyStart = new Date(party.party_time || party.celebration_date)
+              const partyEnd = new Date(partyStart.getTime() + 60 * 60 * 1000) // Add 1 hour
+              const now = new Date()
+              const isHappening = now >= partyStart && now < partyEnd
+              
+              const handlePartyClick = () => {
+                if (isHappening) {
+                  // Navigate to the party room
+                  setSelectedFloor(party.party_floor)
+                  // Find the room by matching party_room
+                  const partyRoomId = party.party_room || 'breakroom'
+                  const rooms = officeData?.rooms || []
+                  // Try to find the room - match by ID, or by name containing "breakroom" on the correct floor
+                  let partyRoom = rooms.find(r => 
+                    r.id === partyRoomId && r.floor === party.party_floor
+                  )
+                  // If not found, try matching base room name without floor suffix
+                  if (!partyRoom) {
+                    const baseRoomId = partyRoomId.replace('_floor2', '').replace('_floor3', '').replace('_floor4', '')
+                    partyRoom = rooms.find(r => 
+                      (r.id === baseRoomId || r.id === partyRoomId) && 
+                      r.floor === party.party_floor &&
+                      (r.name && r.name.toLowerCase().includes('breakroom'))
+                    )
+                  }
+                  // Last resort: find any breakroom on the correct floor
+                  if (!partyRoom) {
+                    partyRoom = rooms.find(r => 
+                      r.floor === party.party_floor &&
+                      (r.name && r.name.toLowerCase().includes('breakroom'))
+                    )
+                  }
+                  if (partyRoom) {
+                    setSelectedRoom(partyRoom)
+                    handleRoomClick(partyRoom)
+                  }
+                }
+              }
               
               return (
                 <div
                   key={party.id}
-                  className={`bg-white rounded-lg p-4 border-2 transition-colors ${
+                  onClick={handlePartyClick}
+                  className={`bg-white rounded-lg p-4 border-2 transition-colors cursor-pointer ${
                     isHappening
-                      ? 'border-pink-400 bg-pink-50'
+                      ? 'border-pink-400 bg-pink-50 hover:border-pink-500'
                       : 'border-gray-200 hover:border-pink-300'
                   }`}
                 >

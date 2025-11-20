@@ -50,8 +50,16 @@ export const apiFetch = async (url, options = {}, config = {}) => {
   }
 
   try {
-    // Make the actual request - NO timeout, NO retry, just fetch
-    const response = await fetch(url, options)
+    // Make the actual request with AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout (increased from 10s to prevent premature aborts)
+    
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
 
     if (returnResponse) {
       return response

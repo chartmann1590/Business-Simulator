@@ -342,19 +342,22 @@ class EmployeeAgent:
         for email in reversed(unread_emails):
             # Get the thread_id for this conversation
             thread_id = email.thread_id or generate_thread_id(self.employee.id, email.sender_id)
-            
-            # SIMPLIFIED: Check if we've already responded to this email
-            # Look for ANY response we sent to this person in this thread after receiving this email
-            # Use a 2-second buffer to avoid race conditions with very recent emails
-            time_buffer = email.timestamp + timedelta(seconds=2)
-            
+
+            # IMPROVED: Check if we've already responded to this specific email
+            # Look for a response we sent in a time window after receiving this email
+            # This prevents false positives where a response to a LATER message is counted as a response to THIS message
+            # Time window: 2 seconds to 10 minutes after receiving the email
+            time_buffer_start = email.timestamp + timedelta(seconds=2)
+            time_buffer_end = email.timestamp + timedelta(minutes=10)
+
             result = await self.db.execute(
                 select(Email)
                 .where(
                     Email.sender_id == self.employee.id,
                     Email.recipient_id == email.sender_id,
                     Email.thread_id == thread_id,
-                    Email.timestamp > time_buffer
+                    Email.timestamp >= time_buffer_start,
+                    Email.timestamp <= time_buffer_end
                 )
                 .limit(1)
             )
@@ -392,22 +395,31 @@ class EmployeeAgent:
             # Skip if sender is None (messages from manager/user are handled separately)
             if chat.sender_id is None:
                 continue
-                
+            
+            # CRITICAL: Skip if sender is the same as recipient (employee replying to themselves)
+            # This should never happen, but prevent it just in case
+            if chat.sender_id == self.employee.id:
+                print(f"⚠️  Skipping chat where {self.employee.name} would reply to themselves (chat ID: {chat.id})")
+                continue
+
             # Get the thread_id for this conversation
             thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
-            
-            # SIMPLIFIED: Check if we've already responded to this message
-            # Look for ANY response we sent to this person in this thread after receiving this message
-            # Use a 2-second buffer to avoid race conditions with very recent messages
-            time_buffer = chat.timestamp + timedelta(seconds=2)
-            
+
+            # IMPROVED: Check if we've already responded to this specific message
+            # Look for a response we sent in a time window after receiving this message
+            # This prevents false positives where a response to a LATER message is counted as a response to THIS message
+            # Time window: 2 seconds to 10 minutes after receiving the message
+            time_buffer_start = chat.timestamp + timedelta(seconds=2)
+            time_buffer_end = chat.timestamp + timedelta(minutes=10)
+
             result = await self.db.execute(
                 select(ChatMessage)
                 .where(
                     ChatMessage.sender_id == self.employee.id,
                     ChatMessage.recipient_id == chat.sender_id,
                     ChatMessage.thread_id == thread_id,
-                    ChatMessage.timestamp > time_buffer
+                    ChatMessage.timestamp >= time_buffer_start,
+                    ChatMessage.timestamp <= time_buffer_end
                 )
                 .limit(1)
             )
@@ -487,8 +499,10 @@ class EmployeeAgent:
                 )
                 project_context = result.scalar_one_or_none()
         
-        # Generate response using LLM - ALWAYS generate a response
+        # ALWAYS generate a response - with multiple fallback levels
+        response = None
         try:
+            # Try to generate LLM response
             response = await self.llm_client.generate_email_response(
                 recipient_name=self.employee.name,
                 recipient_title=self.employee.title,
@@ -501,36 +515,43 @@ class EmployeeAgent:
                 project_context=project_context.name if project_context else None,
                 business_context=business_context
             )
-            
-            # Ensure we always have a response - use fallback if LLM fails
-            if not response or len(response.strip()) == 0:
-                response = f"Hi {sender.name},\n\nThanks for reaching out. I'll review this and get back to you if needed.\n\nBest regards,\n{self.employee.name}"
-        except Exception as e:
-            # Even if LLM fails, create a fallback response
-            print(f"⚠️ Error generating email response for {self.employee.name}, using fallback: {e}")
-            response = f"Hi {sender.name},\n\nThanks for your email. I've received it and will review it shortly.\n\nBest regards,\n{self.employee.name}"
+        except Exception as llm_error:
+            print(f"[WARNING] LLM error for {self.employee.name}, using fallback: {llm_error}")
+
+        # Ensure we always have a response - use fallback if LLM fails or returns empty
+        if not response or len(response.strip()) == 0:
+            response = f"Hi {sender.name},\n\nThanks for reaching out. I'll review this and get back to you if needed.\n\nBest regards,\n{self.employee.name}"
         
         # Use the same thread_id as the original email
         thread_id = email.thread_id or generate_thread_id(self.employee.id, email.sender_id)
-        
-        # Create reply email - ALWAYS create a response
+
+        # Create reply email - ALWAYS create a response (guaranteed)
         reply_subject = f"Re: {email.subject}" if not email.subject.startswith("Re:") else email.subject
-        
-        reply_email = Email(
-            sender_id=self.employee.id,
-            recipient_id=email.sender_id,
-            subject=reply_subject,
-            body=response,
-            read=False,
-            thread_id=thread_id
-        )
-        self.db.add(reply_email)
-        await self.db.flush()
-        print(f"✅ {self.employee.name} responded to {sender.name}'s email")
+
+        try:
+            reply_email = Email(
+                sender_id=self.employee.id,
+                recipient_id=email.sender_id,
+                subject=reply_subject,
+                body=response,
+                read=False,
+                thread_id=thread_id
+            )
+            self.db.add(reply_email)
+            await self.db.flush()
+            print(f"[OK] {self.employee.name} responded to {sender.name}'s email")
+        except Exception as db_error:
+            print(f"[ERROR] Database error saving email response from {self.employee.name}: {db_error}")
+            raise  # Re-raise to ensure we know about DB errors
     
     async def _respond_to_chat(self, chat: ChatMessage, business_context: Dict):
         """Generate and send a response to a chat message."""
         from sqlalchemy import select
+        
+        # CRITICAL: Prevent employees from replying to themselves
+        if chat.sender_id == self.employee.id:
+            print(f"⚠️  BLOCKED: {self.employee.name} attempted to reply to their own message (chat ID: {chat.id})")
+            return
         
         # Get sender information
         result = await self.db.execute(
@@ -538,6 +559,7 @@ class EmployeeAgent:
         )
         sender = result.scalar_one_or_none()
         if not sender:
+            print(f"⚠️  Cannot respond: sender with ID {chat.sender_id} not found")
             return
         
         # Get project context if available
@@ -553,8 +575,10 @@ class EmployeeAgent:
                 )
                 project_context = result.scalar_one_or_none()
         
-        # Generate response using LLM - ALWAYS generate a response
+        # ALWAYS generate a response - with multiple fallback levels
+        response = None
         try:
+            # Try to generate LLM response
             response = await self.llm_client.generate_chat_response(
                 recipient_name=self.employee.name,
                 recipient_title=self.employee.title,
@@ -566,15 +590,18 @@ class EmployeeAgent:
                 project_context=project_context.name if project_context else None,
                 business_context=business_context
             )
-            
-            # Ensure we always have a response - use fallback if LLM fails
-            if not response or len(response.strip()) == 0:
-                response = f"Thanks for reaching out, {sender.name}! I'll get back to you on that."
-            
-            # Use the same thread_id as the original chat
-            thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
-            
-            # Create reply chat - ALWAYS create a response
+        except Exception as llm_error:
+            print(f"[WARNING] LLM error for {self.employee.name}, using fallback: {llm_error}")
+
+        # Ensure we always have a response - use fallback if LLM fails or returns empty
+        if not response or len(response.strip()) == 0:
+            response = f"Thanks for reaching out, {sender.name}! I'll get back to you on that."
+
+        # Use the same thread_id as the original chat
+        thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
+
+        # Create reply chat - ALWAYS create a response (guaranteed)
+        try:
             reply_chat = ChatMessage(
                 sender_id=self.employee.id,
                 recipient_id=chat.sender_id,
@@ -583,18 +610,8 @@ class EmployeeAgent:
             )
             self.db.add(reply_chat)
             await self.db.flush()
-            print(f"✅ {self.employee.name} responded to {sender.name}'s chat message")
-        except Exception as e:
-            # Even if LLM fails, create a fallback response
-            print(f"⚠️ Error generating response for {self.employee.name}, using fallback: {e}")
-            thread_id = chat.thread_id or generate_thread_id(self.employee.id, chat.sender_id)
-            fallback_response = f"Got it, {sender.name}! Thanks for the message."
-            reply_chat = ChatMessage(
-                sender_id=self.employee.id,
-                recipient_id=chat.sender_id,
-                message=fallback_response,
-                thread_id=thread_id
-            )
-            self.db.add(reply_chat)
-            await self.db.flush()
+            print(f"[OK] {self.employee.name} responded to {sender.name}'s chat message")
+        except Exception as db_error:
+            print(f"[ERROR] Database error saving chat response from {self.employee.name}: {db_error}")
+            raise  # Re-raise to ensure we know about DB errors
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 function ProjectDetail() {
   const { id } = useParams()
@@ -20,12 +21,12 @@ function ProjectDetail() {
 
   const fetchProject = async () => {
     try {
-      const response = await fetch(`/api/projects/${id}`)
-      const data = await response.json()
-      setProject(data)
-      setLoading(false)
+      const result = await apiGet(`/api/projects/${id}`)
+      setProject(result.data || null)
     } catch (error) {
       console.error('Error fetching project:', error)
+      setProject(null)
+    } finally {
       setLoading(false)
     }
   }
@@ -33,13 +34,11 @@ function ProjectDetail() {
   const fetchActivities = async () => {
     setLoadingActivities(true)
     try {
-      const response = await fetch(`/api/projects/${id}/activities`)
-      if (response.ok) {
-        const data = await response.json()
-        setActivities(data || [])
-      }
+      const result = await apiGet(`/api/projects/${id}/activities`)
+      setActivities(Array.isArray(result.data) ? result.data : [])
     } catch (error) {
       console.error('Error fetching project activities:', error)
+      setActivities([])
     } finally {
       setLoadingActivities(false)
     }

@@ -35,9 +35,9 @@ class BirthdayManager:
         return result.scalars().all()
     
     async def celebrate_birthday(self, employee: Employee) -> Optional[BirthdayCelebration]:
-        """Create a birthday celebration for an employee and organize a party in breakroom."""
-        from engine.movement_system import update_employee_location
+        """Create a birthday celebration for an employee. Party will happen at scheduled meeting time."""
         from employees.room_assigner import ROOM_BREAKROOM
+        from database.models import Meeting
         today = ensure_timezone_aware(local_now())
         
         # Check if we already celebrated today
@@ -50,39 +50,93 @@ class BirthdayManager:
         if existing:
             return None  # Already celebrated today
         
-        # Calculate age (rough estimate based on hired_at)
-        age = 25  # Default age
-        if employee.hired_at:
-            # Ensure hired_at is timezone-aware for comparison
-            hired_at_aware = ensure_timezone_aware(employee.hired_at)
-            years_employed = (today - hired_at_aware).days / 365.25
-            age = int(25 + years_employed)
-        
-        # Get 14 employees + birthday person = 15 total for the party
-        # Exclude terminated employees
-        all_employees_result = await self.db.execute(
-            select(Employee)
-            .where(Employee.status == "active")
-            .where(Employee.status != "fired")
-            .where(Employee.fired_at.is_(None))
-            .where(Employee.id != employee.id)
+        # Find the scheduled birthday party meeting for today
+        today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        meeting_result = await self.db.execute(
+            select(Meeting)
+            .where(Meeting.start_time >= today_start)
+            .where(Meeting.start_time < today_end)
         )
-        all_employees = all_employees_result.scalars().all()
-        num_attendees = min(14, len(all_employees))
-        attendees = random.sample(all_employees, num_attendees)
-        attendee_ids = [emp.id for emp in attendees]
+        birthday_meeting = None
+        for meeting in meeting_result.scalars().all():
+            metadata = meeting.meeting_metadata or {}
+            if metadata.get('is_birthday_party') and metadata.get('birthday_employee_id') == employee.id:
+                birthday_meeting = meeting
+                break
         
-        # Choose a breakroom for the party (prefer larger ones)
-        breakrooms = [
-            (f"{ROOM_BREAKROOM}_floor2", 2),  # Floor 2 breakroom (capacity 10)
-            (ROOM_BREAKROOM, 1),  # Floor 1 breakroom (capacity 8)
-        ]
-        party_breakroom, party_floor = random.choice(breakrooms)
+        # If no meeting found, create one for 2 PM today
+        if not birthday_meeting:
+            # Calculate age
+            age = 25
+            if employee.hired_at:
+                hired_at_aware = ensure_timezone_aware(employee.hired_at)
+                years_employed = (today - hired_at_aware).days / 365.25
+                age = int(25 + years_employed)
+            
+            # Get attendees
+            all_employees_result = await self.db.execute(
+                select(Employee)
+                .where(Employee.status == "active")
+                .where(Employee.status != "fired")
+                .where(Employee.fired_at.is_(None))
+                .where(Employee.id != employee.id)
+            )
+            all_employees = all_employees_result.scalars().all()
+            num_attendees = min(14, len(all_employees))
+            attendees = random.sample(all_employees, num_attendees) if all_employees else []
+            attendee_ids = [emp.id for emp in attendees]
+            
+            # Choose breakroom
+            breakrooms = [
+                (f"{ROOM_BREAKROOM}_floor2", 2),
+                (ROOM_BREAKROOM, 1),
+            ]
+            party_breakroom, party_floor = random.choice(breakrooms)
+            
+            # Schedule for 2 PM today
+            party_time = today.replace(hour=14, minute=0, second=0, microsecond=0)
+            party_end = party_time + timedelta(hours=1)
+            
+            # Create the meeting
+            room_name = party_breakroom.replace("_floor2", "").replace("_", " ").title()
+            birthday_meeting = Meeting(
+                title=f"🎂 {employee.name}'s Birthday Party",
+                description=f"Birthday party for {employee.name}",
+                organizer_id=employee.id,
+                attendee_ids=attendee_ids + [employee.id],
+                start_time=party_time,
+                end_time=party_end,
+                status="scheduled",
+                meeting_metadata={
+                    "is_birthday_party": True,
+                    "birthday_employee_id": employee.id,
+                    "age": age,
+                    "party_room": party_breakroom,
+                    "party_floor": party_floor,
+                    "room_name": room_name
+                }
+            )
+            self.db.add(birthday_meeting)
+            await self.db.flush()
+        else:
+            # Use meeting details
+            metadata = birthday_meeting.meeting_metadata or {}
+            party_time = birthday_meeting.start_time
+            party_breakroom = metadata.get('party_room', ROOM_BREAKROOM)
+            party_floor = metadata.get('party_floor', 1)
+            age = metadata.get('age', 25)
+            attendee_ids = [aid for aid in birthday_meeting.attendee_ids if aid != employee.id] if birthday_meeting.attendee_ids else []
         
-        # Schedule party time (within the next hour)
-        party_time = today + timedelta(minutes=random.randint(5, 60))
+        # Calculate age if not from meeting
+        if not birthday_meeting or 'age' not in (birthday_meeting.meeting_metadata or {}):
+            age = 25
+            if employee.hired_at:
+                hired_at_aware = ensure_timezone_aware(employee.hired_at)
+                years_employed = (today - hired_at_aware).days / 365.25
+                age = int(25 + years_employed)
         
-        # Create celebration with party details
+        # Create celebration with party details (party will happen at scheduled time)
         celebration = BirthdayCelebration(
             employee_id=employee.id,
             celebration_date=today,
@@ -91,17 +145,24 @@ class BirthdayManager:
             celebration_message=f"Happy {age}th birthday, {employee.name}! 🎉",
             party_room=party_breakroom,
             party_floor=party_floor,
-            party_time=party_time
+            party_time=party_time  # Use scheduled meeting time (2 PM)
         )
         self.db.add(celebration)
         
-        # Move birthday person to breakroom when party time arrives
-        # Mark as "break" so they're protected from being kicked out until party ends
+        # Get attendee employee objects for movement
+        # Always fetch attendees from attendee_ids to ensure we have Employee objects
+        attendees_result = await self.db.execute(
+            select(Employee).where(Employee.id.in_(attendee_ids))
+        )
+        attendees = attendees_result.scalars().all()
+        
+        # Move birthday person and all attendees to breakroom immediately
+        # Everyone must attend and be in the room to celebrate
+        from engine.movement_system import update_employee_location
         await update_employee_location(employee, party_breakroom, "break", self.db)
         employee.floor = party_floor
         
         # Move all attendees to the breakroom
-        # Mark as "break" so they're protected from being kicked out until party ends
         for attendee in attendees:
             await update_employee_location(attendee, party_breakroom, "break", self.db)
             attendee.floor = party_floor
@@ -219,11 +280,18 @@ class BirthdayManager:
         return sorted(upcoming, key=lambda x: x["days_until"])
     
     async def get_scheduled_parties(self) -> List[dict]:
-        """Get all scheduled birthday parties with room information."""
+        """Get all scheduled birthday parties with room information.
+        
+        Includes both BirthdayCelebration records and Meeting records for birthday parties.
+        """
         from datetime import datetime, timedelta
+        from database.models import Meeting
         today = ensure_timezone_aware(local_now())
         today_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
         week_from_now = today_start + timedelta(days=7)
+        
+        parties = []
+        party_employee_ids = set()  # Track which employees already have parties from celebrations
         
         # Get celebrations from today and next week
         result = await self.db.execute(
@@ -234,7 +302,6 @@ class BirthdayManager:
         )
         celebrations = result.scalars().all()
         
-        parties = []
         for celebration in celebrations:
             # Get employee info
             emp_result = await self.db.execute(
@@ -245,22 +312,97 @@ class BirthdayManager:
             if not employee:
                 continue
             
+            party_employee_ids.add(employee.id)
+            
             # Format room name
             room_name = "Breakroom"
             if celebration.party_room:
                 room_name = celebration.party_room.replace("_floor2", "").replace("_", " ").title()
+            
+            # Get party time - prefer party_time, but if not set, try to find the meeting
+            party_time = celebration.party_time
+            if not party_time:
+                # Try to find the meeting for this celebration
+                meeting_result = await self.db.execute(
+                    select(Meeting)
+                    .where(Meeting.start_time >= celebration.celebration_date.replace(hour=0, minute=0, second=0, microsecond=0))
+                    .where(Meeting.start_time < celebration.celebration_date.replace(hour=23, minute=59, second=59))
+                )
+                for meeting in meeting_result.scalars().all():
+                    metadata = meeting.meeting_metadata or {}
+                    if metadata.get('is_birthday_party') and metadata.get('birthday_employee_id') == employee.id:
+                        party_time = meeting.start_time
+                        break
+                # If still no party_time, default to 2 PM on celebration date
+                if not party_time:
+                    party_time = celebration.celebration_date.replace(hour=14, minute=0, second=0, microsecond=0)
             
             parties.append({
                 "id": celebration.id,
                 "employee_id": employee.id,
                 "employee_name": employee.name,
                 "celebration_date": celebration.celebration_date.isoformat() if celebration.celebration_date else None,
-                "party_time": (celebration.party_time or celebration.celebration_date).isoformat() if (celebration.party_time or celebration.celebration_date) else None,
+                "party_time": party_time.isoformat() if party_time else None,
                 "party_room": celebration.party_room or "breakroom",
                 "party_floor": celebration.party_floor or 1,
                 "room_name": room_name,
                 "attendees_count": len(celebration.attendees) if celebration.attendees else 0,
                 "age": celebration.year
+            })
+        
+        # Also get birthday party meetings from Meeting table (for scheduled parties on calendar)
+        meetings_result = await self.db.execute(
+            select(Meeting)
+            .where(Meeting.start_time >= today_start)
+            .where(Meeting.start_time <= week_from_now)
+            .order_by(Meeting.start_time)
+        )
+        meetings = meetings_result.scalars().all()
+        
+        for meeting in meetings:
+            metadata = meeting.meeting_metadata or {}
+            if not metadata.get('is_birthday_party'):
+                continue
+            
+            birthday_employee_id = metadata.get('birthday_employee_id')
+            if not birthday_employee_id:
+                continue
+            
+            # Skip if we already have a celebration for this employee (celebrations take precedence)
+            if birthday_employee_id in party_employee_ids:
+                continue
+            
+            # Get employee info
+            emp_result = await self.db.execute(
+                select(Employee)
+                .where(Employee.id == birthday_employee_id)
+            )
+            employee = emp_result.scalar_one_or_none()
+            if not employee:
+                continue
+            
+            # Get room info from metadata
+            room_name = metadata.get('room_name', 'Breakroom')
+            party_room = metadata.get('party_room', 'breakroom')
+            party_floor = metadata.get('party_floor', 1)
+            age = metadata.get('age', 25)
+            
+            # Count attendees
+            attendees_count = len(meeting.attendee_ids) if meeting.attendee_ids else 0
+            if attendees_count > 0:
+                attendees_count -= 1  # Exclude birthday person from count
+            
+            parties.append({
+                "id": f"meeting_{meeting.id}",
+                "employee_id": employee.id,
+                "employee_name": employee.name,
+                "celebration_date": meeting.start_time.date().isoformat() if meeting.start_time else None,
+                "party_time": meeting.start_time.isoformat() if meeting.start_time else None,
+                "party_room": party_room,
+                "party_floor": party_floor,
+                "room_name": room_name,
+                "attendees_count": attendees_count,
+                "age": age
             })
         
         return parties

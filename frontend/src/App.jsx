@@ -11,6 +11,7 @@ import TaskDetail from './pages/TaskDetail'
 import Financials from './pages/Financials'
 import Communications from './pages/Communications'
 import OfficeView from './pages/OfficeView'
+import HomeView from './pages/HomeView'
 import CustomerReviews from './pages/CustomerReviews'
 import NotificationsHistory from './pages/NotificationsHistory'
 import PetCareGame from './pages/PetCareGame'
@@ -54,6 +55,7 @@ function App() {
           <nav className="flex-1 p-4 space-y-1">
             <NavLink to="/" icon="📊">Dashboard</NavLink>
             <NavLink to="/office-view" icon="🏢">Office View</NavLink>
+            <NavLink to="/home-view" icon="🏠">Home View</NavLink>
             <NavLink to="/pet-care" icon="🐾">Pet Care Game</NavLink>
             <NavLink to="/pet-care-log" icon="📋">Pet Care Log</NavLink>
             <NavLink to="/employees" icon="👥">Employees</NavLink>
@@ -72,6 +74,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/office-view" element={<OfficeView />} />
+            <Route path="/home-view" element={<HomeView />} />
             <Route path="/pet-care" element={<PetCareGame />} />
             <Route path="/pet-care-log" element={<PetCareLog />} />
             <Route path="/employees" element={<Employees />} />

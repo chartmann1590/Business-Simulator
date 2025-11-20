@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f2f2f2;
+    }
+    
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+      text-align: left;
+      vertical-align: top;
+      font-size: 11pt;
+      font-family: Arial;
+    }
+    
+    th {
+      background-color: #366092;
+      color: white;
+      padding: 8px;
+      border-bottom: 1px solid #d0d0d0;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    
+    tr:nth-child(odd) {
+      background-color: #fff;
+    }
+    
+    th, td:hover {
+      cursor: pointer;
+    }
+    
+    th, td:focus {
+      outline: none;
+    }
+    
+    .total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    .note {
+      color: red;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+      <td colspan="8">Financial Dashboard - Mobile App Development Project</td>
+    </tr>
+    
+    <tr style="background-color: #366092; color: white; padding: 8px;">
+      <th>Category</th>
+      <th>Revenue</th>
+      <th>Expense</th>
+      <th>Profit</th>
+      <th>Margin</th>
+      <th>Variance</th>
+    </tr>
+    
+    <tr class="total-row">
+      <td></td>
+      <td><span>$32,045.32</span></td>
+      <td><span>$150,000.00</span></td>
+      <td><span>$361,970.04</span></td>
+      <td><span>42.67%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Department</td>
+      <td>Revenue</td>
+      <td>Expense</td>
+      <td>Profit</td>
+      <td>Margin</td>
+      <td>Variance</td>
+    </tr>
+    
+    <tr>
+      <td>Product</td>
+      <td><span>$848,324.28</span></td>
+      <td><span>$486,354.24</span></td>
+      <td><span>$361,970.04</span></td>
+      <td><span>42.67%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Total</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    
+    <tr style="background-color: #f2f2f2">
+      <th>Project Name</th>
+      <th>Budget</th>
+      <th>Revenue</th>
+      <th>Expense</th>
+      <th>Profit</th>
+      <th>Margin</th>
+    </tr>
+    
+    <tr>
+      <td>Digital Transformation Project</td>
+      <td><span>$196,119.03</span></td>
+      <td><span>$70,675.89</span></td>
+      <td><span>$125,443.14</span></td>
+      <td><span>$45,232.75</span></td>
+      <td><span>23.10%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Strategic Partnership Development</td>
+      <td><span>$156,356.16</span></td>
+      <td><span>$17,080.48</span></td>
+      <td><span>$139,275.68</span></td>
+      <td><span>$-22.20%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Customer Experience Enhancement</td>
+      <td><span>$88,137.90</span></td>
+      <td><span>$10,036.51</span></td>
+      <td><span>$78,101.39</span></td>
+      <td><span>-11.20%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Product Innovation Program</td>
+      <td><span>$147,567.09</span></td>
+      <td><span>$0.00</span></td>
+      <td><span>$147,567.09</span></td>
+      <td><span>100%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr style="background-color: #f2f2f2">
+      <th>Department Headcount</th>
+      <th>Employees</th>
+      <th>Employee Cost</th>
+      <th>Salary Breakdown</th>
+      <th>Department Profit</th>
+      <th>Department Margin</th>
+    </tr>
+    
+    <tr>
+      <td>Marketing</td>
+      <td><span>64</span></td>
+      <td><span>$2,048,192.32</span></td>
+      <td><span>$1,256,983.04</span></td>
+      <td><span>$791,209.28</span></td>
+      <td><span>38.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Design</td>
+      <td><span>56</span></td>
+      <td><span>$1,408,032.32</span></td>
+      <td><span>$828,051.84</span></td>
+      <td><span>$580,980.48</span></td>
+      <td><span>41.01%</span></td>
+    </tr>
+    
+    <tr>
+      <td HR</td>
+      <td><span>56</span></td>
+      <td><span>$2,048,192.32</span></td>
+      <td><span>$1,256,983.04</span></td>
+      <td><span>$791,209.28</span></td>
+      <td><span>38.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Product</td>
+      <td><span>49</span></td>
+      <td><span>$1,008,924.32</span></td>
+      <td><span>$608,451.52</span></td>
+      <td><span>$400,472.80</span></td>
+      <td><span>39.59%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Sales</td>
+      <td><span>47</span></td>
+      <td><span>$1,408,032.32</span></td>
+      <td><span>$828,051.84</span></td>
+      <td><span>$580,980.48</span></td>
+      <td><span>41.01%</span></td>
+    </tr>
+    
+    <tr>
+      <td>IT</td>
+      <td><span>51</span></td>
+      <td><span>$1,656,064.32</span></td>
+      <td><span>$1,045,991.84</span></td>
+      <td><span>$610,072.48</span></td>
+      <td><span>36.91%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Operations</td>
+      <td><span>57</span></td>
+      <td><span>$2,048,192.32</span></td>
+      <td><span>$1,256,983.04</span></td>
+      <td><span>$791,209.28</span></td>
+      <td><span>38.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Engineering</td>
+      <td><span>55</span></td>
+      <td><span>$1,656,064.32</span></td>
+      <td><span>$1,045,991.84</span></td>
+      <td><span>$610,072.48</span></td>
+      <td><span>36.91%</span></td>
+    </tr>
+    
+    <tr>
+      <td Administration</td>
+      <td><span>63</span></td>
+      <td><span>$2,048,192.32</span></td>
+      <td><span>$1,256,983.04</span></td>
+      <td><span>$791,209.28</span></td>
+      <td><span>38.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Executive</td>
+      <td><span>1</span></td>
+      <td><span>$0.00</span></td>
+      <td><span>$0.00</span></td>
+      <td><span>$0.00</span></td>
+      <td><span>0%</span></td>
+    </tr>
+    
+    <tr style="background-color: #f2f2f2">
+      <th>Quarter</th>
+      <th>Revenue</th>
+      <th>Expense</th>
+      <th>Profit</th>
+      <th>Margin</th>
+      <th>Variance</th>
+    </tr>
+    
+    <tr>
+      <td>Q1</td>
+      <td><span>$208,324.28</span></td>
+      <td><span>$100,354.24</span></td>
+      <td><span>$107,970.04</span></td>
+      <td><span>52.37%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Q2</td>
+      <td><span>$320,045.32</span></td>
+      <td><span>$150,000.00</span></td>
+      <td><span>$170,045.32</span></td>
+      <td><span>53.45%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Q3</td>
+      <td><span>$240,324.28</span></td>
+      <td><span>$100,354.24</span></td>
+      <td><span>$139,970.04</span></td>
+      <td><span>58.33%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr>
+      <td>Q4</td>
+      <td><span>$180,045.32</span></td>
+      <td><span>$150,000.00</span></td>
+      <td><span>$30,045.32</span></td>
+      <td><span>-20.28%</span></td>
+      <td></td>
+    </tr>
+    
+    <tr style="background-color: #f2f2f2">
+      <th>Department Headcount Variance</th>
+      <th>Variance</th>
+      <th>Employee Cost Variance</th>
+      <th>Salary Breakdown Variance</th>
+      <th>Department Profit Variance</th>
+      <th>Department Margin Variance</th>
+    </tr>
+    
+    <tr>
+      <td>Marketing</td>
+      <td><span>-8.75%</span></td>
+      <td><span>-1,099,908.64</span></td>
+      <td><span>-754,991.84</span></td>
+      <td><span>-36.92%</span></td>
+      <td><span>6.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Design</td>
+      <td><span>-7.69%</span></td>
+      <td><span>-141,995.84</span></td>
+      <td><span>-77,968.48</span></td>
+      <td><span>-33.49%</span></td>
+      <td><span>3.79%</span></td>
+    </tr>
+    
+    <tr>
+      <td HR</td>
+      <td><span>-8.75%</span></td>
+      <td><span>-1,099,908.64</span></td>
+      <td><span>-754,991.84</span></td>
+      <td><span>-36.92%</span></td>
+      <td><span>6.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Product</td>
+      <td><span>-5.35%</span></td>
+      <td><span>-158,941.52</span></td>
+      <td><span>-155,870.80</span></td>
+      <td><span>-4.55%</span></td>
+      <td><span>0.36%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Sales</td>
+      <td><span>-7.69%</span></td>
+      <td><span>-141,995.84</span></td>
+      <td><span>-77,968.48</span></td>
+      <td><span>-33.49%</span></td>
+      <td><span>3.79%</span></td>
+    </tr>
+    
+    <tr>
+      <td>IT</td>
+      <td><span>-6.23%</span></td>
+      <td><span>-130,991.84</span></td>
+      <td><span>-115,970.48</span></td>
+      <td><span>-5.41%</span></td>
+      <td><span>2.95%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Operations</td>
+      <td><span>-8.75%</span></td>
+      <td><span>-1,099,908.64</span></td>
+      <td><span>-754,991.84</span></td>
+      <td><span>-36.92%</span></td>
+      <td><span>6.45%</span></td>
+    </tr>
+    
+    <tr>
+      <td>Engineering</td>
+      <td><span>-6.23%</span></td>
+      <td><span>-130,991.84</span></td>
+      <td><span>-115,970.48</span></td>
+      <td><span>-5.41%</span></td>
+      <td><span>2.95%</span></td>
+    </tr>
+    
+    <tr>
+      <td Administration</td>
+      <td><span>-8.75%</span></td>
+      <td><span>-1,099,908.64</span></td>
+      <td><span>-754,991.84</span></td>
+      <td><span>-36.92%</span></td>
+      <td><span>6.45%</span></td>
+    </tr>
+    
+    <tr style="background-color: #f2f2f2">
+      <th>Total</th>
+      <th>Variance</th>
+      <th>Variance</th>
+      <th>Variance</th>
+      <th>Variance</th>
+      <th>Variance</th>
+    </tr>
+    
+    <tr>
+      <td></td>
+      <td><span>0.00%</span></td>
+      <td><span>0.00</span></td>
+      <td><span>0.00</span></td>
+      <td><span>0.00</span></td>
+      <td><span>0.00</span></td>
+    </tr>
+    
+  </table>
+
+</body>
+</html>

@@ -27,12 +27,12 @@ function EmployeeScreenView({ employeeId }) {
       const data = await response.json()
       setScreenData(data)
       setError(null)
-      
+
       // Update mouse position
       if (data.screen_activity?.mouse_position) {
         animateMouseTo(data.screen_activity.mouse_position)
       }
-      
+
       // Handle typing animation for text content
       if (data.screen_activity?.action === 'composing' || data.screen_activity?.action === 'editing') {
         startTypingAnimation(data.screen_activity.content)
@@ -48,7 +48,7 @@ function EmployeeScreenView({ employeeId }) {
 
   useEffect(() => {
     fetchScreenData()
-    const interval = setInterval(fetchScreenData, 2500) // Poll every 2.5 seconds
+    const interval = setInterval(fetchScreenData, 10000) // Reduced from 2.5s to 10s to prevent timeouts
     return () => {
       clearInterval(interval)
       if (typingIntervalRef.current) {
@@ -71,20 +71,20 @@ function EmployeeScreenView({ employeeId }) {
     const animate = () => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(elapsed / duration, 1)
-      
+
       // Easing function
       const ease = 1 - Math.pow(1 - progress, 3)
-      
+
       const currentX = startX + (targetX - startX) * ease
       const currentY = startY + (targetY - startY) * ease
-      
+
       setMousePosition({ x: currentX, y: currentY })
-      
+
       if (progress < 1) {
         mouseAnimationRef.current = requestAnimationFrame(animate)
       }
     }
-    
+
     if (mouseAnimationRef.current) {
       cancelAnimationFrame(mouseAnimationRef.current)
     }
@@ -95,7 +95,7 @@ function EmployeeScreenView({ employeeId }) {
     if (typingIntervalRef.current) {
       clearInterval(typingIntervalRef.current)
     }
-    
+
     let textToType = ''
     if (content.body) {
       textToType = content.body
@@ -104,11 +104,11 @@ function EmployeeScreenView({ employeeId }) {
     } else if (content.document_content) {
       textToType = content.document_content.substring(0, 200)
     }
-    
+
     if (textToType) {
       let currentIndex = 0
       setTypingText('')
-      
+
       typingIntervalRef.current = setInterval(() => {
         if (currentIndex < textToType.length) {
           setTypingText(textToType.substring(0, currentIndex + 1))
@@ -176,7 +176,7 @@ function EmployeeScreenView({ employeeId }) {
                 <button className="w-6 h-6 hover:bg-red-600 rounded flex items-center justify-center">×</button>
               </div>
             </div>
-            
+
             {/* Email Content */}
             <div className="p-6 h-full overflow-y-auto bg-gray-50">
               {action === 'composing' ? (
@@ -273,7 +273,7 @@ function EmployeeScreenView({ employeeId }) {
                 <button className="w-6 h-6 hover:bg-red-600 rounded flex items-center justify-center">×</button>
               </div>
             </div>
-            
+
             {/* Chat Content */}
             <div className="flex flex-col h-full">
               <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
@@ -282,29 +282,27 @@ function EmployeeScreenView({ employeeId }) {
                   actualData.chats.slice().reverse().map((chat, idx) => {
                     const isEmployee = chat.sender_id === screenData.employee_id || chat.sender_name === screenData.employee_name
                     return (
-                    <div key={chat.id || idx} className={`flex ${isEmployee ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-xs px-4 py-2 rounded-lg ${
-                        isEmployee
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-gray-200 text-gray-900'
-                      }`}>
-                        <p className="text-sm font-medium mb-1">{chat.sender_name || 'Colleague'}</p>
-                        <p className="text-sm">{chat.message || ''}</p>
-                        <p className="text-xs opacity-70 mt-1">
-                          {chat.timestamp ? formatTime(chat.timestamp) : ''}
-                        </p>
+                      <div key={chat.id || idx} className={`flex ${isEmployee ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-xs px-4 py-2 rounded-lg ${isEmployee
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white border border-gray-200 text-gray-900'
+                          }`}>
+                          <p className="text-sm font-medium mb-1">{chat.sender_name || 'Colleague'}</p>
+                          <p className="text-sm">{chat.message || ''}</p>
+                          <p className="text-xs opacity-70 mt-1">
+                            {chat.timestamp ? formatTime(chat.timestamp) : ''}
+                          </p>
+                        </div>
                       </div>
-                    </div>
                     )
                   })
                 ) : content.messages && Array.isArray(content.messages) ? (
                   content.messages.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.sender === screenData.employee_name ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-xs px-4 py-2 rounded-lg ${
-                        msg.sender === screenData.employee_name
+                      <div className={`max-w-xs px-4 py-2 rounded-lg ${msg.sender === screenData.employee_name
                           ? 'bg-blue-600 text-white'
                           : 'bg-white border border-gray-200 text-gray-900'
-                      }`}>
+                        }`}>
                         <p className="text-sm font-medium mb-1">{msg.sender || 'Colleague'}</p>
                         <p className="text-sm">{msg.text || msg.message || ''}</p>
                       </div>
@@ -337,7 +335,7 @@ function EmployeeScreenView({ employeeId }) {
                   </div>
                 )}
               </div>
-              
+
               {/* Message Input */}
               <div className="border-t border-gray-200 p-4 bg-white">
                 <div className="flex gap-2">
@@ -381,13 +379,13 @@ function EmployeeScreenView({ employeeId }) {
                 <button className="w-6 h-6 hover:bg-red-600 rounded flex items-center justify-center">×</button>
               </div>
             </div>
-            
+
             {/* Browser Content */}
             <div className="p-6 h-full overflow-y-auto bg-white">
               <h1 className="text-2xl font-bold text-gray-900 mb-4">{content.page_title || 'Web Page'}</h1>
               {/* Render HTML content if available, otherwise show plain text */}
               {content.page_content && content.page_content.includes('<') ? (
-                <div 
+                <div
                   className="text-gray-700 leading-relaxed prose max-w-none"
                   dangerouslySetInnerHTML={{ __html: content.page_content }}
                 />
@@ -415,7 +413,7 @@ function EmployeeScreenView({ employeeId }) {
                 <button className="w-6 h-6 hover:bg-red-600 rounded flex items-center justify-center">×</button>
               </div>
             </div>
-            
+
             {/* File Explorer or Document Viewer */}
             <div className="flex h-full">
               {action === 'viewing' && !content.document_content ? (
@@ -460,7 +458,7 @@ function EmployeeScreenView({ employeeId }) {
                   </div>
                 </div>
               ) : null}
-              
+
               <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
                 {/* Show actual file content if available, otherwise use generated content */}
                 {actualData.files && actualData.files.length > 0 && action === 'viewing' ? (
@@ -508,7 +506,7 @@ function EmployeeScreenView({ employeeId }) {
     <div className="relative w-full h-full bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 flex items-center justify-center overflow-hidden">
       {/* Desktop Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-20"></div>
-      
+
       {/* Desktop Icons */}
       <div className="absolute top-8 left-8 space-y-3 z-10">
         <div className="flex flex-col items-center gap-1 cursor-pointer hover:bg-white hover:bg-opacity-20 p-2 rounded">
@@ -524,7 +522,7 @@ function EmployeeScreenView({ employeeId }) {
           <span className="text-white text-xs text-center">Recycle Bin</span>
         </div>
       </div>
-      
+
       {/* Application Window - Scaled to fit */}
       <div className="absolute inset-0 flex items-center justify-center p-4 pb-16">
         <div className="relative w-full h-full flex items-center justify-center" style={{ maxWidth: '95%', maxHeight: '85%' }}>
@@ -533,7 +531,7 @@ function EmployeeScreenView({ employeeId }) {
           </div>
         </div>
       </div>
-      
+
       {/* Mouse Cursor */}
       <div
         className="absolute pointer-events-none z-50"
@@ -552,7 +550,7 @@ function EmployeeScreenView({ employeeId }) {
           />
         </svg>
       </div>
-      
+
       {/* Taskbar */}
       <div className="absolute bottom-0 left-0 right-0 bg-gray-800 text-white px-4 py-2 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-2">

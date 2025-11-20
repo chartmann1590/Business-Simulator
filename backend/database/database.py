@@ -36,11 +36,11 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     future=True,
-    pool_size=25,  # Increased for better concurrency (async can handle more)
-    max_overflow=15,  # Allow more overflow for peak loads
-    pool_timeout=30,  # Wait up to 30 seconds for a connection
+    pool_size=50,  # INCREASED: More persistent connections for high concurrency
+    max_overflow=30,  # INCREASED: More overflow capacity for peak loads (80 total)
+    pool_timeout=60,  # INCREASED: Give more time to acquire connections during high load
     pool_pre_ping=True,  # Verify connections before using them
-    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_recycle=1800,  # REDUCED: Recycle connections every 30 min to prevent staleness
     # PostgreSQL-specific optimizations
     connect_args={
         "server_settings": {
@@ -48,7 +48,9 @@ engine = create_async_engine(
             "jit": "on",  # Enable JIT compilation for complex queries
             "work_mem": "16MB",  # Increase work memory for sorts/joins
             "maintenance_work_mem": "64MB",  # For index creation/maintenance
-        }
+        },
+        "timeout": 60,  # Connection timeout in seconds
+        "command_timeout": 60,  # Command execution timeout
     },
     # Use connection pooling with statement caching
     execution_options={
@@ -69,10 +71,10 @@ Base = declarative_base()
 # Import all models to ensure they're registered with Base
 from database.models import (
     Employee, Project, Task, Decision, Financial,
-    Activity, BusinessMetric, Email, ChatMessage, BusinessSettings,
+    Activity, BusinessMetric, Email, ChatMessage, BusinessSettings, BusinessGoal,
     EmployeeReview, Notification, CustomerReview, Product, ProductTeamMember,
     Meeting, OfficePet, Gossip, Weather, RandomEvent, Newsletter, Suggestion, SuggestionVote, BirthdayCelebration,
-    TrainingSession, TrainingMaterial
+    TrainingSession, TrainingMaterial, HomeSettings, FamilyMember, HomePet, ClockInOut, HolidayCelebration, SharedDriveFile, SharedDriveFileVersion, PetCareLog
 )
 
 async def get_db():
@@ -631,6 +633,101 @@ async def _run_migrations():
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_holiday_celebrations_holiday_name ON holiday_celebrations(holiday_name)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_holiday_celebrations_created_at ON holiday_celebrations(created_at)"))
                 print("Migration completed: holiday_celebrations table created.")
+            
+            # Migration: Add current_location columns to family_members and home_pets tables
+            if 'family_members' in tables:
+                result = await conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'family_members'
+                """))
+                family_column_rows = result.fetchall()
+                family_column_names = [row[0] for row in family_column_rows]
+                
+                if 'current_location' not in family_column_names:
+                    print("Running migration: Adding current_location column to family_members table...")
+                    await conn.execute(text("ALTER TABLE family_members ADD COLUMN current_location TEXT DEFAULT 'inside'"))
+                    print("Migration completed: current_location column added to family_members table.")
+            
+            if 'home_pets' in tables:
+                result = await conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    AND table_name = 'home_pets'
+                """))
+                pets_column_rows = result.fetchall()
+                pets_column_names = [row[0] for row in pets_column_rows]
+
+                if 'current_location' not in pets_column_names:
+                    print("Running migration: Adding current_location column to home_pets table...")
+                    await conn.execute(text("ALTER TABLE home_pets ADD COLUMN current_location TEXT DEFAULT 'inside'"))
+                    print("Migration completed: current_location column added to home_pets table.")
+
+            # Migration: Add online_status column to employees table (for Teams presence)
+            if 'online_status' not in column_names:
+                print("Running migration: Adding online_status column to employees table...")
+                await conn.execute(text("ALTER TABLE employees ADD COLUMN online_status TEXT DEFAULT 'online'"))
+                print("Migration completed: online_status column added to employees table.")
+
+            # Migration: Add sleep_state column to employees table (for sleep schedules)
+            if 'sleep_state' not in column_names:
+                print("Running migration: Adding sleep_state column to employees table...")
+                await conn.execute(text("ALTER TABLE employees ADD COLUMN sleep_state TEXT DEFAULT 'awake'"))
+                print("Migration completed: sleep_state column added to employees table.")
+
+            # Migration: Add sleep_state column to family_members table
+            if 'family_members' in tables:
+                result = await conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    AND table_name = 'family_members'
+                """))
+                family_sleep_column_rows = result.fetchall()
+                family_sleep_column_names = [row[0] for row in family_sleep_column_rows]
+
+                if 'sleep_state' not in family_sleep_column_names:
+                    print("Running migration: Adding sleep_state column to family_members table...")
+                    await conn.execute(text("ALTER TABLE family_members ADD COLUMN sleep_state TEXT DEFAULT 'awake'"))
+                    print("Migration completed: sleep_state column added to family_members table.")
+
+            # Migration: Add sleep_state column to home_pets table
+            if 'home_pets' in tables:
+                result = await conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    AND table_name = 'home_pets'
+                """))
+                pets_sleep_column_rows = result.fetchall()
+                pets_sleep_column_names = [row[0] for row in pets_sleep_column_rows]
+
+                if 'sleep_state' not in pets_sleep_column_names:
+                    print("Running migration: Adding sleep_state column to home_pets table...")
+                    await conn.execute(text("ALTER TABLE home_pets ADD COLUMN sleep_state TEXT DEFAULT 'awake'"))
+                    print("Migration completed: sleep_state column added to home_pets table.")
+
+            # Migration: Create clock_in_out table if it doesn't exist
+            if 'clock_in_out' not in tables:
+                print("Running migration: Creating clock_in_out table...")
+                await conn.execute(text("""
+                    CREATE TABLE clock_in_out (
+                        id SERIAL PRIMARY KEY,
+                        employee_id INTEGER NOT NULL,
+                        event_type TEXT NOT NULL,
+                        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        location TEXT,
+                        notes TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clock_in_out_employee_id ON clock_in_out(employee_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clock_in_out_timestamp ON clock_in_out(timestamp)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clock_in_out_event_type ON clock_in_out(event_type)"))
+                print("Migration completed: clock_in_out table created.")
     except Exception as e:
         print(f"Warning: Migration failed: {e}")
         import traceback

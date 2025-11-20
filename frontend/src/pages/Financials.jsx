@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiGet } from '../utils/api'
 import {
   LineChart,
   Line,
@@ -30,20 +31,19 @@ function Financials() {
   }, [periodDays])
 
   const fetchData = async () => {
+    setLoading(true)
     try {
-      const [financialsRes, analyticsRes] = await Promise.all([
-        fetch(`/api/financials?days=${periodDays}`),
-        fetch(`/api/financials/analytics?days=${periodDays}`)
+      const [financialsResult, analyticsResult] = await Promise.all([
+        apiGet(`/api/financials?days=${periodDays}`),
+        apiGet(`/api/financials/analytics?days=${periodDays}`)
       ])
-      const financialsData = financialsRes.ok ? await financialsRes.json() : []
-      const analyticsData = analyticsRes.ok ? await analyticsRes.json() : null
-      setFinancials(financialsData || [])
-      setAnalytics(analyticsData)
-      setLoading(false)
+      setFinancials(Array.isArray(financialsResult.data) ? financialsResult.data : [])
+      setAnalytics(analyticsResult.data || null)
     } catch (error) {
       console.error('Error fetching financial data:', error)
       setFinancials([])
       setAnalytics(null)
+    } finally {
       setLoading(false)
     }
   }

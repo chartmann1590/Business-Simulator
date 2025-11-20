@@ -201,7 +201,11 @@ Each employee has:
 - **Floor Assignment**: Employees are assigned to floors 1-4 based on their role and department
 - **Home Room**: Assigned workspace based on role, title, and department
 - **Current Room**: Tracks real-time location as employees move between rooms
-- **Activity State**: idle, working, walking, meeting, break, training, waiting
+- **Activity State**: idle, working, walking, meeting, break, training, waiting, at_home, sleeping, leaving_work, commuting_home
+- **Online Status**: Tracks employee online/offline status in Teams
+- **Home System**: Employees have homes with family members and pets
+- **Sleep Schedule**: Employees and family members have realistic sleep/wake cycles
+- **Clock In/Out**: Automatic time tracking for arrivals and departures
 
 ## Observing the Simulation
 
@@ -289,6 +293,22 @@ The web interface provides several views:
   - In-memory query result caching
   - Reduced database load
   - Faster response times
+  - **Home View**: Visual representation of employee homes
+    - Interior and exterior views of employee residences
+    - Family members (spouses, children) with individual activities
+    - Home pets (cats and dogs) with care needs
+    - Real-time home conversations and activities
+    - Sleep/wake cycle visualization
+  - **Clock In/Out System**: Automatic time tracking
+    - Morning arrivals (6:45am-7:45am) with staggered timing
+    - Evening departures (6:45pm-7:15pm) with staggered timing
+    - Clock event history tracking
+    - Automatic online/offline status updates
+  - **Sleep System**: Realistic sleep schedules
+    - Bedtime transitions (10pm-12am) for employees and families
+    - Morning wake-ups (employees: 5:30am-6:45am, family: 7:30am-9am)
+    - Sleep state tracking for employees, family members, and pets
+    - Weekend sleep schedule variations
 
 All views update in real-time as the simulation runs via WebSocket.
 
@@ -325,9 +345,13 @@ All views update in real-time as the simulation runs via WebSocket.
 
 ## Documentation
 
-For comprehensive documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
+Comprehensive documentation is available in the `docs/` folder:
 
-For PostgreSQL optimization details, see [POSTGRESQL_OPTIMIZATIONS.md](POSTGRESQL_OPTIMIZATIONS.md)
+- **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)** - Complete system documentation
+- **[docs/POSTGRESQL_OPTIMIZATIONS.md](docs/POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
+- **[docs/COMMUNICATION_FIXES.md](docs/COMMUNICATION_FIXES.md)** - Communication system fixes and improvements
+- **[docs/DATABASE_CONNECTION_FIX.md](docs/DATABASE_CONNECTION_FIX.md)** - Database connection pool fixes
+- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI assistants
 
 ## Starting a New Game
 
@@ -380,6 +404,14 @@ The project includes utility scripts for testing and debugging:
 - `backend/create_real_products.py` - Create realistic product data
 - `backend/link_reviews_to_products.py` - Link customer reviews to products
 - `backend/migrate_add_products.py` - Database migration for products
+- `backend/backfill_thread_ids.py` - Ensure all messages have thread IDs
+- `backend/check_unreplied_messages.py` - Analyze message reply rates
+- `backend/instant_reply_all.py` - Fast fallback responses to all messages
+- `backend/force_reply_all_messages.py` - Full LLM responses to all messages
+- `backend/fix_stuck_training_sessions.py` - Fix training sessions that are stuck
+- `backend/check_db_counts.py` - Check database record counts
+- `backend/reset_communications.py` - Reset communication system
+- `backend/run_migrations.py` - Run database migrations
 
 ## License
 

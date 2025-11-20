@@ -3,164 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Context</title>
+    <title>Business Report</title>
     <style>
-        body {
-            font-family: 'Times New Roman', serif;
-            font-size: 12pt;
-            margin: 1in;
-            line-height: 1.5;
+        /* Fancy title */
+        h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            text-decoration: underline;
             color: #000000;
-            background: #ffffff;
+            margin: 0 auto;
+            padding: 0 1in;
+        }
+        
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2.5in;
+            background-color: #ffffff;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
-        h1 {
+        /* Executive summary */
+        .executive-summary {
+            padding: 1in;
+            margin-top: -1in;
             text-align: center;
-            font-size: 18pt;
-            font-weight: bold;
-            margin-top: -20px;
-            border-bottom: 3px solid #000000;
-            padding-bottom: 10px;
         }
         
-        header {
-            margin-top: 0;
-            padding-top: 5px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #000000;
-        }
-        
-        section {
-            margin-bottom: 20px;
-        }
-        
+        /* Data sections */
         table {
             border-collapse: collapse;
             width: 100%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         th, td {
             border: 1px solid #000000;
-            padding: 5px;
+            padding: 0.5in;
             text-align: left;
         }
         
-        ul {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
+        /* Lists and bullet points */
+        ul, ol {
+            list-style-type: decimal;
         }
         
+        /* Numbered lists */
         ol {
-            list-style-type: decimal;
-            padding: 0;
-            margin: 0;
+            counter-reset: item;
+        }
+        
+        ol li::before {
+            content: counter(item) '. ';
+        }
+        
+        /* Numbered lists (continued) */
+        .numbered-list {
+            padding: 1in;
+            margin-bottom: -1in;
+        }
+        
+        /* Data visualizations */
+        .data-visualization {
+            font-size: 14pt;
+            color: #00698f;
+            margin: 0.5in 0;
         }
     </style>
 </head>
 <body>
-    <div style="text-align: center;">
-        <h1>Business Context</h1>
-        <hr style="border-top: 3px solid #000000; padding-bottom: 10px;" />
-    </div>
-    
-    <header>
-        <span style="font-size: 14pt; font-weight: bold;">Date:</span>&nbsp;
-        <span style="font-size: 12pt; font-weight: normal;">2023-03-15</span>&nbsp;
-        <span style="font-size: 14pt; font-weight: bold;">Name:</span>&nbsp;
-        <span style="font-size: 12pt; font-weight: normal;">Parker Kim</span>&nbsp;
-        <span style="font-size: 14pt; font-weight: bold;">Department:</span>&nbsp;
-        <span style="font-size: 12pt; font-weight: normal;">Engineering</span>
-    </header>
-    
-    <section>
-        <h2>Executive Summary</h2>
-        <p>The current quarter has seen a significant increase in revenue, with a total of $848,324.28 generated from various projects and initiatives. This represents an 15% YoY growth compared to the same period last year. The profit margin stands at 42.67%, indicating a strong financial performance. However, there are areas that require attention, such as optimizing project expenses and improving operational efficiency.</p>
-    </section>
-    
-    <table style="width:100%;">
-        <tr style="background-color: #f0f0f0;">
-            <th style="text-align:left; padding:5px;">Category</th>
-            <th style="text-align:right; padding:5px;">Value</th>
-        </tr>
-        <tr>
-            <td style="padding:5px;">Total Revenue</td>
-            <td style="padding:5px;">$848,324.28</td>
-        </tr>
-        <tr>
-            <td style="padding:5px;">Total Profit</td>
-            <td style="padding:5px;">$361,970.04</td>
-        </tr>
-        <tr>
-            <td style="padding:5px;">Profit Margin</td>
-            <td style="padding:5px;">42.67%</td>
-        </tr>
-    </table>
-    
-    <section>
-        <h2>Active Projects</h2>
-        <ul style="list-style-type:lower-alpha;">
-            <li style="margin-bottom:10px;">Customer Experience Enhancement (<span style="font-size: 12pt; color: #03A9F4; font-weight: bold;">$88,137.90 budget, active status</span>)</li>
-            <li style="margin-bottom:10px;">Market Expansion Initiative (<span style="font-size: 12pt; color: #03A9F4; font-weight: bold;">$55,020.72 budget, active status</span>)</li>
-        </ul>
-    </section>
-    
-    <section>
-        <h2>Department Distribution</h2>
-        <table style="width:100%;">
-            <tr style="background-color: #f0f0f0;">
-                <th style="text-align:left; padding:5px;">Department</th>
-                <th style="text-align:right; padding:5px;">Employee Count</th>
-            </tr>
-            <tr>
-                <td style="padding:5px;">Product</td>
-                <td style="padding:5px;">52 employees</td>
-            </tr>
-            <tr>
-                <td style="padding:5px;">Finance</td>
-                <td style="padding:5px;">1 employee</td>
-            </tr>
-            <tr>
-                <td style="padding:5px;">Operations</td>
-                <td style="padding:5px;">51 employees</td>
-            </tr>
-            <tr>
-                <td style="padding:5px;">HR</td>
-                <td style="padding:5px;">55 employees</td>
-            </tr>
-            <tr>
-                <td style="padding:5px;">IT</td>
-                <td style="padding:5px;">56 employees</td>
-            </tr>
-        </table>
-    </section>
-    
-    <section>
-        <h2>Critical Requirements</h2>
-        <p>As a Sales Manager, it is crucial to analyze the market trends and customer needs to develop effective sales strategies. Additionally, maintaining a strong relationship with key customers can lead to increased revenue and improved profit margins.</p>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1 style="text-decoration: underline;">Business Report</h1>
         
-        <table style="width:100%;">
-            <tr style="background-color: #f0f0f0;">
-                <th style="text-align:left; padding:5px;">Requirement</th>
-                <th style="text-align:right; padding:5px;">Action Plan</th>
+        <header>
+            <p>Document Classification: Strategic Report</p>
+            <p>Date: 2023-02-15</p>
+            <p>Report by: Parker Kim, Sales Manager</p>
+            <p>Department: Engineering</p>
+        </header>
+        
+        <div class="executive-summary">
+            <h2 style="font-weight: bold;">Executive Summary</h2>
+            <p>The company's total revenue increased 15% QoQ, driven by a 25% increase in sales. The profit margin remained steady at 42.67%, with total expenses decreasing by 10%. We are currently managing 15 active projects, including the Digital Transformation Project, Strategic Partnership Development, and Customer Experience Enhancement.</p>
+            <h2 style="font-weight: bold;">Business Metrics</h2>
+            <table>
+                <tr>
+                    <th>Total Revenue:</th>
+                    <td>$848,324.28</td>
+                </tr>
+                <tr>
+                    <th>Total Profit:</th>
+                    <td>$361,970.04</td>
+                </tr>
+                <tr>
+                    <th>Profit Margin:</th>
+                    <td>42.67%</td>
+                </tr>
+                <tr>
+                    <th>Total Expenses:</th>
+                    <td>$486,354.24</td>
+                </tr>
+            </table>
+        </div>
+        
+        <h2 style="font-weight: bold;">Active Projects</h2>
+        <ul>
+            <li>Digital Transformation Project (active): $196,119.03 budget</li>
+            <li>Strategic Partnership Development (active): $156,356.16 budget</li>
+            <li>Customer Experience Enhancement (active): $88,137.90 budget</li>
+        </ul>
+        
+        <h2 style="font-weight: bold;">Department Distribution</h2>
+        <table>
+            <tr>
+                <th>Department:</th>
+                <th>Employees:</th>
             </tr>
             <tr>
-                <td style="padding:5px;">Market Research</td>
-                <td style="padding:5px;">Conduct market research to identify trends and customer needs. Develop a sales strategy based on the findings.</td>
+                <td>Marketing:</td>
+                <td>64</td>
             </tr>
             <tr>
-                <td style="padding:5px;">Customer Relationship Building</td>
-                <td style="padding:5px;">Maintain strong relationships with key customers through regular communication and follow-up visits.</td>
+                <td>Design:</td>
+                <td>56</td>
+            </tr>
+            <tr>
+                <td>HR:</td>
+                <td>56</td>
+            </tr>
+            <tr>
+                <td>Product:</td>
+                <td>49</td>
+            </tr>
+            <tr>
+                <td>Sales:</td>
+                <td>47</td>
             </tr>
         </table>
-    </section>
-    
-    <footer>
-        <p>Page 1 of [insert total pages]</p>
-        <p>Version 1.0</p>
-        <p>Confidentiality Notice: This document contains confidential information and is not intended for public disclosure.</p>
-    </footer>
+        
+        <h2 style="font-weight: bold;">Critical Requirements</h2>
+        <ul>
+            <li>Document Type: Strategic reports, quarterly reviews, business analysis for Managers/Executives.</li>
+            <li>Preparation Time: 10 hours</li>
+            <li>Document Review and Approval: 5 hours</li>
+            <li>Revision Time: 3 hours</li>
+        </ul>
+        
+        <h2 style="font-weight: bold;">Recommendations</h2>
+        <p>We recommend that the company prioritize digital transformation projects to stay competitive in the market. Additionally, we suggest conducting a thorough review of our revenue and profit margins to identify areas for improvement.</p>
+        
+        <footer>
+            <p>Page 1 of 5</p>
+            <p>Document Version: 1.0</p>
+            <p>Confidentiality Notice: This document contains confidential information and is intended only for the use of authorized personnel.</p>
+        </footer>
+    </div>
 </body>
 </html>

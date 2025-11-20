@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { getAvatarPath } from '../utils/avatarMapper'
 import { formatDateShortTime, formatDateTime } from '../utils/timezone'
 
-function ChatView({ chats, employees }) {
+function ChatView({ chats, employees, onRefresh }) {
   const [selectedChat, setSelectedChat] = useState(null)
   const [groupedChats, setGroupedChats] = useState({})
+  const [newMessage, setNewMessage] = useState('')
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
     // Group chats by thread_id to ensure all messages between two employees stay in the same thread
@@ -25,9 +27,10 @@ function ChatView({ chats, employees }) {
       grouped[key].messages.push(chat)
     })
     
-    // Convert participants Sets to Arrays
+    // Convert participants Sets to Arrays and filter out null/undefined
     Object.keys(grouped).forEach(key => {
       grouped[key].participants = Array.from(grouped[key].participants)
+        .filter(id => id !== null && id !== undefined)
     })
     
     // Sort messages within each conversation - newest first
@@ -64,6 +67,72 @@ function ChatView({ chats, employees }) {
   }
 
   const currentConversation = selectedChat ? groupedChats[selectedChat] : null
+
+  // Get the employee ID to send to (the one that's not null - manager has sender_id = null)
+  const getRecipientEmployeeId = () => {
+    if (!currentConversation || !currentConversation.messages || currentConversation.messages.length === 0) {
+      // If no messages, try to get from participants
+      const validParticipants = currentConversation?.participants?.filter(id => id !== null && id !== undefined) || []
+      return validParticipants.length > 0 ? validParticipants[0] : null
+    }
+    
+    // Find the employee ID from existing messages
+    // Look for messages where sender_id is null (from manager) - recipient_id is the employee
+    // Or messages where recipient_id is null (to manager) - sender_id is the employee
+    for (const msg of currentConversation.messages) {
+      if (msg.sender_id === null && msg.recipient_id !== null) {
+        return msg.recipient_id
+      }
+      if (msg.recipient_id === null && msg.sender_id !== null) {
+        return msg.sender_id
+      }
+    }
+    
+    // Fallback: get first valid participant
+    const validParticipants = currentConversation.participants.filter(id => id !== null && id !== undefined)
+    return validParticipants.length > 0 ? validParticipants[0] : null
+  }
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault()
+    if (!newMessage.trim() || sending) return
+
+    const employeeId = getRecipientEmployeeId()
+    if (!employeeId) {
+      alert('Cannot determine recipient. Please select a conversation.')
+      return
+    }
+
+    setSending(true)
+    try {
+      const response = await fetch('/api/chats/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employee_id: employeeId,
+          message: newMessage.trim()
+        })
+      })
+
+      if (response.ok) {
+        setNewMessage('')
+        // Refresh messages
+        if (onRefresh) {
+          await onRefresh()
+        }
+      } else {
+        const error = await response.json()
+        alert(`Error sending message: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      alert('Error sending message. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
 
   // Format time to show actual date and time (never "just now")
   const formatTime = (timestamp) => {
@@ -109,8 +178,12 @@ function ChatView({ chats, employees }) {
         <div className="flex-1 overflow-y-auto">
           {Object.keys(groupedChats).map(key => {
             const conv = groupedChats[key]
-            const otherId = conv.participants.find(id => id !== conv.participants[0])
-            const other = getEmployee(otherId || conv.participants[0])
+            // Filter out null/undefined and sort participants by ID to ensure consistent ordering
+            const validParticipants = conv.participants.filter(id => id !== null && id !== undefined)
+            const sortedParticipants = [...validParticipants].sort((a, b) => (a || 0) - (b || 0))
+            // Show the second participant (or first if only one) in the sidebar
+            const otherId = sortedParticipants[1] || sortedParticipants[0]
+            const other = getEmployee(otherId)
             // Messages are sorted newest first, so first message is most recent
             const lastMessage = conv.messages[0]
             
@@ -187,15 +260,27 @@ function ChatView({ chats, employees }) {
               </div>
             </div>
             
-            {/* Messages Area - newest messages at top */}
+            {/* Messages Area - oldest messages at top, newest at bottom */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
               <div className="space-y-4">
-                {currentConversation.messages.map((chat, index) => {
+                {/* Reverse messages for display: show oldest first, newest last (standard chat UI) */}
+                {[...currentConversation.messages].reverse().map((chat, index) => {
                   const sender = getEmployee(chat.sender_id)
-                  // Since messages are sorted newest first, check next message (index + 1) for grouping
-                  const nextChat = index < currentConversation.messages.length - 1 ? currentConversation.messages[index + 1] : null
-                  const showAvatar = !nextChat || nextChat.sender_id !== chat.sender_id
-                  const isMe = chat.sender_id === currentConversation.participants[0]
+                  // Since we reversed the array, check previous message (index - 1) for grouping
+                  const reversedMessages = [...currentConversation.messages].reverse()
+                  const prevChat = index > 0 ? reversedMessages[index - 1] : null
+                  const showAvatar = !prevChat || prevChat.sender_id !== chat.sender_id
+                  
+                  // Determine message alignment based on sender
+                  // Sort participants by ID to ensure consistent ordering (filter nulls first)
+                  const validParticipants = currentConversation.participants.filter(id => id !== null && id !== undefined)
+                  const sortedParticipants = [...validParticipants].sort((a, b) => (a || 0) - (b || 0))
+                  
+                  // For display: messages from the first participant (smaller ID) go on right (blue)
+                  // Messages from the second participant go on left (white)
+                  // This ensures consistent visual distinction between the two participants
+                  const firstParticipantId = sortedParticipants[0]
+                  const isMe = chat.sender_id === firstParticipantId
                   
                   return (
                     <div
@@ -238,19 +323,31 @@ function ChatView({ chats, employees }) {
             
             {/* Input Area (Teams-style) */}
             <div className="px-6 py-4 border-t border-gray-200 bg-white">
-              <div className="flex items-center space-x-2">
+              <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
                 <input
                   type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Type a new message"
                   className="flex-1 px-4 py-2 bg-gray-100 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled
+                  disabled={sending}
                 />
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
+                <button
+                  type="submit"
+                  disabled={!newMessage.trim() || sending}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sending ? (
+                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
                 </button>
-              </div>
+              </form>
             </div>
           </>
         ) : (

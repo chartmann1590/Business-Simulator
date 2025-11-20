@@ -21,7 +21,10 @@ function Dashboard() {
   const [trainingData, setTrainingData] = useState(null)
   const [trainingLoading, setTrainingLoading] = useState(false)
   const [selectedTrainingEmployee, setSelectedTrainingEmployee] = useState(null)
-  
+  const [clockEvents, setClockEvents] = useState([])
+  const [clockStats, setClockStats] = useState(null)
+  const [clockLoading, setClockLoading] = useState(false)
+
   const handleEmployeeClick = (employee) => {
     // Navigate to office view with employee ID and floor as URL parameters
     const params = new URLSearchParams({
@@ -30,11 +33,11 @@ function Dashboard() {
     })
     navigate(`/office-view?${params.toString()}`)
   }
-  
+
   const formatBreakDuration = (breakStartTime, fallbackToCurrent = false) => {
     // Always calculate a duration - never return N/A
     let startTime = breakStartTime
-    
+
     // If no start time provided, use current time as fallback (they just entered)
     if (!startTime) {
       if (fallbackToCurrent) {
@@ -45,18 +48,18 @@ function Dashboard() {
         startTime = currentTime.toISOString()
       }
     }
-    
+
     try {
       const breakStart = new Date(startTime)
       const now = currentTime
       const diffMs = now - breakStart
-      
+
       if (diffMs < 0) return 'Just started'
-      
+
       const diffMinutes = Math.floor(diffMs / (1000 * 60))
       const diffHours = Math.floor(diffMinutes / 60)
       const diffDays = Math.floor(diffHours / 24)
-      
+
       if (diffDays > 0) {
         return `${diffDays} day${diffDays > 1 ? 's' : ''} ${diffHours % 24} hour${(diffHours % 24) !== 1 ? 's' : ''}`
       } else if (diffHours > 0) {
@@ -80,7 +83,7 @@ function Dashboard() {
     setLoading(true)
     try {
       const result = await apiGet('/api/dashboard')
-      
+
       // ALWAYS use the data we got (fresh, cached, or default)
       // apiGet ALWAYS returns data, even if it's default empty structure
       const data = result.data || {
@@ -170,10 +173,10 @@ function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 5000)
+    const interval = setInterval(fetchDashboardData, 30000) // Reduced from 5s to 30s to prevent timeouts
     return () => clearInterval(interval)
   }, [fetchDashboardData])
-  
+
   // Poll for activities separately to ensure we get all activities
   useEffect(() => {
     const fetchActivities = async () => {
@@ -186,12 +189,12 @@ function Dashboard() {
         console.error('Error fetching activities:', error)
       }
     }
-    
+
     fetchActivities()
-    const interval = setInterval(fetchActivities, 3000) // Poll every 3 seconds
+    const interval = setInterval(fetchActivities, 15000) // Reduced from 3s to 15s to prevent timeouts
     return () => clearInterval(interval)
   }, [])
-  
+
   // Update current time every minute to refresh break durations
   useEffect(() => {
     const timeInterval = setInterval(() => {
@@ -260,6 +263,31 @@ function Dashboard() {
       const interval = setInterval(fetchTrainingData, 10000) // Refresh every 10 seconds
       return () => clearInterval(interval)
     }
+
+    // Fetch clock events when clock tab is active
+    const fetchClockData = async () => {
+      setClockLoading(true)
+      try {
+        const [eventsResult, statsResult] = await Promise.all([
+          apiGet('/api/clock-events/today'),
+          apiGet('/api/clock-events/stats')
+        ])
+        setClockEvents(eventsResult.data || [])
+        setClockStats(statsResult.data || null)
+      } catch (error) {
+        console.error('Error fetching clock data:', error)
+        setClockEvents([])
+        setClockStats(null)
+      } finally {
+        setClockLoading(false)
+      }
+    }
+
+    if (activeTab === 'clock') {
+      fetchClockData()
+      const interval = setInterval(fetchClockData, 30000) // Refresh every 30 seconds
+      return () => clearInterval(interval)
+    }
   }, [activeTab])
 
   // Update business name in sidebar
@@ -290,11 +318,11 @@ function Dashboard() {
       <div className="px-4 py-6">
         <div className="text-center py-12">
           <p className="text-gray-500 mb-4">Unable to load dashboard data</p>
-          <button 
+          <button
             onClick={() => {
               setLoading(true)
               fetchDashboardData()
-            }} 
+            }}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             Retry
@@ -304,7 +332,7 @@ function Dashboard() {
     )
   }
 
-  const profitMargin = dashboardData && dashboardData.revenue > 0 
+  const profitMargin = dashboardData && dashboardData.revenue > 0
     ? ((dashboardData.profit / dashboardData.revenue) * 100).toFixed(1)
     : 0
 
@@ -319,73 +347,75 @@ function Dashboard() {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'overview'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab('company')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'company'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'company'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Company Overview
           </button>
           <button
             onClick={() => setActiveTab('leadership')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'leadership'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'leadership'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Leadership
           </button>
           <button
             onClick={() => setActiveTab('boardroom')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'boardroom'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'boardroom'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Boardroom
           </button>
           <button
             onClick={() => setActiveTab('suggestions')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'suggestions'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'suggestions'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Employee Suggestions
           </button>
           <button
             onClick={() => setActiveTab('breaks')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'breaks'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'breaks'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Break Tracking
           </button>
           <button
             onClick={() => setActiveTab('training')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'training'
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'training'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             Training
+          </button>
+          <button
+            onClick={() => setActiveTab('clock')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'clock'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+          >
+            Clock In/Out
           </button>
         </nav>
       </div>
@@ -395,113 +425,113 @@ function Dashboard() {
         <>
           {/* Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Total Revenue</div>
-          <div className="mt-2 text-3xl font-bold text-green-600">
-            ${(dashboardData.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Total Revenue</div>
+              <div className="mt-2 text-3xl font-bold text-green-600">
+                ${(dashboardData.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Total Profit</div>
+              <div className={`mt-2 text-3xl font-bold ${(dashboardData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ${(dashboardData.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Active Projects</div>
+              <div className="mt-2 text-3xl font-bold text-blue-600">
+                {dashboardData.active_projects}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-sm font-medium text-gray-500">Employees</div>
+              <div className="mt-2 text-3xl font-bold text-purple-600">
+                {dashboardData.employee_count}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Total Profit</div>
-          <div className={`mt-2 text-3xl font-bold ${(dashboardData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ${(dashboardData.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Active Projects</div>
-          <div className="mt-2 text-3xl font-bold text-blue-600">
-            {dashboardData.active_projects}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Employees</div>
-          <div className="mt-2 text-3xl font-bold text-purple-600">
-            {dashboardData.employee_count}
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Recent Activities */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
-          </div>
-          <div className="px-6 py-4 max-h-96 overflow-y-auto">
-            {(() => {
-              // Merge all activity sources and remove duplicates
-              const allActivities = [
-                ...activities,
-                ...(pollingActivities || []),
-                ...(dashboardData?.recent_activities || [])
-              ]
-              
-              // Remove duplicates by ID and timestamp
-              const seen = new Set()
-              const uniqueActivities = allActivities.filter(act => {
-                if (!act) return false
-                const key = `${act.id || act.timestamp || Math.random()}_${act.description || ''}`
-                if (seen.has(key)) return false
-                seen.add(key)
-                return true
-              })
-              
-              // Sort by timestamp (newest first)
-              uniqueActivities.sort((a, b) => {
-                const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0
-                const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0
-                return timeB - timeA
-              })
-              
-              const displayActivities = uniqueActivities.slice(0, 50) // Show up to 50 activities
-              
-              if (displayActivities.length === 0) {
-                return <p className="text-gray-500 text-center py-4">No activities yet</p>
-              }
-              
-              return (
-                <div className="space-y-4">
-                  {displayActivities.map((activity, idx) => (
-                    <div key={activity.id || idx} className="border-l-4 border-blue-500 pl-4 py-2">
-                      <div className="text-sm text-gray-900">{activity.description || activity.activity_type}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {formatTimestamp(activity.timestamp)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
-          </div>
-        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Recent Activities */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
+              </div>
+              <div className="px-6 py-4 max-h-96 overflow-y-auto">
+                {(() => {
+                  // Merge all activity sources and remove duplicates
+                  const allActivities = [
+                    ...activities,
+                    ...(pollingActivities || []),
+                    ...(dashboardData?.recent_activities || [])
+                  ]
 
-        {/* Business Goals */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Business Goals</h3>
-          </div>
-          <div className="px-6 py-4">
-            {dashboardData.goals && dashboardData.goals.length > 0 ? (
-              <div className="space-y-4">
-                {dashboardData.goals.map((goal, idx) => {
-                  const goalKeys = Object.keys(dashboardData.goal_progress || {})
-                  const isComplete = goalKeys[idx] ? dashboardData.goal_progress[goalKeys[idx]] : false
+                  // Remove duplicates by ID and timestamp
+                  const seen = new Set()
+                  const uniqueActivities = allActivities.filter(act => {
+                    if (!act) return false
+                    const key = `${act.id || act.timestamp || Math.random()}_${act.description || ''}`
+                    if (seen.has(key)) return false
+                    seen.add(key)
+                    return true
+                  })
+
+                  // Sort by timestamp (newest first)
+                  uniqueActivities.sort((a, b) => {
+                    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0
+                    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0
+                    return timeB - timeA
+                  })
+
+                  const displayActivities = uniqueActivities.slice(0, 50) // Show up to 50 activities
+
+                  if (displayActivities.length === 0) {
+                    return <p className="text-gray-500 text-center py-4">No activities yet</p>
+                  }
+
                   return (
-                    <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">{goal}</span>
-                      <span className={`text-sm font-medium ${isComplete ? 'text-green-600' : 'text-gray-400'}`}>
-                        {isComplete ? '✓' : '○'}
-                      </span>
+                    <div className="space-y-4">
+                      {displayActivities.map((activity, idx) => (
+                        <div key={activity.id || idx} className="border-l-4 border-blue-500 pl-4 py-2">
+                          <div className="text-sm text-gray-900">{activity.description || activity.activity_type}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {formatTimestamp(activity.timestamp)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )
-                })}
+                })()}
               </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">No goals defined yet</p>
-            )}
+            </div>
+
+            {/* Business Goals */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Business Goals</h3>
+              </div>
+              <div className="px-6 py-4">
+                {dashboardData.goals && dashboardData.goals.length > 0 ? (
+                  <div className="space-y-4">
+                    {dashboardData.goals.map((goal, idx) => {
+                      const goalKeys = Object.keys(dashboardData.goal_progress || {})
+                      const isComplete = goalKeys[idx] ? dashboardData.goal_progress[goalKeys[idx]] : false
+                      return (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700">{goal}</span>
+                          <span className={`text-sm font-medium ${isComplete ? 'text-green-600' : 'text-gray-400'}`}>
+                            {isComplete ? '✓' : '○'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No goals defined yet</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
         </>
       )}
 
@@ -555,8 +585,8 @@ function Dashboard() {
               {dashboardData?.break_tracking?.employees_on_break && dashboardData.break_tracking.employees_on_break.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {dashboardData.break_tracking.employees_on_break.map((employee) => (
-                    <div 
-                      key={employee.id} 
+                    <div
+                      key={employee.id}
                       onClick={() => handleEmployeeClick(employee)}
                       className="border border-orange-200 rounded-lg p-4 bg-orange-50 cursor-pointer hover:bg-orange-100 hover:border-orange-300 transition-all duration-200 hover:shadow-md"
                     >
@@ -836,12 +866,11 @@ function Dashboard() {
                     <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between mb-2">
                         <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${
-                          product.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          product.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                          product.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${product.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            product.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                              product.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                          }`}>
                           {product.status}
                         </span>
                       </div>
@@ -958,14 +987,13 @@ function Dashboard() {
                           <h4 className="text-lg font-semibold text-gray-900">{leader.name}</h4>
                           <p className="text-sm text-gray-600">{leader.title}</p>
                         </div>
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${
-                          leader.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
-                          leader.role === 'CTO' ? 'bg-indigo-100 text-indigo-800' :
-                          leader.role === 'COO' ? 'bg-green-100 text-green-800' :
-                          leader.role === 'CFO' ? 'bg-amber-100 text-amber-800' :
-                          leader.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${leader.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
+                            leader.role === 'CTO' ? 'bg-indigo-100 text-indigo-800' :
+                              leader.role === 'COO' ? 'bg-green-100 text-green-800' :
+                                leader.role === 'CFO' ? 'bg-amber-100 text-amber-800' :
+                                  leader.role === 'Manager' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-gray-100 text-gray-800'
+                          }`}>
                           {leader.role}
                         </span>
                       </div>
@@ -1004,11 +1032,10 @@ function Dashboard() {
                             <div className="text-sm font-semibold text-gray-900">{decision.employee_name}</div>
                             <div className="text-xs text-gray-500">{decision.employee_role}</div>
                           </div>
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            decision.decision_type === 'strategic' ? 'bg-orange-100 text-orange-800' :
-                            decision.decision_type === 'tactical' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${decision.decision_type === 'strategic' ? 'bg-orange-100 text-orange-800' :
+                              decision.decision_type === 'tactical' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                            }`}>
                             {decision.decision_type}
                           </span>
                         </div>
@@ -1069,36 +1096,36 @@ function Dashboard() {
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">Strategic Vision</h4>
                 <p className="text-sm text-gray-600">
-                  Our leadership team is making {dashboardData?.leadership_insights?.metrics?.strategic_decisions_count || 0} strategic decisions 
-                  that are shaping the company's direction and ensuring long-term success. 
+                  Our leadership team is making {dashboardData?.leadership_insights?.metrics?.strategic_decisions_count || 0} strategic decisions
+                  that are shaping the company's direction and ensuring long-term success.
                   {dashboardData?.leadership_insights?.metrics?.ceo_count > 0 && (
-                    <> With {dashboardData.leadership_insights.metrics.ceo_count} CEO{dashboardData.leadership_insights.metrics.ceo_count > 1 ? 's' : ''} 
-                    and {dashboardData.leadership_insights.metrics.manager_count} manager{dashboardData.leadership_insights.metrics.manager_count > 1 ? 's' : ''} 
-                    at the helm, we have strong executive guidance.</>
+                    <> With {dashboardData.leadership_insights.metrics.ceo_count} CEO{dashboardData.leadership_insights.metrics.ceo_count > 1 ? 's' : ''}
+                      and {dashboardData.leadership_insights.metrics.manager_count} manager{dashboardData.leadership_insights.metrics.manager_count > 1 ? 's' : ''}
+                      at the helm, we have strong executive guidance.</>
                   )}
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">Project Leadership</h4>
                 <p className="text-sm text-gray-600">
-                  Leadership is actively involved in {dashboardData?.leadership_insights?.metrics?.projects_led_by_leadership || 0} projects, 
-                  ensuring strategic alignment and successful execution. This hands-on approach from executives 
+                  Leadership is actively involved in {dashboardData?.leadership_insights?.metrics?.projects_led_by_leadership || 0} projects,
+                  ensuring strategic alignment and successful execution. This hands-on approach from executives
                   demonstrates commitment to delivering results and maintaining high standards.
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">Organizational Growth</h4>
                 <p className="text-sm text-gray-600">
-                  With a leadership team of {dashboardData?.leadership_insights?.metrics?.total_leadership_count || 0} members, 
-                  we have the expertise and vision needed to scale operations, drive innovation, and maintain 
+                  With a leadership team of {dashboardData?.leadership_insights?.metrics?.total_leadership_count || 0} members,
+                  we have the expertise and vision needed to scale operations, drive innovation, and maintain
                   competitive advantage in the market.
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 mb-2">Continuous Improvement</h4>
                 <p className="text-sm text-gray-600">
-                  Leadership activities show ongoing engagement with {dashboardData?.leadership_insights?.recent_activities?.length || 0} recent actions, 
-                  indicating active management and continuous improvement initiatives that keep the company 
+                  Leadership activities show ongoing engagement with {dashboardData?.leadership_insights?.recent_activities?.length || 0} recent actions,
+                  indicating active management and continuous improvement initiatives that keep the company
                   moving forward.
                 </p>
               </div>
@@ -1109,7 +1136,7 @@ function Dashboard() {
 
       {/* Boardroom Tab Content */}
       {activeTab === 'boardroom' && (
-        <BoardroomView 
+        <BoardroomView
           leadershipTeam={dashboardData?.leadership_insights?.leadership_team || []}
           chats={chats}
           onChatsUpdate={async () => {
@@ -1215,8 +1242,8 @@ function Dashboard() {
                   <div className="px-6 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {trainingData.current_training.map((session) => (
-                        <div 
-                          key={session.employee_id} 
+                        <div
+                          key={session.employee_id}
                           className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md cursor-pointer transition-all"
                           onClick={() => setSelectedTrainingEmployee({ id: session.employee_id, name: session.employee_name })}
                         >
@@ -1309,7 +1336,7 @@ function Dashboard() {
             <div className="bg-white rounded-lg shadow p-12 text-center">
               <p className="text-gray-500 text-lg">No suggestions found</p>
               <p className="text-gray-400 text-sm mt-2">
-                {suggestionFilter !== 'all' 
+                {suggestionFilter !== 'all'
                   ? `No suggestions with status "${suggestionFilter}"`
                   : 'Suggestions will appear here as employees submit them'}
               </p>
@@ -1322,13 +1349,12 @@ function Dashboard() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h4 className="text-lg font-semibold text-gray-900">{suggestion.title}</h4>
-                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                          suggestion.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
-                          suggestion.status === 'reviewed' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                          suggestion.status === 'implemented' ? 'bg-green-100 text-green-800 border border-green-300' :
-                          suggestion.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-300' :
-                          'bg-gray-100 text-gray-800 border border-gray-300'
-                        }`}>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${suggestion.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                            suggestion.status === 'reviewed' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                              suggestion.status === 'implemented' ? 'bg-green-100 text-green-800 border border-green-300' :
+                                suggestion.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-300' :
+                                  'bg-gray-100 text-gray-800 border border-gray-300'
+                          }`}>
                           {suggestion.status === 'pending' && '⏳ '}
                           {suggestion.status === 'reviewed' && '👀 '}
                           {suggestion.status === 'implemented' && '✅ '}
@@ -1350,7 +1376,7 @@ function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="border-t border-gray-200 pt-4 mt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
@@ -1422,6 +1448,139 @@ function Dashboard() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Clock In/Out Tab Content */}
+      {activeTab === 'clock' && (
+        <div className="space-y-6">
+          {/* Stats Cards */}
+          {clockStats && (
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-gray-500">Total Employees</div>
+                <div className="mt-2 text-3xl font-semibold text-gray-900">{clockStats.total_employees}</div>
+              </div>
+              <div className="bg-green-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-green-600">Clocked In Today</div>
+                <div className="mt-2 text-3xl font-semibold text-green-700">{clockStats.clocked_in_today}</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-blue-600">Currently at Work</div>
+                <div className="mt-2 text-3xl font-semibold text-blue-700">{clockStats.currently_at_work}</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-purple-600">Currently at Home</div>
+                <div className="mt-2 text-3xl font-semibold text-purple-700">{clockStats.currently_at_home}</div>
+              </div>
+              <div className="bg-orange-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-orange-600">Clocked Out Today</div>
+                <div className="mt-2 text-3xl font-semibold text-orange-700">{clockStats.clocked_out_today}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Clock Events List */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Today's Clock Events</h3>
+              <p className="text-sm text-gray-500 mt-1">All employee clock in/out activity for today</p>
+            </div>
+
+            {clockLoading ? (
+              <div className="p-8 text-center text-gray-500">
+                Loading clock events...
+              </div>
+            ) : clockEvents.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No clock events recorded today yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {clockEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-4 flex-1">
+                        {/* Employee Avatar */}
+                        {event.employee.avatar_path ? (
+                          <img
+                            src={event.employee.avatar_path}
+                            alt={event.employee.name}
+                            className="h-12 w-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-500 font-semibold text-sm">
+                              {event.employee.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Event Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={() => navigate(`/employees/${event.employee.id}`)}
+                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                            >
+                              {event.employee.name}
+                            </button>
+                            <span className="text-sm text-gray-500">
+                              {event.employee.title}
+                            </span>
+                            {event.employee.department && (
+                              <span className="text-sm text-gray-400">
+                                · {event.employee.department}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Event Type Badge */}
+                          <div className="mt-2 flex items-center space-x-3">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                              event.event_type === 'clock_in'
+                                ? 'bg-green-100 text-green-800'
+                                : event.event_type === 'clock_out'
+                                ? 'bg-orange-100 text-orange-800'
+                                : event.event_type === 'arrived_home'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {event.event_type === 'clock_in' && '🏢 Clocked In'}
+                              {event.event_type === 'clock_out' && '👋 Clocked Out'}
+                              {event.event_type === 'arrived_home' && '🏠 Arrived Home'}
+                              {event.event_type === 'left_home' && '🚶 Left Home'}
+                            </span>
+
+                            {event.location && (
+                              <span className="text-sm text-gray-500">
+                                at {event.location}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Notes */}
+                          {event.notes && (
+                            <div className="mt-2 text-sm text-gray-600">
+                              {event.notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Timestamp */}
+                      <div className="ml-4 flex-shrink-0 text-sm text-gray-500">
+                        {formatTimestamp(event.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

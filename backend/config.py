@@ -106,7 +106,7 @@ def get_midnight_today() -> datetime:
 def get_midnight_tomorrow() -> datetime:
     """
     Get tomorrow's midnight (00:00:00) in the configured timezone.
-    
+
     Returns:
         datetime object representing tomorrow at midnight in configured timezone
     """
@@ -115,6 +115,36 @@ def get_midnight_tomorrow() -> datetime:
     return midnight_today + timedelta(days=1)
 
 
+def is_work_hours() -> bool:
+    """
+    Check if current time is during work hours (7am-7pm Monday-Friday).
+    Employees are at the office during work hours (7am-7pm Monday-Friday).
+    Employees are at home during non-work hours (7pm-7am or weekends).
+
+    Returns:
+        True if current time is between 7am-7pm on Monday-Friday (work hours), False otherwise
+    """
+    current_time = now()
+    current_hour = current_time.hour
+    current_weekday = current_time.weekday()  # 0 = Monday, 6 = Sunday
+    
+    # Work hours: 7am (07:00) to 7pm (19:00) Monday-Friday
+    # Monday = 0, Friday = 4
+    is_weekday = current_weekday < 5  # Monday (0) through Friday (4)
+    is_work_time = 7 <= current_hour < 19
+    
+    return is_weekday and is_work_time
+
+
+def should_be_at_home() -> bool:
+    """
+    Check if employees should be at home based on current time.
+    Employees are at home from 7pm-7am (non-work hours).
+
+    Returns:
+        True if employees should be at home, False if they should be at office
+    """
+    return not is_work_hours()
 
 
 

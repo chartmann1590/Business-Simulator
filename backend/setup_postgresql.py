@@ -49,7 +49,7 @@ async def check_postgresql_installed() -> bool:
             ["psql", "--version"],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=60
         )
         if result.returncode == 0:
             print(f"[OK] PostgreSQL found: {result.stdout.strip()}")

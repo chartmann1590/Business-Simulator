@@ -26,9 +26,9 @@ async def migrate_database():
         echo=False,
         pool_size=1,  # Minimal pool for migration
         max_overflow=0,  # No overflow for migration
-        pool_timeout=10,  # Shorter timeout
+        pool_timeout=60,  # Timeout for acquiring connection
         connect_args={
-            "command_timeout": 30,  # 30 second timeout for commands
+            "command_timeout": 60,  # 60 second timeout for commands
         }
     )
     

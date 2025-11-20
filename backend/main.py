@@ -168,6 +168,10 @@ import uvicorn
 from datetime import datetime, timedelta
 from config import now as local_now
 
+# Fix for Windows asyncio loop policy with asyncpg
+if platform.system() == 'Windows':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 # Create simulator instance (will be initialized in lifespan)
 simulator = OfficeSimulator()
 
@@ -414,11 +418,19 @@ app.include_router(router, prefix="/api")
 avatars_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "avatars")
 if os.path.exists(avatars_path):
     app.mount("/avatars", StaticFiles(directory=avatars_path), name="avatars")
+    print(f"✅ Avatars directory mounted: {avatars_path}")
 
 # Serve static files for office layouts
 office_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "office_layout")
 if os.path.exists(office_layout_path):
     app.mount("/office_layout", StaticFiles(directory=office_layout_path), name="office_layout")
+    print(f"✅ Office layout directory mounted: {office_layout_path}")
+
+# Serve static files for home layouts
+home_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "home_layout")
+if os.path.exists(home_layout_path):
+    app.mount("/home_layout", StaticFiles(directory=home_layout_path), name="home_layout")
+    print(f"✅ Home layout directory mounted: {home_layout_path}")
 
 @app.websocket("/ws")
 async def websocket_route(websocket: WebSocket):
@@ -434,17 +446,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
-        log_config=None,
-        reload_excludes=[
-            "*.log",
-            "*.log.*",  # Rotated log files (backend.log.1, backend.log.2, etc.)
-            "*.db",
-            "*.db-shm",
-            "*.db-wal",
-            "__pycache__",
-            "*.pyc",
-            "*.pyo",
-        ]
+        reload=False,  # Disabled auto-reload - only restart manually for code changes
+        log_config=None
     )
 

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Financial Dashboard</title>
+  <style>
+    /* Title */
+    tr:nth-child(1) td {
+      background-color: #366092;
+      color: white;
+      font-size: 16pt;
+      font-weight: bold;
+      padding: 12px;
+    }
+
+    /* Header Row */
+    th {
+      background: #d0d0d0;
+      border: 1px solid #d0d0d0;
+      padding: 8px;
+      text-align: left;
+    }
+
+    /* Data Rows */
+    tr:nth-child(2) td, tr:nth-child(3) td, ... {
+      background-color: white;
+      border-bottom: 1px solid #f2f2f2;
+      padding: 8px;
+      text-align: right;
+    }
+    tr:nth-child(even) td, tr:nth-child(odd) td {
+      background-color: #f2f2f2;
+      border-bottom: 1px solid #f2f2f2;
+      padding: 8px;
+      text-align: right;
+    }
+
+    /* Totals Row */
+    tr:last-child td {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      padding: 8px;
+      border-bottom: double 1px solid #d0d0d0;
+    }
+    tr:last-child td:nth-child(2) {
+      display: block;
+      width: calc(100% - 15px);
+    }
+
+    /* Cells */
+    td {
+      padding: 8px;
+    }
+
+    /* Dates */
+    .date {
+      text-align: center;
+    }
+
+    /* Numbers */
+    span.number {
+      font-size: 12pt;
+    }
+  </style>
+</head>
+<body>
+  <table border="0" cellpadding="0" cellspacing="0">
+    <tr>
+      <td colspan="10" style="text-align: center; padding-top: 20px;">Financial Dashboard</td>
+    </tr>
+
+    <tr>
+      <th>Business Metrics</th>
+      <th>Total Revenue ($)</th>
+      <th>Total Profit ($)</th>
+      <th>Total Expenses ($)</th>
+      <th>Profit Margin (%)</th>
+    </tr>
+
+    <tr>
+      <td class="date">2022-01-01</td>
+      <td>$848,324.28
+      <span class="number">$361,970.04
+      <td>$486,354.24
+      <td>42.67%</td>
+    </tr>
+
+    <tr>
+      <th>Active Projects</th>
+      <th>Budget ($)</th>
+      <th>Revenue ($)</th>
+      <th>Profit Margin (%)</th>
+    </tr>
+
+    <tr>
+      <td class="date">2022-01-01</td>
+      <td>$75,000.00
+      <td>$25,831.02
+      <td>34.56%</td>
+    </tr>
+
+    <!-- Add more rows for each active project -->
+    ...
+
+    <tr>
+      <th>Department Performance</th>
+      <th>Employee Count</th>
+      <th>Department Headcount</th>
+    </tr>
+
+    <tr>
+      <td class="date">2022-01-01</td>
+      <td>Design
+      <td>58
+      <td>64
+    </tr>
+
+    <!-- Add more rows for each department -->
+    ...
+
+    <tr>
+      <th>Totals</th>
+      <th>Total Revenue ($)</th>
+      <th>Total Profit ($)</th>
+    </tr>
+
+    <tr>
+      <td colspan="3" class="totals">Totals
+  <td colspan="2" style="display: block; width: calc(100% - 15px);"></td>
+    </tr>
+  </table>
+</body>
+</html>

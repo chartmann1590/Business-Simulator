@@ -2677,6 +2677,186 @@ The training system manages employee training sessions, automatically generates 
 - Tracks session metadata and progress
 
 **TrainingMaterial Table:**
+- Stores training material content (HTML format)
+- Links to training sessions and departments
+- Tracks material creation and update dates
+
+## Clock In/Out System
+
+The clock in/out system manages employee arrival, departure, and time tracking with realistic workday schedules.
+
+### Features
+
+- **Morning Arrivals**: Employees arrive at work between 6:45am-7:45am with staggered timing
+- **Evening Departures**: Employees leave work between 6:45pm-7:15pm with staggered timing
+- **Clock Event Tracking**: All clock in/out events are logged with timestamps and locations
+- **Automatic State Transitions**: Employees transition between office and home states automatically
+- **Online Status Updates**: Employee online/offline status in Teams is updated based on location
+- **Weekend Handling**: No clock events on weekends (Saturday/Sunday)
+
+### How It Works
+
+1. **Morning Arrivals (6:45am-7:45am)**:
+   - 6:45am-7:00am: 30% of employees arrive (early birds)
+   - 7:00am-7:30am: 60% of employees arrive (normal timing)
+   - 7:30am-7:45am: Remaining 10% arrive (latecomers)
+   - Employees transition from "at_home" or "sleeping" to "working" state
+   - Clock in events are logged with "clock_in" event type
+   - Employees are placed in their home rooms or default workspace
+   - Online status is set to "online" in Teams
+
+2. **Evening Departures (6:45pm-7:15pm)**:
+   - 6:45pm-7:00pm: 40% of employees leave
+   - 7:00pm-7:10pm: 50% of employees leave
+   - 7:10pm-7:15pm: Remaining 10% leave
+   - Employees transition to "leaving_work" state
+   - Clock out events are logged with "clock_out" event type
+   - Online status is set to "offline" in Teams
+   - Employees then transition to "commuting_home" and finally "at_home"
+
+3. **Commuting Process**:
+   - Employees in "leaving_work" state immediately transition to "commuting_home"
+   - After brief period (simplified in simulation), employees arrive home
+   - "arrived_home" events are logged
+   - Employees transition to "at_home" state
+
+### Database Structure
+
+**ClockInOut Table:**
+- Stores clock events (clock_in, clock_out, left_home, arrived_home)
+- Tracks employee, event type, location, timestamp, and notes
+- Provides complete time tracking history
+
+### API Endpoints
+
+- `GET /api/clock/employee/{employee_id}` - Get clock history for an employee
+- `GET /api/clock/today` - Get all clock events for today
+
+## Sleep System
+
+The sleep system manages realistic sleep/wake cycles for employees, family members, and pets.
+
+### Features
+
+- **Bedtime Transitions**: Employees and families go to sleep between 10pm-12am with staggered timing
+- **Morning Wake-ups**: Employees wake 5:30am-6:45am, family members wake 7:30am-9am
+- **Sleep State Tracking**: Tracks sleep state (awake/sleeping) for employees, family members, and pets
+- **Coordinated Sleep**: When employees go to sleep, their family members and pets also sleep
+- **Weekend Variations**: Family members can wake later on weekends
+
+### How It Works
+
+1. **Bedtime Process (10pm-12am)**:
+   - 10pm-10:30pm: 30% go to sleep
+   - 10:30pm-11pm: 40% go to sleep
+   - 11pm-11:30pm: 20% go to sleep
+   - 11:30pm-12am: Everyone remaining goes to sleep
+   - Employees' sleep_state is set to "sleeping"
+   - Activity state is set to "sleeping"
+   - Family members and pets associated with the employee also go to sleep
+
+2. **Employee Wake-ups (5:30am-6:45am, weekdays only)**:
+   - 5:30am-6:00am: 40% wake up (early birds)
+   - 6:00am-6:30am: 50% wake up (normal)
+   - 6:30am-6:45am: Everyone remaining wakes up
+   - Employees' sleep_state is set to "awake"
+   - Activity state is set to "at_home" (preparing for work)
+   - Pets also wake up with employees (need to be fed)
+
+3. **Family Member Wake-ups (7:30am-9am, all days)**:
+   - 7:30am-8:00am: 30% wake up
+   - 8:00am-8:30am: 50% wake up
+   - 8:30am-9:00am: Everyone remaining wakes up
+   - Family members' sleep_state is set to "awake"
+   - Family members wake after employees have left for work
+
+### Database Structure
+
+**Employee Table:**
+- `sleep_state`: "awake" or "sleeping" for employees
+
+**FamilyMember Table:**
+- `sleep_state`: "awake" or "sleeping" for family members
+
+**HomePet Table:**
+- `sleep_state`: "awake" or "sleeping" for pets
+
+## Home System
+
+The home system provides a complete view of employee home life, including family members, pets, and home activities.
+
+### Features
+
+- **Home Layout Visualization**: Interior and exterior views of employee homes
+- **Family Members**: Employees have spouses and children with individual activities
+- **Home Pets**: Cats and dogs with care needs (happiness, hunger, energy)
+- **Home Conversations**: AI-generated conversations between family members
+- **Home Activities**: Real-time tracking of home activities and interactions
+- **Sleep Integration**: Visual representation of sleep/wake cycles at home
+
+### How It Works
+
+1. **Home Data Structure**:
+   - Each employee has a home with family members (spouse, children)
+   - Home pets (cats and dogs) belong to the home
+   - Home settings track home layout and configuration
+
+2. **Family Members**:
+   - Spouses have names, avatars, and activities
+   - Children have names, avatars, and activities
+   - Family members have sleep states and current locations
+   - Family activities are tracked and displayed
+
+3. **Home Pets**:
+   - Pets have names, types (cat/dog), and personalities
+   - Pet stats: happiness, hunger, energy
+   - Pets have sleep states and current locations
+   - Pet care logs track employee interactions with pets
+
+4. **Home Conversations**:
+   - AI-generated conversations between family members
+   - Conversations update periodically
+   - Realistic family interactions and discussions
+
+5. **Home View**:
+   - Frontend displays interior or exterior view of home
+   - Shows family members and pets in their locations
+   - Displays current activities and conversations
+   - Updates in real-time via WebSocket
+
+### Database Structure
+
+**HomeSettings Table:**
+- Stores home configuration and layout information
+- Links to employee
+
+**FamilyMember Table:**
+- Stores family member information (name, relationship, avatar)
+- Links to employee (home owner)
+- Tracks sleep state and current location
+
+**HomePet Table:**
+- Stores pet information (name, type, personality)
+- Links to employee (home owner)
+- Tracks happiness, hunger, energy stats
+- Tracks sleep state and current location
+
+**PetCareLog Table:**
+- Tracks employee interactions with pets
+- Records care activities (feeding, playing, etc.)
+
+### API Endpoints
+
+- `GET /api/home/employees` - Get list of employees with home data
+- `GET /api/home/layout/{employee_id}` - Get home layout for an employee
+- `GET /api/home/conversations/{employee_id}` - Get home conversations
+
+### Frontend Components
+
+- **HomeView**: Main page for viewing employee homes
+- **HomeLayout**: Visual representation of home interior/exterior
+- **FamilyMemberView**: Display family member information and activities
+- **PetView**: Display pet information and care stats
 - Stores training material content and metadata
 - Tracks usage count, difficulty level, and estimated duration
 - Links to shared drive files

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title> Alejandro Navarro Financial Dashboard </title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+		}
+
+		table {
+		    border-collapse: collapse;
+		}
+
+		th, td {
+		    padding: 8px;
+		    border: 1px solid #d0d0d0;
+		}
+
+		th {
+		    background: #366092;
+		    color: white;
+		    font-weight: bold;
+		    padding: 8px;
+		}
+
+		tbody tr:nth-child(even) {
+		    background: #f2f2f2;
+		}
+
+		totals th, totals td {
+		    background: #e7f3ff;
+		    font-weight: bold;
+		    border-top: 2px solid #d0d0d0;
+		}
+	</style>
+</head>
+<body>
+
+<table style="width:100%; margin:0 auto;">
+	<tr>
+	  <td colspan="8" style="text-align:center; padding:12px;"> Alejandro Navarro Financial Dashboard </td>
+	</tr>
+
+	<tr>
+	  <th>Employee Name</th>
+	  <th>Title</th>
+	  <th>Department</th>
+	  <th>Revenue Growth Rate (%)</th>
+	  <th>Expense Tracking</th>
+	  <th>Project ROI Analysis</th>
+	  <th>Department Performance</th>
+	  <th>Summary Metrics</th>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Alejandro Navarro </td>
+	  <td> Marketing Manager </td>
+	  <td> Product </td>
+	  <td> 42.67% </td>
+	  <td> $848,324.28 </td>
+	  <td> $361,970.04 </td>
+	  <td> 64 </td>
+	  <td> $361,970.04 / $848,324.28 = 0.4247 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> John Doe </td>
+	  <td> Sales Representative </td>
+	  <td> Sales </td>
+	  <td> 0.00% </td>
+	  <td> $70,675.89 </td>
+	  <td> $156,356.16 </td>
+	  <td> 50 </td>
+	  <td> $70,675.89 / $156,356.16 = 0.0454 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Jane Smith </td>
+	  <td> Marketing Specialist </td>
+	  <td> Marketing </td>
+	  <td> 42.67% </td>
+	  <td> $17,080.48 </td>
+	  <td> $88,137.90 </td>
+	  <td> 55 </td>
+	  <td> $17,080.48 / $88,137.90 = 0.0193 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Bob Johnson </td>
+	  <td> Sales Manager </td>
+	  <td> Sales </td>
+	  <td> 0.00% </td>
+	  <td> $10,036.51 </td>
+	  <td> $115,778.81 </td>
+	  <td> 53 </td>
+	  <td> $10,036.51 / $115,778.81 = 0.0087 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <th>Total</th>
+	  <th>Total Revenue</th>
+	  <th>Total Expenses</th>
+	  <th>Profit Margin (%)</th>
+	  <th>Active Projects</th>
+	  <th>Employee Count</th>
+	  <th>Department Summary</th>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <td colspan="8"> $848,324.28 </td>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <td colspan="8"> $361,970.04 </td>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <td colspan="8"> 42.67% </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Digital Transformation Project </td>
+	  <td> $196,119.03 </td>
+	  <td> $70,675.89 </td>
+	  <td> 0.36% </td>
+	  <td> Budget: $196,119.03, Revenue: $70,675.89 </td>
+	  <td> ROI: ($126,443.14) / $196,119.03 = -0.6455 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Strategic Partnership Development </td>
+	  <td> $156,356.16 </td>
+	  <td> $17,080.48 </td>
+	  <td> 0.11% </td>
+	  <td> Budget: $156,356.16, Revenue: $17,080.48 </td>
+	  <td> ROI: ($139,275.68) / $156,356.16 = -0.8913 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Customer Experience Enhancement </td>
+	  <td> $88,137.90 </td>
+	  <td> $10,036.51 </td>
+	  <td> 0.011% </td>
+	  <td> Budget: $88,137.90, Revenue: $10,036.51 </td>
+	  <td> ROI: ($78,101.39) / $88,137.90 = -0.8811 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Customer Experience Enhancement </td>
+	  <td> $115,778.81 </td>
+	  <td> $43,994.25 </td>
+	  <td> 0.037% </td>
+	  <td> Budget: $115,778.81, Revenue: $43,994.25 </td>
+	  <td> ROI: ($71,784.56) / $115,778.81 = -0.6271 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Market Expansion Initiative </td>
+	  <td> $55,020.72 </td>
+	  <td> $0.00 </td>
+	  <td> N/A </td>
+	  <td> Budget: $55,020.72, Revenue: $0.00 </td>
+	  <td> ROI: ($55,020.72) / $55,020.72 = 1.0000 </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td> Administration </td>
+	  <td> $123,456.78 </td>
+	  <td> $42,987.65 </td>
+	  <td> -34.67% </td>
+	  <td> 63 employees </td>
+	  <td> 0.00% </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <th>Total Revenue</th>
+	  <th>Total Expenses</th>
+	  <th>Profit Margin (%)</th>
+	  <th>Active Projects</th>
+	  <th>Employee Count</th>
+	  <th>Department Summary</th>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <td colspan="8"> $848,324.28 </td>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <th colspan="4" style="text-align:left;"> Quarterly Breakdown: </th>
+	  <th> Current Quarter </th>
+	  <th> Previous Quarter </th>
+	  <th> Growth Rate (%) </th>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <td colspan="4" style="text-align:left;"> Q1, 2023: $248,124.12, Q2, 2023: $300,200.15, Growth Rate: 21.07% </td>
+	  <td> N/A </td>
+	  <td> N/A </td>
+	</tr>
+
+	<tr style="background-color:#f2f2f2;">
+	  <th colspan="8"> Summary Metrics </th>
+	</tr>
+
+	<tr style="background-color:#e7f3ff;">
+	  <td colspan="8"> Total Revenue: $848,324.28, Profit Margin: 42.67%, Employee Count: 1309 </td>
+	</tr>
+
+	<table style="width:100%; margin:0 auto; border-collapse: collapse;">
+	  <tr>
+	    <th style="text-align:left;"> Notes </th>
+	  </tr>
+	</table>
+
+</table>
+
+</body>
+</html>

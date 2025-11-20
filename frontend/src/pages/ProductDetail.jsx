@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { apiGet } from '../utils/api'
 
 function ProductDetail() {
   const { id } = useParams()
@@ -14,15 +15,12 @@ function ProductDetail() {
 
   const fetchProduct = async () => {
     try {
-      const response = await fetch(`/api/products/${id}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      setProduct(data)
-      setLoading(false)
+      const result = await apiGet(`/api/products/${id}`)
+      setProduct(result.data || null)
     } catch (error) {
       console.error('Error fetching product:', error)
+      setProduct(null)
+    } finally {
       setLoading(false)
     }
   }

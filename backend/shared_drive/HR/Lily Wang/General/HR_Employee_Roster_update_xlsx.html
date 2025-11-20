@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        /* Header Styles */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background-color: white;
+        }
+        
+        /* Alternating Row Styles */
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        /* Totals Row Styles */
+        th:first-child, td:first-child {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+        
+        /* Number Formatting */
+        .currency {
+            text-align: right;
+        }
+        
+        /* Percentage Formatting */
+        .percentage {
+            text-align: right;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<table border="0" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width:100%">
+    <tr>
+        <th colspan="8">Financial Dashboard - Engineering Department</th>
+    </tr>
+    <tr>
+        <td colspan="8"><strong>Employee Information:</strong></td>
+    </tr>
+    <tr>
+        <td>Name:</td>
+        <td>Lily Wang</td>
+    </tr>
+    <tr>
+        <td>Title:</td>
+        <td>Engineering Manager</td>
+    </tr>
+    <tr>
+        <td>Department:</td>
+        <td>HR</td>
+    </tr>
+    <tr>
+        <th colspan="8">Business Metrics:</th>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Total Revenue ($)</th>
+        <td class="currency">848,324.28</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Total Profit ($) </th>
+        <td class="currency">361,970.04</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Total Expenses ($)</th>
+        <td class="currency">486,354.24</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Profit Margin (%)</th>
+        <td class="percentage">42.67%</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Active Projects</th>
+        <td>15</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Total Employees</th>
+        <td>1306</td>
+    </tr>
+    <tr>
+        <th colspan="8">Active Project Details:</th>
+    </tr>
+    <tr>
+        <th style="background-color: #366092; color: white;">Project Name</th>
+        <th style="background-color: #366092; color: white;">Budget ($)</th>
+        <th style="background-color: #366092; color: white;">Revenue ($) </th>
+    </tr>
+    <tr>
+        <td>Customer Portal Redesign</td>
+        <td class="currency">$75,000.00</td>
+        <td class="currency">$25,831.02</td>
+    </tr>
+    <tr>
+        <td>API Infrastructure Upgrade</td>
+        <td class="currency">$100,000.00</td>
+        <td class="currency">$28,996.55</td>
+    </tr>
+    <tr>
+        <td>Mobile App Development</td>
+        <td class="currency">$150,000.00</td>
+        <td class="currency">$32,045.32</td>
+    </tr>
+    <tr>
+        <td>Digital Transformation Project</td>
+        <td class="currency">$196,119.03</td>
+        <td class="currency">$70,675.89</td>
+    </tr>
+    <tr>
+        <td>Strategic Partnership Development</td>
+        <td class="currency">$156,356.16</td>
+        <td class="currency">$17,080.48</td>
+    </tr>
+    <tr>
+        <th colspan="8">Department Breakdown:</th>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Department</th>
+        <th style="text-align: right;">Employee Count</th>
+    </tr>
+    <tr>
+        <td>Marketing</td>
+        <td>64</td>
+    </tr>
+    <tr>
+        <td>Design</td>
+        <td>55</td>
+    </tr>
+    <tr>
+        <td>Product</td>
+        <td>50</td>
+    </tr>
+    <tr>
+        <td>HR</td>
+        <td>55</td>
+    </tr>
+    <tr>
+        <td>Sales</td>
+        <td>50</td>
+    </tr>
+    <tr>
+        <td>IT</td>
+        <td>52</td>
+    </tr>
+    <tr>
+        <td>Operations</td>
+        <td>57</td>
+    </tr>
+    <tr>
+        <td>Engineering</td>
+        <td>53</td>
+    </tr>
+    <tr>
+        <td>Administration</td>
+        <td>63</td>
+    </tr>
+    <tr>
+        <td>Executive</td>
+        <td>1</td>
+    </tr>
+    <tr>
+        <th colspan="8">Financial Summary:</th>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Quarter 1 Revenue ($)</th>
+        <td class="currency">$215,012.50</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Year-to-Date Profit ($)</th>
+        <td class="currency">$243,432.15</td>
+    </tr>
+    <tr>
+        <th style="text-align: right;">Total Employee Cost ($)</th>
+        <td class="currency">$476,215.75</td>
+    </tr>
+    <tr>
+        <th colspan="8">Notes:</th>
+    </tr>
+    <tr>
+        <td>Assumptions made based on business data.</td>
+    </tr>
+</table>
+
+</body>
+</html>

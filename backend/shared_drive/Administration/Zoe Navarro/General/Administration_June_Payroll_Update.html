@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Financial Dashboard</title>
+	<style>
+	
+	/* Title */
+	.title {
+		color: #fff;
+		font-size: 18pt;
+		font-weight: bold;
+		text-align: center;
+		padding: 12px;
+		border-bottom: 1px solid #d0d0d0;
+	}
+
+	/* Header Row */
+	.header-row {
+		background-color: #366092;
+		color: white;
+		font-weight: bold;
+		padding: 8px;
+		border-top: 2px solid #d0d0d0;
+	}
+
+	/* Data Rows */
+	.data-rows {
+		background-color: #f2f2f2;
+		padding: 8px;
+		border-bottom: 1px solid #d0d0d0;
+	}
+	
+	/* Alternating Rows */
+	.data-rows:nth-child(even) {
+		background-color: #fff;
+	}
+	
+	/* Totals Row */
+	.totals-row {
+		background-color: #e7f3ff;
+		color: black;
+		font-weight: bold;
+		padding: 8px;
+		border-top: 2px solid #d0d0d0;
+	}
+
+	/* Number Formatting */
+	.number-formatting {
+		padding-right: 12px;
+		text-align: right;
+	}
+	
+	/* Dates */
+	.date-formatting {
+		padding-left: 12px;
+		text-align: left;
+	}
+	
+	/* Conditional Formatting */
+	.conditional-formatting {
+		background-color: green;
+	}
+	
+</style>
+</head>
+<body>
+
+<table border-collapse="collapse" cellpadding="0">
+    <tr class="title">
+        <td colspan="10"></td>
+    </tr>
+    <tr class="header-row">
+        <th>Employee Information</th>
+        <th>Department</th>
+        <th>Job Title</th>
+        <th>Status</th>
+    </tr>
+
+    <!-- Employee Information Table -->
+    <table style="width:100%">
+        <tr>
+            <td>Employee Name:</td>
+            <td>John Doe</td>
+            <td>Administrative Assistant</td>
+            <td>Active</td>
+        </tr>
+        
+        <tr class="data-rows">
+            <td>Name:</td>
+            <td>Jane Smith</td>
+            <td>Accountant</td>
+            <td>Inactive</td>
+        </tr>
+
+        <!-- More data rows... -->
+    </table>
+
+    <br/>
+
+    <h2>Business Metrics</h2>
+
+    <table style="width:100%">
+        <tr class="header-row">
+            <th>Total Revenue:</th>
+            <th>Total Profit:</th>
+            <th>Total Expenses:</th>
+            <th>Profit Margin:</th>
+            <th>Active Projects:</th>
+            <th>Total Employees:</th>
+        </tr>
+
+        <tr class="data-rows">
+            <td>$848,324.28</td>
+            <td>$361,970.04</td>
+            <td>$486,354.24</td>
+            <td>42.67%</td>
+            <td>15</td>
+            <td>1397</td>
+        </tr>
+
+        <!-- More data rows... -->
+    </table>
+
+    <br/>
+
+    <h2>Active Projects Data</h2>
+
+    <table style="width:100%">
+        <tr class="header-row">
+            <th>Project Name:</th>
+            <th>Budget:</th>
+            <th>Revenue:</th>
+            <th>Status:</th>
+        </tr>
+
+        <tr class="data-rows">
+            <td>Customer Portal Redesign</td>
+            <td>$75,000.00</td>
+            <td>$25,831.02</td>
+            <td>In Progress</td>
+        </tr>
+
+        <!-- More data rows... -->
+    </table>
+
+    <br/>
+
+    <h2>Department Data</h2>
+
+    <table style="width:100%">
+        <tr class="header-row">
+            <th>Department:</th>
+            <th>Employees:</th>
+        </tr>
+
+        <tr class="data-rows">
+            <td>Design</td>
+            <td>55</td>
+        </tr>
+
+        <!-- More data rows... -->
+    </table>
+
+    <br/>
+
+    <h2>Critical Requirements</h2>
+
+    <table style="width:100%">
+        <tr class="header-row">
+            <th>Requirement:</th>
+            <th>Status:</th>
+        </tr>
+
+        <tr class="data-rows">
+            <td>Financial Analysis</td>
+            <td>Complete</td>
+        </tr>
+
+        <!-- More data rows... -->
+    </table>
+
+</body>
+</html>
