@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Financial Dashboard</title>
+    <style>
+        /* Styles for the entire page */
+        body {
+            font-family: Arial;
+            background-color: #f0f0f0;
+        }
+        
+        /* Title row styles */
+        table td:nth-child(1) {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            border-bottom: 2px solid #d0d0d0;
+        }
+        
+        /* Header row styles */
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        /* Data row styles */
+        td:nth-child(odd) {
+            background-color: #f2f2f2;
+        }
+        td:nth-child(even) {
+            background-color: white;
+        }
+        
+        /* Totals row styles */
+        td:nth-child(8) {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+        
+        /* Data cell padding and alignment */
+        td, th {
+            padding: 8px;
+            text-align: left; /* Left for text, Right for numbers, Center for dates */
+        }
+        
+        /* Number formatting */
+        .currency {
+            font-size: 14pt;
+            color: #0044cc;
+            text-align: right;
+        }
+        
+        /* Percentage formatting */
+        .percentage {
+            font-size: 12pt;
+            color: #666666;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <table border-collapse="collapse">
+        <tr><td colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td></tr>
+        <tr>
+            <th>Department</th>
+            <th>Project Name</th>
+            <th>Budget</th>
+            <th>Revenue</th>
+            <th>Profit Margin</th>
+            <th>Active Projects</th>
+            <th>Total Employees</th>
+            <th>Totals</th>
+        </tr>
+        <tr>
+            <td style="background: #366092; color: white;">IT</td>
+            <td colspan="5">Mobile App Development</td>
+            <td class="currency">$150,000.00</td>
+            <td class="currency">$32,045.32</td>
+            <td class="percentage">42.67%</td>
+            <td>1</td>
+            <td class="currency">$848,324.28 - $486,354.24 = $361,970.04</td>
+        </tr>
+        <tr>
+            <td style="background: #366092; color: white;">IT</td>
+            <td colspan="5">Digital Transformation Project</td>
+            <td class="currency">$196,119.03</td>
+            <td class="currency">$70,675.89</td>
+            <td class="percentage">36.07%</td>
+            <td>1</td>
+            <td class="currency">$848,324.28 - $486,354.24 = $361,970.04</td>
+        </tr>
+        <tr>
+            <td style="background: #366092; color: white;">IT</td>
+            <td colspan="5">Strategic Partnership Development</td>
+            <td class="currency">$156,356.16</td>
+            <td class="currency">$17,080.48</td>
+            <td class="percentage">10.91%</td>
+            <td>1</td>
+            <td class="currency">$848,324.28 - $486,354.24 = $361,970.04</td>
+        </tr>
+        <tr>
+            <td style="background: #366092; color: white;">IT</td>
+            <td colspan="5">Customer Experience Enhancement</td>
+            <td class="currency">$88,137.90</td>
+            <td class="currency">$10,036.51</td>
+            <td class="percentage">11.31%</td>
+            <td>1</td>
+            <td class="currency">$848,324.28 - $486,354.24 = $361,970.04</td>
+        </tr>
+        <!-- Add more rows for other departments and projects -->
+    </table>
+</body>
+</html>

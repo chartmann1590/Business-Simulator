@@ -94,16 +94,27 @@ class PetManager:
         return result.scalars().all()
     
     async def move_pet_randomly(self, pet: OfficePet):
-        """Move a pet to a random room (occasionally)."""
-        # 20% chance to move (more frequent wandering)
-        if random.random() > 0.2:
+        """Move a pet to a random room. Enforces 1-hour maximum stay in any room."""
+        # Check if pet has been in the same room for more than 1 hour
+        force_move = False
+        if pet.last_room_change:
+            time_in_room = local_now() - pet.last_room_change
+            hours_in_room = time_in_room.total_seconds() / 3600
+            if hours_in_room >= 1.0:
+                force_move = True
+        else:
+            # No last_room_change recorded, set it now and allow occasional movement
+            force_move = False
+
+        # Move if forced (1+ hour) or by chance (20%)
+        if not force_move and random.random() > 0.2:
             return
-        
+
         from employees.room_assigner import (
             ROOM_BREAKROOM, ROOM_LOUNGE, ROOM_OPEN_OFFICE, ROOM_CUBICLES,
             ROOM_CONFERENCE_ROOM, ROOM_MANAGER_OFFICE, ROOM_RECEPTION
         )
-        
+
         # Rooms pets can visit
         room_options = [
             (ROOM_BREAKROOM, 1),
@@ -115,26 +126,44 @@ class PetManager:
             (ROOM_CUBICLES, 1),
             (ROOM_RECEPTION, 1),
         ]
-        
-        new_room, new_floor = random.choice(room_options)
-        
+
+        # Choose a different room if possible
+        available_rooms = [(room, floor) for room, floor in room_options
+                          if room != pet.current_room or floor != pet.floor]
+        if available_rooms:
+            new_room, new_floor = random.choice(available_rooms)
+        else:
+            new_room, new_floor = random.choice(room_options)
+
+        old_room = pet.current_room
+        old_floor = pet.floor
+
         pet.current_room = new_room
         pet.floor = new_floor
+        pet.last_room_change = local_now()
         self.db.add(pet)
-        
+
         # Create activity
+        description = f"{pet.name} wandered from {old_room or 'unknown'} (floor {old_floor}) to {new_room.replace('_floor2', '').replace('_', ' ')} (floor {new_floor})"
+        if force_move:
+            description += " [Auto-move after 1 hour]"
+
         activity = Activity(
             employee_id=None,
             activity_type="pet_movement",
-            description=f"🐾 {pet.name} is wandering around the {new_room.replace('_floor2', '').replace('_', ' ')} on floor {new_floor}",
+            description=description,
             activity_metadata={
                 "pet_id": pet.id,
-                "room": new_room,
-                "floor": new_floor
+                "pet_name": pet.name,
+                "old_room": old_room,
+                "old_floor": old_floor,
+                "new_room": new_room,
+                "new_floor": new_floor,
+                "forced": force_move
             }
         )
         self.db.add(activity)
-        
+
         await self.db.commit()
     
     async def check_pet_interactions(self) -> List[Activity]:

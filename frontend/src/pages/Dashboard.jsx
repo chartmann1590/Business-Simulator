@@ -5,6 +5,7 @@ import { formatTimestamp } from '../utils/timezone'
 import { useNavigate } from 'react-router-dom'
 import { apiGet } from '../utils/api'
 import TrainingDetailModal from '../components/TrainingDetailModal'
+import OrganizationChart from '../components/OrganizationChart'
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null)
@@ -100,7 +101,7 @@ function Dashboard() {
           mission: "To deliver innovative technology solutions",
           industry: "Technology & Software Development",
           founded: "2024",
-          location: "San Francisco, CA",
+          location: "New York",
           ceo: "Not Assigned",
           total_projects: 0,
           completed_projects: 0,
@@ -142,7 +143,7 @@ function Dashboard() {
           mission: "To deliver innovative technology solutions",
           industry: "Technology & Software Development",
           founded: "2024",
-          location: "San Francisco, CA",
+          location: "New York",
           ceo: "Not Assigned",
           total_projects: 0,
           completed_projects: 0,
@@ -1013,6 +1014,9 @@ function Dashboard() {
               )}
             </div>
           </div>
+
+          {/* Organization Hierarchy */}
+          <OrganizationChart />
 
           {/* Strategic Decisions and Activities */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

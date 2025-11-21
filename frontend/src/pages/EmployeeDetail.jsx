@@ -194,6 +194,24 @@ function EmployeeDetail() {
                   Birthday: {formatDateShort(new Date(2000, employee.birthday_month - 1, employee.birthday_day))}
                 </p>
               )}
+              {employee.manager && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Reports to:</span>
+                  <a
+                    href={`/employees/${employee.manager.id}`}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                  >
+                    {employee.manager.name} ({employee.manager.title})
+                  </a>
+                </div>
+              )}
+              {employee.direct_reports && employee.direct_reports.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-xs text-gray-500">
+                    Managing {employee.direct_reports_count} employee{employee.direct_reports_count !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
               {(employee.fired_at || employee.status === 'fired') && (
                 <div className="mt-1">
                   <p className="text-xs text-red-600">
@@ -570,20 +588,34 @@ function EmployeeDetail() {
             <div>
               <span className="text-sm text-gray-600 font-medium">Current Location</span>
               <p className="text-lg font-semibold text-gray-900 mt-1">
-                {employee.current_room 
-                  ? formatRoomName(employee.current_room) || 'Unknown'
-                  : employee.home_room 
-                    ? formatRoomName(employee.home_room) || 'Unknown'
-                    : 'Not assigned'}
+                {employee.activity_state && (employee.activity_state.toLowerCase() === 'at_home' || employee.activity_state.toLowerCase() === 'sleeping')
+                  ? 'At home'
+                  : employee.activity_state && employee.activity_state.toLowerCase() === 'commuting_home'
+                  ? 'Commuting home'
+                  : employee.activity_state && employee.activity_state.toLowerCase() === 'leaving_work'
+                  ? 'Leaving office'
+                  : employee.current_room
+                    ? formatRoomName(employee.current_room) || 'Unknown'
+                    : employee.home_room
+                      ? formatRoomName(employee.home_room) || 'Unknown'
+                      : 'Not assigned'}
               </p>
-              {employee.floor && (
+              {employee.floor && employee.activity_state && employee.activity_state.toLowerCase() !== 'at_home' && employee.activity_state.toLowerCase() !== 'sleeping' && employee.activity_state.toLowerCase() !== 'commuting_home' && employee.activity_state.toLowerCase() !== 'leaving_work' && (
                 <p className="text-xs text-gray-500 mt-1">Floor {employee.floor}</p>
               )}
             </div>
             <div>
               <span className="text-sm text-gray-600 font-medium">Activity</span>
               <p className="text-lg font-semibold text-gray-900 mt-1 capitalize">
-                {employee.activity_state || 'idle'}
+                {employee.activity_state && employee.activity_state.toLowerCase() === 'at_home'
+                  ? 'At home'
+                  : employee.activity_state && employee.activity_state.toLowerCase() === 'sleeping'
+                  ? 'Sleeping'
+                  : employee.activity_state && employee.activity_state.toLowerCase() === 'commuting_home'
+                  ? 'Commuting'
+                  : employee.activity_state && employee.activity_state.toLowerCase() === 'leaving_work'
+                  ? 'Leaving work'
+                  : (employee.activity_state || 'idle')}
               </p>
               {employee.activity_state === 'walking' && employee.target_room && (
                 <p className="text-sm text-yellow-600 mt-1 font-medium">
@@ -592,9 +624,9 @@ function EmployeeDetail() {
               )}
             </div>
           </div>
-          {employee.home_room && employee.current_room !== employee.home_room && (
+          {employee.home_room && employee.current_room !== employee.home_room && employee.activity_state && employee.activity_state.toLowerCase() !== 'at_home' && employee.activity_state.toLowerCase() !== 'sleeping' && employee.activity_state.toLowerCase() !== 'commuting_home' && (
             <div className="mt-4 pt-4 border-t border-blue-200">
-              <span className="text-sm text-gray-600 font-medium">Home Room</span>
+              <span className="text-sm text-gray-600 font-medium">Office Room</span>
               <p className="text-sm text-gray-700 mt-1">
                 {formatRoomName(employee.home_room)}
               </p>
@@ -909,6 +941,38 @@ function EmployeeDetail() {
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Files</h3>
         <RecentFiles employeeId={parseInt(id)} />
       </div>
+
+      {/* Direct Reports */}
+      {employee.direct_reports && employee.direct_reports.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            Direct Reports ({employee.direct_reports_count})
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {employee.direct_reports.map((report) => (
+              <a
+                key={report.id}
+                href={`/employees/${report.id}`}
+                className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
+              >
+                <img
+                  src={report.avatar_path || '/avatars/office_char_01_manager.png'}
+                  alt={report.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.src = '/avatars/office_char_01_manager.png'
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{report.name}</p>
+                  <p className="text-xs text-gray-600 truncate">{report.title}</p>
+                  <p className="text-xs text-gray-500">{report.department}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Clock In/Out History */}
       {clockHistory && clockHistory.length > 0 && (

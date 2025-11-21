@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        /* Title Row */
+        table tr:nth-child(1) td {
+            background: #366092;
+            color: white;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            text-align: center;
+        }
+
+        /* Header Row */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Data Rows */
+        td:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        /* Totals Row */
+        tr.total td {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+
+        /* Data Validation Notes */
+        input[type="text"]::-webkit-input-focus-box {
+            outline-color: transparent;
+            outline-width: 0;
+        }
+    </style>
+</head>
+<body>
+
+<table style="border-collapse: collapse; width:100%;">
+    <tr>
+        <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+            Business Dashboard
+        </td>
+    </tr>
+    <tr>
+        <th>Financial Analysis</th>
+        <th>Sales Performance</th>
+        <th>Management KPIs</th>
+        <th>Operations Metrics</th>
+        <th>HR Management</th>
+    </tr>
+
+    <!-- Finance/Accounting Section -->
+    <tr class="total">
+        <td style="border-top: 2px solid #d0d0d0;">Total Revenue: $848,324.28</td>
+        <td style="border-top: 2px solid #d0d0d0;">Total Profit: $361,970.04</td>
+        <td style="border-top: 2px solid #d0d0d0;">Profit Margin: 42.67%</td>
+        <td style="border-top: 2px solid #d0d0d0;">Active Projects: 15</td>
+        <td style="border-top: 2px solid #d0d0d0;">Total Employees: 1406</td>
+    </tr>
+
+    <!-- Finance/Accounting Data -->
+    <tr>
+        <td>Revenue by Department:</td>
+        <td>$848,324.28</td>
+        <td>Profit Margin: 42.67%</td>
+        <td style="text-align: right;">$361,970.04</td>
+        <td style="text-align: right;">1406</td>
+    </tr>
+
+    <!-- Sales/Marketing Section -->
+    <tr class="total">
+        <td style="border-top: 2px solid #d0d0d0;">Sales Performance:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Revenue by Product/Service:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Conversion Metrics</td>
+    </tr>
+
+    <!-- Sales/Marketing Data -->
+    <tr>
+        <td>Revenue by Product/Service:</td>
+        <td>$848,324.28</td>
+        <td style="text-align: right;">80%</td>
+    </tr>
+
+    <!-- Management Section -->
+    <tr class="total">
+        <td style="border-top: 2px solid #d0d0d0;">Management KPIs:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Department Performance:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Project ROI Analysis</td>
+    </tr>
+
+    <!-- Management Data -->
+    <tr>
+        <td>Department Performance:</td>
+        <td style="text-align: right;">80%</td>
+        <td style="text-align: right;">50%</td>
+    </tr>
+
+    <!-- Operations Section -->
+    <tr class="total">
+        <td style="border-top: 2px solid #d0d0d0;">Operations Metrics:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Resource Allocation:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Efficiency Metrics:</td>
+    </tr>
+
+    <!-- Operations Data -->
+    <tr>
+        <td>Resource Allocation:</td>
+        <td style="text-align: right;">50%</td>
+        <td style="text-align: right;">70%</td>
+    </tr>
+
+    <!-- HR Management Section -->
+    <tr class="total">
+        <td style="border-top: 2px solid #d0d0d0;">HR Management:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Employee Cost Analysis:</td>
+        <td style="border-top: 2px solid #d0d0d0;">Department Headcount:</td>
+    </tr>
+
+    <!-- HR Management Data -->
+    <tr>
+        <td>Employee Cost Analysis:</td>
+        <td style="text-align: right;">$500,000.00</td>
+        <td style="text-align: right;">1000</td>
+    </tr>
+
+    <!-- Summary Section -->
+    <tr class="total">
+        <th>Total Revenue: $848,324.28</th>
+        <th>Total Profit: $361,970.04</th>
+        <th>Profit Margin: 42.67%</th>
+        <th>Active Projects: 15</th>
+        <th>Total Employees: 1406</th>
+    </tr>
+
+    <!-- Footer Section -->
+    <tr style="background-color: #f2f2f2; padding: 8px;">
+        <td>Data Source: Real Business Data</td>
+        <td>Last Updated: March 2023</td>
+        <td>Notes:</td>
+    </tr>
+</table>
+
+</body>
+</html>

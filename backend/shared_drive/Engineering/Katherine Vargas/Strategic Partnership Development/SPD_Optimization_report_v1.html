@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        /* TABLE STYLES */
+        table {
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+        }
+
+        .alternating-row {
+            background-color: #f2f2f2;
+        }
+        
+        .total-row {
+            background-color: #e7f3ff;
+            border-top: 2px solid #00698f;
+        }
+
+        /* FONT STYLES */
+        font {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+        }
+
+        /* COLOR CODING */
+        .positive {
+            color: green;
+        }
+        
+        .negative {
+            color: red;
+        }
+        
+        .total {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <!-- TITLE ROW -->
+        <tr>
+            <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td>
+        </tr>
+
+        <!-- HEADER ROW -->
+        <tr>
+            <th>Employee Role</th>
+            <th>Financial Analysis</th>
+            <th>Sales Performance</th>
+            <th>KPI Dashboard</th>
+            <th>Operations</th>
+            <th>HR</th>
+        </tr>
+
+        <!-- DATA ROWS -->
+        <tr class="alternating-row">
+            <td>Finance/Accounting</td>
+            <td><span style="font-size: 12pt; color: #00698f;">Budget Breakdown:</span> $156,356.16
+                <br><span style="font-size: 12pt; color: #00698f;">Revenue by Department/Project:</span>
+                <table style="width:100%">
+                    <tr>
+                        <th>Department</th>
+                        <th>Project</th>
+                        <th>Budget</th>
+                        <th>Revenue</th>
+                    </tr>
+                    <tr class="alternating-row">
+                        <td>Engineering</td>
+                        <td>Strategic Partnership Development</td>
+                        <td>$75,000.00</td>
+                        <td>$25,831.02</td>
+                    </tr>
+                    <!-- Add more departments and projects as needed -->
+                </table>
+            </td>
+        </tr>
+
+        <tr class="alternating-row">
+            <td>Sales/Marketing</td>
+            <td><span style="font-size: 12pt; color: #00698f;">Sales Performance:</span> $848,324.28
+                <br><span style="font-size: 12pt; color: #00698f;">Revenue by Product/Service:</span>
+                <table style="width:100%">
+                    <tr>
+                        <th>Product</th>
+                        <th>Revenue</th>
+                    </tr>
+                    <tr class="alternating-row">
+                        <td>Marketing</td>
+                        <td>$400,000.00</td>
+                    </tr>
+                    <!-- Add more products as needed -->
+                </table>
+            </td>
+        </tr>
+
+        <tr class="alternating-row">
+            <td>Management</td>
+            <td><span style="font-size: 12pt; color: #00698f;">KPI Dashboard:</span>
+                <table style="width:100%">
+                    <tr>
+                        <th>KPI Metric</th>
+                        <th>Value</th>
+                    </tr>
+                    <tr class="alternating-row">
+                        <td>Total Revenue</td>
+                        <td>$848,324.28</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <tr class="alternating-row">
+            <td>Operations</td>
+            <td><span style="font-size: 12pt; color: #00698f;">Resource Allocation:</span>
+                <table style="width:100%">
+                    <tr>
+                        <th>Department</th>
+                        <th>Employees</th>
+                    </tr>
+                    <tr class="alternating-row">
+                        <td>Engineering</td>
+                        <td>49</td>
+                    </tr>
+                    <!-- Add more departments as needed -->
+                </table>
+            </td>
+        </tr>
+
+        <tr class="alternating-row">
+            <td>HR</td>
+            <td><span style="font-size: 12pt; color: #00698f;">Employee Cost Analysis:</span>
+                <table style="width:100%">
+                    <tr>
+                        <th>Department</th>
+                        <th>Employees</th>
+                        <th>Salary Breakdown:</th>
+                    </tr>
+                    <tr class="alternating-row">
+                        <td>Engineering</td>
+                        <td>49</td>
+                        <td>$100,000.00</td>
+                    </tr>
+                    <!-- Add more departments as needed -->
+                </table>
+            </td>
+        </tr>
+
+        <!-- CALCULATED COLUMNS -->
+        <tr class="total-row">
+            <th colspan="6" style="background-color: #e7f3ff; border-top: 2px solid #00698f;">Totals:</th>
+        </tr>
+        <tr>
+            <td colspan="6">Total Revenue: $848,324.28
+                <br>Total Profit: $361,970.04
+                <br>Total Expenses: $486,354.24</td>
+        </tr>
+
+        <!-- SUMMARY SECTION -->
+        <tr class="alternating-row">
+            <th>Summary Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Profit Margin:</td>
+            <td>42.67%</td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+            <td colspan="6">Last Updated: <span style="font-size: 10pt;">2023-02-20</span></td>
+        </tr>
+    </table>
+</body>
+</html>

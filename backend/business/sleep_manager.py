@@ -4,11 +4,14 @@ Bedtime: 10pm-12am (staggered)
 Wake-up: Employees 5:30am-6:45am, Family 7:30am-9am
 """
 import random
+import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Employee, FamilyMember, HomePet, Activity
-from config import now
+from config import now, TIMEZONE_NAME
+
+logger = logging.getLogger(__name__)
 
 
 class SleepManager:
@@ -28,11 +31,20 @@ class SleepManager:
         current_time = now()
         current_hour = current_time.hour
         current_minute = current_time.minute
+        
+        # Log timezone info for debugging
+        logger.debug(f"[SLEEP] Processing bedtime at {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (timezone: {TIMEZONE_NAME})")
 
         # Only run between 10pm (22:00) and 12am (00:00)
         # Handle midnight rollover (hour 0 = 12am)
-        if not (current_hour >= 22 or current_hour == 0):
+        # Also handle late night hours 1-5 (people should still be sleeping)
+        if not (current_hour >= 22 or current_hour == 0 or (1 <= current_hour < 6)):
             return {"went_to_sleep": 0, "message": "Not in bedtime window"}
+        
+        # After midnight (hour 0), if it's past 12:30am, don't process new bedtimes
+        # People should already be asleep by then
+        if current_hour == 0 and current_minute > 30:
+            return {"went_to_sleep": 0, "message": "Past bedtime window (after 12:30am)"}
 
         # Get all active employees who are awake
         result = await self.db.execute(
@@ -81,8 +93,7 @@ class SleepManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="sleep",
-                    description=f"{employee.name} went to bed for the night",
-                    impact="neutral"
+                    description=f"{employee.name} went to bed for the night"
                 )
                 self.db.add(activity)
                 activities_created.append(activity)
@@ -183,8 +194,7 @@ class SleepManager:
                         activity = Activity(
                             employee_id=employee.id,
                             activity_type="wake_up",
-                            description=f"{employee.name} woke up and is preparing for work",
-                            impact="neutral"
+                            description=f"{employee.name} woke up and is preparing for work"
                         )
                         self.db.add(activity)
                         woke_employees += 1
@@ -244,6 +254,160 @@ class SleepManager:
             "woke_employees": woke_employees,
             "woke_family": woke_family,
             "message": f"{woke_employees} employees and {woke_family} family members woke up"
+        }
+
+    async def enforce_sleep_rules(self) -> dict:
+        """
+        Enforce sleep rules based on current time.
+        This ensures employees who should be sleeping are actually sleeping,
+        and those who should be awake are awake.
+        
+        Returns:
+            Dictionary with enforcement statistics
+        """
+        current_time = now()
+        current_hour = current_time.hour
+        current_minute = current_time.minute
+        current_weekday = current_time.weekday()  # 0 = Monday, 6 = Sunday
+        
+        logger.debug(f"[SLEEP ENFORCE] Enforcing sleep rules at {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (timezone: {TIMEZONE_NAME})")
+        
+        enforced_sleep = 0
+        enforced_wake = 0
+        activities_created = []
+        
+        # Get all active employees
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        employees = result.scalars().all()
+        
+        # Determine if it's a sleep period (10pm-5:30am on weekdays, or 10pm-7:30am on weekends)
+        is_sleep_period = False
+        should_be_sleeping = False
+        
+        if current_weekday < 5:  # Weekday
+            # Weekdays: Sleep from 10pm (22:00) to 5:30am (05:30)
+            is_sleep_period = current_hour >= 22 or current_hour < 5 or (current_hour == 5 and current_minute < 30)
+            should_be_sleeping = is_sleep_period
+        else:  # Weekend
+            # Weekends: Sleep from 10pm (22:00) to 7:30am (07:30) - employees can sleep in
+            is_sleep_period = current_hour >= 22 or current_hour < 7 or (current_hour == 7 and current_minute < 30)
+            should_be_sleeping = is_sleep_period
+        
+        # Check each employee
+        for employee in employees:
+            # Skip if employee is at work (they shouldn't be sleeping at work)
+            if employee.activity_state not in ["at_home", "sleeping", "leaving_work", "commuting_home"]:
+                # Employee is at work, should be awake
+                if employee.sleep_state == "sleeping":
+                    employee.sleep_state = "awake"
+                    enforced_wake += 1
+                    logger.info(f"[SLEEP ENFORCE] {employee.name} forced awake (at work)")
+                continue
+            
+            # If it's sleep period and employee is at home, they should be sleeping
+            if should_be_sleeping and employee.sleep_state == "awake":
+                # Force them to sleep
+                employee.sleep_state = "sleeping"
+                employee.activity_state = "sleeping"
+                enforced_sleep += 1
+                
+                # Create activity log
+                activity = Activity(
+                    employee_id=employee.id,
+                    activity_type="sleep",
+                    description=f"{employee.name} went to bed (enforced by sleep rules)"
+                )
+                self.db.add(activity)
+                activities_created.append(activity)
+                
+                # Also put family members to sleep
+                family_result = await self.db.execute(
+                    select(FamilyMember).where(
+                        and_(
+                            FamilyMember.employee_id == employee.id,
+                            FamilyMember.sleep_state == "awake"
+                        )
+                    )
+                )
+                family_members = family_result.scalars().all()
+                for family_member in family_members:
+                    family_member.sleep_state = "sleeping"
+                
+                # Also put pets to sleep
+                pets_result = await self.db.execute(
+                    select(HomePet).where(
+                        and_(
+                            HomePet.employee_id == employee.id,
+                            HomePet.sleep_state == "awake"
+                        )
+                    )
+                )
+                pets = pets_result.scalars().all()
+                for pet in pets:
+                    pet.sleep_state = "sleeping"
+                
+                logger.info(f"[SLEEP ENFORCE] {employee.name} forced to sleep (sleep period)")
+            
+            # If it's wake period and employee should be awake
+            elif not should_be_sleeping and employee.sleep_state == "sleeping":
+                # Check if it's wake-up time
+                should_wake = False
+                
+                if current_weekday < 5:  # Weekday
+                    # Employees wake 5:30am-6:45am on weekdays
+                    if (current_hour == 5 and current_minute >= 30) or (current_hour == 6 and current_minute < 45):
+                        should_wake = True
+                    elif current_hour >= 7:
+                        # After 7am, definitely should be awake
+                        should_wake = True
+                else:  # Weekend
+                    # On weekends, employees can sleep until 7:30am, but should wake by 8am
+                    if current_hour >= 8:
+                        should_wake = True
+                
+                if should_wake:
+                    employee.sleep_state = "awake"
+                    if employee.activity_state == "sleeping":
+                        employee.activity_state = "at_home"
+                    enforced_wake += 1
+                    
+                    # Create activity log
+                    activity = Activity(
+                        employee_id=employee.id,
+                        activity_type="wake_up",
+                        description=f"{employee.name} woke up (enforced by sleep rules)"
+                    )
+                    self.db.add(activity)
+                    activities_created.append(activity)
+                    
+                    # Wake up pets
+                    pets_result = await self.db.execute(
+                        select(HomePet).where(
+                            and_(
+                                HomePet.employee_id == employee.id,
+                                HomePet.sleep_state == "sleeping"
+                            )
+                        )
+                    )
+                    pets = pets_result.scalars().all()
+                    for pet in pets:
+                        pet.sleep_state = "awake"
+                    
+                    logger.info(f"[SLEEP ENFORCE] {employee.name} forced awake (wake period)")
+        
+        if enforced_sleep > 0 or enforced_wake > 0:
+            await self.db.commit()
+            logger.info(f"[SLEEP ENFORCE] Enforced sleep: {enforced_sleep}, Enforced wake: {enforced_wake}")
+        
+        return {
+            "enforced_sleep": enforced_sleep,
+            "enforced_wake": enforced_wake,
+            "current_time": current_time.isoformat(),
+            "timezone": TIMEZONE_NAME,
+            "is_sleep_period": is_sleep_period,
+            "message": f"Enforced {enforced_sleep} to sleep, {enforced_wake} to wake"
         }
 
     async def get_sleeping_stats(self) -> dict:

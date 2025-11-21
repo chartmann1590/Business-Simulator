@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Financial Dashboard</title>
+	<style>
+		table {
+			border-collapse: collapse;
+			margin-top: 20px;
+		}
+
+		th, td {
+			border: 1px solid #d0d0d0;
+			padding: 8px;
+			text-align: center;
+		}
+		
+		th {
+			background: #366092;
+			color: white;
+			font-weight: bold;
+		}
+		
+		td:nth-child(odd) {
+			background: white;
+		}
+		
+		td:nth-child(even) {
+			background: #f2f2f2;
+		}
+		
+		tbody tr:last-child td:first-child {
+			background: #e7f3ff;
+			font-weight: bold;
+			border-top: 2px solid #d0d0d0;
+		}
+		
+		th, .total {
+			text-align: right;
+		}
+		
+		h1 {
+			font-size: 24pt;
+			margin-bottom: 12px;
+		}
+		
+		.note {
+			color: #666;
+			font-style: italic;
+		}
+	
+	</style>
+</head>
+<body>
+
+<table>
+	<tr><th colspan="X" style="text-align: center; font-size: 24pt; font-weight: bold;">Financial Dashboard</th></tr>
+	<tr><th colspan="10">Income Statement</th></tr>
+	<tr><th>Quarter</th><th>Revenue</th><th>Cost of Goods Sold</th><th>Gross Profit</th><th>Operating Expenses</th><th>Net Income</th></tr>
+
+	<tr><td>Jan-Q2 2023</td><td>$848,324.28</td><td>$486,354.24</td><td>$361,970.04</td><td>$100,000.00</td><td>$261,970.04</td></tr>
+	<tr><td>Jan-Q2 2023</td><td>$848,324.28</td><td>$486,354.24</td><td>$361,970.04</td><td>$100,000.00</td><td>$261,970.04</td></tr>
+	<tr><th>Department</th><th>Employee Count</th><th>Budget</th><th>Actual Spend</th></tr>
+
+	<tr><td>Marketing</td><td>64</td><td>$150,000.00</td><td>$120,000.00</td></tr>
+	<tr><td>IT</td><td>45</td><td>$100,000.00</td><td>$80,000.00</td></tr>
+	
+	<h1>Financial Summary</h1>
+
+	<tr><th>Total Revenue</th><th>$848,324.28</th></tr>
+	<tr><th>Total Expenses</th><th>$486,354.24</th></tr>
+	<tr><th>Net Income</th><th>$361,970.04</th></tr>
+	
+	<note>This financial dashboard is for demonstration purposes only and may not reflect actual data.</note>
+	
+</table>
+
+</body>
+</html>

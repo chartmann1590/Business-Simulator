@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Analysis Report</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            margin: 1in;
+            line-height: 1.5;
+            color: #000000;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10pt;
+            border-bottom: 2pt solid #000000;
+        }
+
+        h2 {
+            font-weight: bold;
+            margin-top: 5pt;
+            margin-bottom: 5pt;
+        }
+
+        p {
+            line-height: 1.5;
+            margin-bottom: 12pt;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1pt solid #000000;
+            padding: 5pt;
+            text-align: left;
+        }
+
+        ul {
+            list-style-type: none;
+            margin-top: 10pt;
+        }
+
+        ol {
+            list-style-type: decimal;
+            margin-top: 10pt;
+        }
+
+        ul li, ol li {
+            display: inline-block;
+            margin-right: 10pt;
+        }
+    </style>
+</head>
+<body>
+
+<h1 style="font-size: 18pt; font-weight: bold;"><u>Business Analysis Report</u></h1>
+<p style="margin-bottom: 5pt;">Date: <span id="date"></span><br/>Employee Name: Victor Hall<br/>Department: Administration</p>
+
+<h2>Executive Summary</h2>
+<p>Our company has achieved significant growth and profitability in the past quarter, with total revenue reaching $848,324.28 and profit totaling $361,970.04.</p>
+<p>The profit margin stands at 42.67%, indicating a strong financial performance. Additionally, we have 15 active projects, including Customer Portal Redesign ($75,000.00 budget) and API Infrastructure Upgrade ($100,000.00 budget).</p>
+
+<h2>Business Metrics</h2>
+<table style="width: 100%; border-collapse: collapse;">
+    <tr>
+        <th style="border: 1pt solid #000000; padding: 5pt;">Metric</th>
+        <th style="border: 1pt solid #000000; padding: 5pt;">Value</th>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Total Revenue</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">$848,324.28</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Total Profit</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">$361,970.04</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Profit Margin</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">42.67%</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Total Expenses</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">$486,354.24</td>
+    </tr>
+</table>
+
+<h2>Active Projects</h2>
+<ul style="margin-top: 0;">
+    <li style="display: inline-block; margin-right: 10pt;">Customer Portal Redesign ($75,000.00 budget)<br/>Active Status: Ongoing<br/>Project Manager: John Doe</li>
+    <li style="display: inline-block; margin-right: 10pt;">API Infrastructure Upgrade ($100,000.00 budget)<br/>Active Status: Ongoing<br/>Project Manager: Jane Smith</li>
+    <li style="display: inline-block; margin-right: 10pt;">Mobile App Development ($150,000.00 budget)<br/>Active Status: Ongoing<br/>Project Manager: Bob Johnson</li>
+</ul>
+
+<h2>Department Distribution</h2>
+<table style="width: 100%; border-collapse: collapse;">
+    <tr>
+        <th style="border: 1pt solid #000000; padding: 5pt;">Department</th>
+        <th style="border: 1pt solid #000000; padding: 5pt;">Employee Count</th>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Design</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">52</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Marketing</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">66</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Engineering</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">52</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">HR</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">48</td>
+    </tr>
+    <tr>
+        <td style="border: 1pt solid #000000; padding: 5pt;">Administration</td>
+        <td style="border: 1pt solid #000000; padding: 5pt;">57</td>
+    </tr>
+</table>
+
+<h2>Conclusion and Recommendations</h2>
+<p>Based on our analysis, we recommend increasing investment in the Mobile App Development project to enhance customer engagement. Additionally, we suggest implementing cost-saving measures across departments to optimize resource allocation.</p>
+
+<p style="margin-bottom: 5pt;">Recommendation: Increase investment in Mobile App Development project by 10%. Implement cost-saving measures across departments to optimize resource allocation.</p>
+
+<h2>Footer</h2>
+<p style="font-size: 12pt; margin-top: 0;">Page 1 of 2<br/>Document Version: 1.0<br/>Confidentiality Notice: This document contains confidential information. Please do not share or disclose without authorization.</p>
+
+<script>
+    document.getElementById("date").innerHTML = new Date().toISOString();
+</script>
+
+</body>
+</html>

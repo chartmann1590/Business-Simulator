@@ -433,7 +433,23 @@ async def _run_migrations():
                 """))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_office_pets_floor ON office_pets(floor)"))
                 print("Migration completed: office_pets table created.")
-            
+
+            # Migration: Add last_room_change column to office_pets table
+            if 'office_pets' in tables:
+                result = await conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    AND table_name = 'office_pets'
+                """))
+                office_pets_column_rows = result.fetchall()
+                office_pets_column_names = [row[0] for row in office_pets_column_rows]
+
+                if 'last_room_change' not in office_pets_column_names:
+                    print("Running migration: Adding last_room_change column to office_pets table...")
+                    await conn.execute(text("ALTER TABLE office_pets ADD COLUMN last_room_change TIMESTAMP WITH TIME ZONE"))
+                    print("Migration completed: last_room_change column added to office_pets table.")
+
             # Migration: Create gossip table if it doesn't exist
             if 'gossip' not in tables:
                 print("Running migration: Creating gossip table...")
@@ -728,6 +744,42 @@ async def _run_migrations():
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clock_in_out_timestamp ON clock_in_out(timestamp)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clock_in_out_event_type ON clock_in_out(event_type)"))
                 print("Migration completed: clock_in_out table created.")
+
+            # Migration: Add manager_id column to employees table (for organizational hierarchy)
+            manager_id_column_added = False
+            if 'manager_id' not in column_names:
+                print("Running migration: Adding manager_id column to employees table...")
+                await conn.execute(text("ALTER TABLE employees ADD COLUMN manager_id INTEGER"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id)"))
+                print("Migration completed: manager_id column added to employees table.")
+                manager_id_column_added = True
+            
+            # Migration: Add foreign key constraint for manager_id if it doesn't exist
+            # Check if foreign key constraint already exists
+            fk_result = await conn.execute(text("""
+                SELECT constraint_name 
+                FROM information_schema.table_constraints 
+                WHERE table_schema = 'public' 
+                AND table_name = 'employees' 
+                AND constraint_type = 'FOREIGN KEY'
+                AND constraint_name LIKE '%manager_id%'
+            """))
+            fk_exists = fk_result.fetchone() is not None
+            
+            # Add foreign key if column exists (either was already there or just added)
+            if not fk_exists and ('manager_id' in column_names or manager_id_column_added):
+                print("Running migration: Adding foreign key constraint for manager_id...")
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE employees 
+                        ADD CONSTRAINT fk_employees_manager_id 
+                        FOREIGN KEY (manager_id) 
+                        REFERENCES employees(id) 
+                        ON DELETE SET NULL
+                    """))
+                    print("Migration completed: Foreign key constraint added for manager_id.")
+                except Exception as e:
+                    print(f"Note: Foreign key constraint may already exist or could not be added: {e}")
     except Exception as e:
         print(f"Warning: Migration failed: {e}")
         import traceback

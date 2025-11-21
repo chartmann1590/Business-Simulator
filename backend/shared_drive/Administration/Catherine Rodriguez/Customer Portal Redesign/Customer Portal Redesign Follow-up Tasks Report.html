@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Styles */
+        table {
+            border-collapse: collapse;
+        }
+        
+        th,
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .alternating {
+            background: #f2f2f2;
+        }
+        
+        .totals {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <!-- TITLE ROW -->
+        <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+            <td colspan="8">Financial Dashboard - Administration Department</td>
+        </tr>
+        
+        <!-- HEADER ROW -->
+        <tr>
+            <th>Department</th>
+            <th>Employees</th>
+            <th>Projects</th>
+            <th>Total Revenue</th>
+            <th>Total Expenses</th>
+            <th>Profit Margin (%)</th>
+            <th>Active Projects</th>
+        </tr>
+        
+        <!-- DATA ROWS -->
+        <tr class="alternating">
+            <td>Design</td>
+            <td>50</td>
+            <td>15</td>
+            <td>$848,324.28</td>
+            <td>$486,354.24</td>
+            <td>42.67%</td>
+            <td>1</td>
+        </tr>
+        
+        <tr class="alternating">
+            <td>Finance</td>
+            <td>1</td>
+            <td>0</td>
+            <td>$25,831.02</td>
+            <td>$0</td>
+            <td>100%</td>
+            <td>0</td>
+        </tr>
+        
+        <!-- ... ADD MORE ROWS HERE ... -->
+        
+        <tr class="totals">
+            <th>Totals</th>
+            <th>Total Employees</th>
+            <th>Total Projects</th>
+            <th>Total Revenue</th>
+            <th>Total Expenses</th>
+            <th>Profit Margin (%)</th>
+            <th>Active Projects</th>
+        </tr>
+        
+        <tr>
+            <td>$1417</td>
+            <td>1417</td>
+            <td>15</td>
+            <td>$848,324.28</td>
+            <td>$486,354.24</td>
+            <td>42.67%</td>
+            <td>15</td>
+        </tr>
+        
+        <!-- FOOTER -->
+        <tr style="background: white; padding: 8px; border-top: 1px solid #d0d0d0;">
+            <th>Data Source:</th>
+            <td>Actual Business Data</td>
+            <th>Last Updated:</th>
+            <td>Date</td>
+            <th>Notes:</th>
+            <td>Please see notes section for assumptions and data validation.</td>
+        </tr>
+    </table>
+</body>
+</html>
+
+(Note: You'll need to add more rows with actual business data, project names, budgets, and revenue figures. Also, adjust the styles as needed to fit your desired look.)

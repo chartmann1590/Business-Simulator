@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Header row */
+        table tr:nth-child(1) td {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Data rows */
+        table tr:nth-child(n+2) td {
+            background-color: white;
+        }
+        table tr:nth-child(odd) td, table tr:nth-child(even) th {
+            background-color: #f2f2f2;
+        }
+
+        /* Totals row */
+        table tr:nth-child(1) td:last-child {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+        table tr:nth-child(26) td {
+            background-color: #e7f3ff;
+            font-weight: bold;
+        }
+
+        /* Number formatting */
+        table th, table td.numbers {
+            text-align: right;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        table th.numbers, table td.numbers {
+            white-space: pre;
+        }
+
+        /* Currency format */
+        table th currencies, table td.currencies {
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background-color: white;
+        }
+        table th.currencies, table td.currencies {
+            white-space: pre;
+        }
+
+        /* Dates */
+        table th.dates, table td.dates {
+            text-align: center;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+    <table border-collapse="collapse">
+        <tr><td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td></tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Employee Information</th>
+            <th style="padding: 8px; border: 1px solid #d0d0d0;">Department Headcount</th>
+        </tr>
+        <tr><td>Name: Kiera Blackwood</td><td>Administration: 57 employees</td></tr>
+        <tr><td>Title: Receptionist</td><td>Operations: 52 employees</td></tr>
+
+        <tr><td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Analysis</td></tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Financial Metrics</th>
+            <th style="padding: 8px; border: 1px solid #d0d0d0;">Totals</th>
+        </tr>
+        <tr>
+            <td>Revenue:</td><td class="numbers">$848,324.28</td>
+            <td class="currencies">($486,354.24 - $361,970.04)</td>
+        </tr>
+        <tr>
+            <td>Profit:</td><td class="numbers">$361,970.04</td>
+            <td class="currencies">($86,384.20)</td>
+        </tr>
+        <tr>
+            <td>Budget:</td><td class="numbers">$75,000.00</td>
+            <td class="currencies">$0</td>
+        </tr>
+
+        <tr>
+            <th style="padding: 8px; border: 1px solid #d0d0d0;">Department Performance</th>
+            <th style="background: white;">Totals</th>
+        </tr>
+        <tr>
+            <td>Marketing:</td><td class="numbers">63 employees, $25,831.02 revenue</td>
+            <td class="currencies">($0)</td>
+        </tr>
+        <tr>
+            <td>IT:</td><td class="numbers">45 employees, $28,996.55 revenue</td>
+            <td class="currencies">($0)</td>
+        </tr>
+
+        <tr>
+            <th style="padding: 8px; border: 1px solid #d0d0d0;">KPI Dashboard</th>
+            <th style="background: white;">Totals</th>
+        </tr>
+        <tr>
+            <td>Active Projects:</td><td class="numbers">15 projects, $75,000.00 budget, $25,831.02 revenue</td>
+            <td class="currencies">($0)</td>
+        </tr>
+
+        <tr>
+            <th style="padding: 8px; border: 1px solid #d0d0d0;">Project ROI Analysis</th>
+            <th style="background: white;">Totals</th>
+        </tr>
+        <tr>
+            <td>Customer Portal Redesign:</td><td class="numbers">42.67% margin, $25,831.02 revenue, $75,000.00 budget</td>
+            <td class="currencies">$0</td>
+        </tr>
+
+    </table>
+
+</body>
+</html>

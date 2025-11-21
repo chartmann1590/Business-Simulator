@@ -23,7 +23,7 @@ async def main():
         await init_db()
         print()
         print("=" * 60)
-        print("✅ Migrations completed successfully!")
+        print("[SUCCESS] Migrations completed successfully!")
         print("=" * 60)
         print()
         print("The following changes have been applied:")
@@ -32,13 +32,15 @@ async def main():
         print("  • sleep_state column added to family_members table")
         print("  • sleep_state column added to home_pets table")
         print("  • clock_in_out table created with indexes")
+        print("  • manager_id column added to employees table (for organizational hierarchy)")
+        print("  • Foreign key constraint added for manager_id")
         print()
         print("You can now restart the backend server.")
 
     except Exception as e:
         print()
         print("=" * 60)
-        print("❌ Migration failed!")
+        print("[ERROR] Migration failed!")
         print("=" * 60)
         print(f"Error: {e}")
         import traceback

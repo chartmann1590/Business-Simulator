@@ -15,6 +15,18 @@
 11. [Deployment](#deployment)
 12. [Troubleshooting](#troubleshooting)
 
+## Additional Documentation
+
+For detailed documentation on specific systems, see:
+
+- **[ORGANIZATIONAL_STRUCTURE.md](ORGANIZATIONAL_STRUCTURE.md)** - Organizational structure system with manager-employee relationships and hierarchy management
+- **[CLOCK_SYSTEM.md](CLOCK_SYSTEM.md)** - Clock in/out system for automatic time tracking
+- **[SLEEP_SYSTEM.md](SLEEP_SYSTEM.md)** - Sleep schedule management for employees, families, and pets
+- **[COFFEE_BREAK_SYSTEM.md](COFFEE_BREAK_SYSTEM.md)** - Coffee break system with timing rules and capacity management
+- **[POSTGRESQL_OPTIMIZATIONS.md](POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
+- **[COMMUNICATION_FIXES.md](COMMUNICATION_FIXES.md)** - Communication system fixes and improvements
+- **[DATABASE_CONNECTION_FIX.md](DATABASE_CONNECTION_FIX.md)** - Database connection pool fixes
+
 ---
 
 ## Project Overview
@@ -44,7 +56,8 @@ The Business Simulator is a fully autonomous office simulation system where AI-p
 - **Customer Reviews**: AI-generated customer reviews for completed projects with ratings and statistics
 - **Pet Care System**: Office pets that employees can interact with and care for
 - **Birthday Celebrations**: Automatic birthday party system with calendar integration
-- **Coffee Breaks**: Natural break system for employees with automatic scheduling
+- **Coffee Breaks**: Natural break system for employees with automatic scheduling, strict timing rules, and capacity management
+- **Organizational Structure**: Proper 1:10 manager-to-employee ratio with complete reporting hierarchy
 - **Gossip System**: AI-generated workplace gossip and social interactions
 - **Newsletter System**: Company newsletter generation with periodic updates
 - **Random Events**: Dynamic office events affecting productivity and morale

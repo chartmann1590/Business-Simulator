@@ -14,16 +14,25 @@ class CoffeeBreakManager:
         """Determine if an employee should take a coffee break."""
         # Managers have stricter break rules to prevent abuse
         is_manager = employee.role in ["Manager", "CEO", "CTO", "COO", "CFO"] or employee.hierarchy_level < 3
-        
+
+        # STRICT RULE: Must wait at least 2 hours since last break (no exceptions)
+        if employee.last_coffee_break:
+            time_since_break = local_now() - employee.last_coffee_break
+            hours_since = time_since_break.total_seconds() / 3600
+
+            if hours_since < 2.0:
+                return False  # Absolute minimum 2 hours between breaks
+
+        # First break of the day
         if not employee.last_coffee_break:
             # Managers should wait longer before their first break
             if is_manager:
                 return False  # Managers don't get immediate breaks
             return True  # Regular employees can take first break
-        
+
         time_since_break = local_now() - employee.last_coffee_break
         hours_since = time_since_break.total_seconds() / 3600
-        
+
         if is_manager:
             # Managers: stricter rules - breaks every 4-6 hours with lower probability
             if hours_since >= 6:
@@ -46,8 +55,45 @@ class CoffeeBreakManager:
         from engine.movement_system import update_employee_location
         from employees.room_assigner import ROOM_BREAKROOM
         now = local_now()
-        
-        # Check for manager break abuse before allowing break
+
+        # Check 1: Ensure at least 2 hours since last break
+        if employee.last_coffee_break:
+            time_since_break = now - employee.last_coffee_break
+            hours_since = time_since_break.total_seconds() / 3600
+            if hours_since < 2.0:
+                raise ValueError(f"Break denied: Only {hours_since:.1f} hours since last break (minimum 2 hours required)")
+
+        # Check 2: Check if employee has a meeting coming up soon (within next 30 minutes)
+        upcoming_meeting = await self.check_upcoming_meetings(employee, minutes_ahead=30)
+        if upcoming_meeting:
+            meeting_time = upcoming_meeting.start_time.strftime("%I:%M %p")
+            raise ValueError(f"Break denied: Meeting scheduled at {meeting_time} (within 30 minutes)")
+
+        # Check 3: Check break room capacity before allowing break
+        target_breakroom = ROOM_BREAKROOM
+        if employee.floor == 2:
+            target_breakroom = f"{ROOM_BREAKROOM}_floor2"
+        elif employee.floor >= 3:
+            # Use breakroom on floor 2 or 1
+            target_breakroom = f"{ROOM_BREAKROOM}_floor2" if random.random() < 0.5 else ROOM_BREAKROOM
+
+        # Check capacity of target breakroom
+        capacity_check = await self.check_breakroom_capacity(target_breakroom)
+        if not capacity_check["has_space"]:
+            # Try the other breakroom if first choice is full
+            if target_breakroom == ROOM_BREAKROOM:
+                alternate_breakroom = f"{ROOM_BREAKROOM}_floor2"
+            else:
+                alternate_breakroom = ROOM_BREAKROOM
+
+            alternate_capacity = await self.check_breakroom_capacity(alternate_breakroom)
+            if alternate_capacity["has_space"]:
+                target_breakroom = alternate_breakroom
+            else:
+                # Both breakrooms are full
+                raise ValueError(f"Break denied: All break rooms are at capacity ({capacity_check['current']}/{capacity_check['capacity']})")
+
+        # Check 4: Manager break abuse before allowing break
         is_manager = employee.role in ["Manager", "CEO", "CTO", "COO", "CFO"] or employee.hierarchy_level < 3
         if is_manager:
             abuse_check = await self.check_manager_break_frequency(employee)
@@ -70,19 +116,12 @@ class CoffeeBreakManager:
                 await self.db.commit()
                 print(f"🚫 BREAK DENIED: Manager {employee.name} attempted to take break but was denied: {abuse_check.get('reason')}")
                 raise ValueError(f"Break denied: {abuse_check.get('reason')}")
-        
+
+        # All checks passed - grant the break
         # Update last coffee break time
         employee.last_coffee_break = now
         self.db.add(employee)
-        
-        # Find a breakroom on the employee's floor or nearby
-        target_breakroom = ROOM_BREAKROOM
-        if employee.floor == 2:
-            target_breakroom = f"{ROOM_BREAKROOM}_floor2"
-        elif employee.floor >= 3:
-            # Use breakroom on floor 2 or 1
-            target_breakroom = f"{ROOM_BREAKROOM}_floor2" if random.random() < 0.5 else ROOM_BREAKROOM
-        
+
         # Move employee to breakroom
         await update_employee_location(employee, target_breakroom, "break", self.db)
         
@@ -594,4 +633,91 @@ class CoffeeBreakManager:
             }
         
         return {"is_abuse": False, "reason": "Break frequency is acceptable"}
+
+    async def check_breakroom_capacity(self, breakroom_id: str) -> dict:
+        """Check if a breakroom has available capacity.
+
+        Args:
+            breakroom_id: ID of the breakroom to check (e.g., "breakroom" or "breakroom_floor2")
+
+        Returns:
+            Dict with has_space (bool), current (int), capacity (int), available (int)
+        """
+        from sqlalchemy import select, or_
+        from employees.room_assigner import ROOM_BREAKROOM
+
+        # Break room capacities
+        BREAKROOM_CAPACITY = 15  # Each breakroom holds 15 people
+
+        # Count employees currently in this breakroom
+        result = await self.db.execute(
+            select(Employee).where(
+                Employee.status == "active",
+                Employee.current_room == breakroom_id
+            )
+        )
+        employees_in_room = result.scalars().all()
+        current_count = len(employees_in_room)
+
+        has_space = current_count < BREAKROOM_CAPACITY
+        available = BREAKROOM_CAPACITY - current_count
+
+        return {
+            "has_space": has_space,
+            "current": current_count,
+            "capacity": BREAKROOM_CAPACITY,
+            "available": available
+        }
+
+    async def check_upcoming_meetings(self, employee: Employee, minutes_ahead: int = 30) -> Optional[Meeting]:
+        """Check if an employee has a meeting coming up soon.
+
+        Args:
+            employee: Employee to check
+            minutes_ahead: How many minutes ahead to check (default: 30)
+
+        Returns:
+            Meeting object if employee has an upcoming meeting, None otherwise
+        """
+        from sqlalchemy import select, or_
+        from datetime import timedelta
+
+        now = local_now()
+        check_until = now + timedelta(minutes=minutes_ahead)
+
+        # Check if employee is organizer or attendee of any meetings in the next X minutes
+        result = await self.db.execute(
+            select(Meeting).where(
+                Meeting.start_time >= now,
+                Meeting.start_time <= check_until,
+                or_(
+                    Meeting.organizer_id == employee.id,
+                    Meeting.attendee_ids.contains([employee.id])  # Check if employee is in attendee list
+                )
+            ).order_by(Meeting.start_time)
+        )
+        meetings = result.scalars().all()
+
+        # Check attendee_ids more carefully (JSON field)
+        for meeting in meetings:
+            # Check if employee is organizer
+            if meeting.organizer_id == employee.id:
+                return meeting
+
+            # Check if employee is in attendee_ids
+            if meeting.attendee_ids:
+                # Convert attendee_ids to set for comparison
+                attendee_ids_set = set()
+                for aid in meeting.attendee_ids:
+                    if isinstance(aid, int):
+                        attendee_ids_set.add(aid)
+                    elif isinstance(aid, str) and aid.isdigit():
+                        attendee_ids_set.add(int(aid))
+                    elif isinstance(aid, (int, float)):
+                        attendee_ids_set.add(int(aid))
+
+                if employee.id in attendee_ids_set:
+                    return meeting
+
+        return None
 

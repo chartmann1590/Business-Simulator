@@ -11,7 +11,7 @@ from database.query_cache import cached_query, clear_cache
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from config import now as local_now, TIMEZONE_NAME
+from config import now as local_now, TIMEZONE_NAME, is_work_hours
 import logging
 
 # Set up logger for this module
@@ -353,7 +353,46 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
     
     # Calculate next review information
     next_review_info = await _calculate_next_review_info(emp, db)
-    
+
+    # Get manager information
+    manager_info = None
+    if emp.manager_id:
+        manager_result = await db.execute(
+            select(Employee).where(Employee.id == emp.manager_id)
+        )
+        manager = manager_result.scalar_one_or_none()
+        if manager:
+            manager_info = {
+                "id": manager.id,
+                "name": manager.name,
+                "title": manager.title,
+                "role": manager.role,
+                "department": manager.department,
+                "avatar_path": manager.avatar_path if hasattr(manager, 'avatar_path') else None
+            }
+
+    # Get direct reports (if this is a manager)
+    direct_reports = []
+    if emp.role in ["Manager", "CEO", "CTO", "COO", "CFO"]:
+        reports_result = await db.execute(
+            select(Employee).where(
+                Employee.manager_id == emp.id,
+                Employee.status == "active"
+            ).order_by(Employee.name)
+        )
+        reports = reports_result.scalars().all()
+        direct_reports = [
+            {
+                "id": report.id,
+                "name": report.name,
+                "title": report.title,
+                "role": report.role,
+                "department": report.department,
+                "avatar_path": report.avatar_path if hasattr(report, 'avatar_path') else None
+            }
+            for report in reports
+        ]
+
     return {
         "id": emp.id,
         "name": emp.name,
@@ -362,6 +401,9 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "hierarchy_level": emp.hierarchy_level,
         "department": emp.department,
         "status": emp.status,
+        "manager": manager_info,
+        "direct_reports": direct_reports,
+        "direct_reports_count": len(direct_reports),
         "current_task_id": emp.current_task_id,
         "personality_traits": emp.personality_traits,
         "backstory": emp.backstory,
@@ -369,7 +411,10 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         "current_room": emp.current_room if hasattr(emp, 'current_room') else None,
         "home_room": emp.home_room if hasattr(emp, 'home_room') else None,
         "target_room": emp.target_room if hasattr(emp, 'target_room') else None,
+        "floor": emp.floor if hasattr(emp, 'floor') else None,
         "activity_state": emp.activity_state if hasattr(emp, 'activity_state') else "idle",
+        "sleep_state": emp.sleep_state if hasattr(emp, 'sleep_state') else "awake",
+        "online_status": emp.online_status if hasattr(emp, 'online_status') else "online",
         "hired_at": emp.hired_at.isoformat() if hasattr(emp, 'hired_at') and emp.hired_at else None,
         "fired_at": emp.fired_at.isoformat() if hasattr(emp, 'fired_at') and emp.fired_at else None,
         "termination_reason": termination_reason,
@@ -1992,7 +2037,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     "mission": "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.",
                     "industry": "Technology & Software Development",
                     "founded": "2024",
-                    "location": "San Francisco, CA",
+                    "location": "New York",
                     "ceo": "Not Assigned",
                     "total_projects": 0,
                     "completed_projects": 0,
@@ -2160,7 +2205,7 @@ async def _fetch_dashboard_data(db: AsyncSession):
         business_mission = settings_dict.get("business_mission", "To deliver innovative technology solutions that empower businesses to achieve their goals through cutting-edge software development and consulting services.")
         business_industry = settings_dict.get("business_industry", "Technology & Software Development")
         business_founded = settings_dict.get("business_founded", "2024")
-        business_location = settings_dict.get("business_location", "San Francisco, CA")
+        business_location = settings_dict.get("business_location", "New York")
         
         # Get all projects for company overview
         try:
@@ -3143,6 +3188,10 @@ async def get_all_training_sessions(
 async def get_training_overview(db: AsyncSession = Depends(get_db)):
     """Get overall training statistics and overview."""
     try:
+        # Check if it's work hours (7am-7pm Monday-Friday)
+        # Employees are only at the office during work hours
+        is_work_time = is_work_hours()
+        
         # Get total sessions
         total_sessions_result = await db.execute(
             select(func.count(TrainingSession.id))
@@ -3157,12 +3206,16 @@ async def get_training_overview(db: AsyncSession = Depends(get_db)):
         )
         total_minutes = total_time_result.scalar_one() or 0
         
-        # Get active sessions
-        active_sessions_result = await db.execute(
-            select(func.count(TrainingSession.id))
-            .where(TrainingSession.status == "in_progress")
-        )
-        active_sessions = active_sessions_result.scalar_one() or 0
+        # Get active sessions - only count during work hours
+        # During non-work hours, employees are at home, so no active training sessions
+        if is_work_time:
+            active_sessions_result = await db.execute(
+                select(func.count(TrainingSession.id))
+                .where(TrainingSession.status == "in_progress")
+            )
+            active_sessions = active_sessions_result.scalar_one() or 0
+        else:
+            active_sessions = 0
         
         # Get unique employees trained
         unique_employees_result = await db.execute(
@@ -3187,23 +3240,28 @@ async def get_training_overview(db: AsyncSession = Depends(get_db)):
             for row in top_topics_result.all()
         ]
         
-        # Get employees currently in training
-        current_training_result = await db.execute(
-            select(TrainingSession, Employee)
-            .join(Employee, TrainingSession.employee_id == Employee.id)
-            .where(TrainingSession.status == "in_progress")
-        )
-        current_training = [
-            {
-                "employee_id": s.employee_id,
-                "employee_name": emp.name,
-                "topic": s.training_topic,
-                "room": s.training_room,
-                "training_material_id": s.training_material_id,
-                "start_time": s.start_time.isoformat() if s.start_time else None,
-            }
-            for s, emp in current_training_result.all()
-        ]
+        # Get employees currently in training - only during work hours
+        # During non-work hours (7pm-7am or weekends), employees are at home
+        if is_work_time:
+            current_training_result = await db.execute(
+                select(TrainingSession, Employee)
+                .join(Employee, TrainingSession.employee_id == Employee.id)
+                .where(TrainingSession.status == "in_progress")
+            )
+            current_training = [
+                {
+                    "employee_id": s.employee_id,
+                    "employee_name": emp.name,
+                    "topic": s.training_topic,
+                    "room": s.training_room,
+                    "training_material_id": s.training_material_id,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                }
+                for s, emp in current_training_result.all()
+            ]
+        else:
+            # Outside work hours - employees are at home, no training sessions
+            current_training = []
         
         return {
             "total_sessions": total_sessions,
@@ -6300,7 +6358,8 @@ async def get_pets(db: AsyncSession = Depends(get_db)):
             "current_room": pet.current_room,
             "floor": pet.floor,
             "personality": pet.personality,
-            "favorite_employee_id": pet.favorite_employee_id
+            "favorite_employee_id": pet.favorite_employee_id,
+            "last_room_change": pet.last_room_change.isoformat() if pet.last_room_change else None
         }
         for pet in pets
     ]
@@ -7982,4 +8041,175 @@ async def get_clock_stats():
             "currently_at_work": currently_at_work,
             "currently_at_home": total_employees - currently_at_work
         }
+
+
+@router.post("/clock-events/backfill")
+async def backfill_missing_clock_outs():
+    """Backfill missing clock-out events for employees who already left but don't have clock-out records."""
+    async with async_session_maker() as db:
+        from business.clock_manager import ClockManager
+        clock_manager = ClockManager(db)
+        
+        result = await clock_manager.backfill_missing_clock_outs()
+        return result
+
+@router.post("/sleep/enforce")
+async def enforce_sleep_rules():
+    """Manually enforce sleep rules based on current time."""
+    async with async_session_maker() as db:
+        from business.sleep_manager import SleepManager
+        
+        sleep_manager = SleepManager(db)
+        result = await sleep_manager.enforce_sleep_rules()
+        return result
+
+@router.get("/sleep/status")
+async def get_sleep_status():
+    """Get current sleep status of all employees, family members, and pets."""
+    async with async_session_maker() as db:
+        from business.sleep_manager import SleepManager
+        from sqlalchemy import and_
+        from config import now
+        
+        sleep_manager = SleepManager(db)
+        stats = await sleep_manager.get_sleeping_stats()
+        
+        # Get detailed list of sleeping employees
+        employees_result = await db.execute(
+            select(Employee).where(
+                and_(
+                    Employee.status == "active",
+                    Employee.sleep_state == "sleeping"
+                )
+            ).order_by(Employee.name)
+        )
+        sleeping_employees = employees_result.scalars().all()
+        
+        # Get sleeping family members with employee info
+        family_result = await db.execute(
+            select(FamilyMember, Employee.name.label('employee_name'), Employee.id.label('employee_id')).join(
+                Employee, FamilyMember.employee_id == Employee.id
+            ).where(
+                FamilyMember.sleep_state == "sleeping"
+            ).order_by(Employee.name, FamilyMember.name)
+        )
+        sleeping_family = family_result.all()
+        
+        # Get sleeping pets with employee info
+        pets_result = await db.execute(
+            select(HomePet, Employee.name.label('employee_name'), Employee.id.label('employee_id')).join(
+                Employee, HomePet.employee_id == Employee.id
+            ).where(
+                HomePet.sleep_state == "sleeping"
+            ).order_by(Employee.name, HomePet.name)
+        )
+        sleeping_pets = pets_result.all()
+        
+        current_time = now()
+        
+        return {
+            "current_time": current_time.isoformat(),
+            "statistics": stats,
+            "sleeping_employees": [
+                {
+                    "id": emp.id,
+                    "name": emp.name,
+                    "title": emp.title,
+                    "department": emp.department,
+                    "activity_state": emp.activity_state,
+                    "sleep_state": emp.sleep_state
+                }
+                for emp in sleeping_employees
+            ],
+            "sleeping_family": [
+                {
+                    "id": fm.FamilyMember.id,
+                    "name": fm.FamilyMember.name,
+                    "relationship_type": fm.FamilyMember.relationship_type,
+                    "age": fm.FamilyMember.age,
+                    "employee_id": fm.employee_id,
+                    "employee_name": fm.employee_name,
+                    "sleep_state": fm.FamilyMember.sleep_state
+                }
+                for fm in sleeping_family
+            ],
+            "sleeping_pets": [
+                {
+                    "id": pet.HomePet.id,
+                    "name": pet.HomePet.name,
+                    "pet_type": pet.HomePet.pet_type,
+                    "employee_id": pet.employee_id,
+                    "employee_name": pet.employee_name,
+                    "sleep_state": pet.HomePet.sleep_state
+                }
+                for pet in sleeping_pets
+            ]
+        }
+
+@router.get("/company-hierarchy")
+async def get_company_hierarchy(db: AsyncSession = Depends(get_db)):
+    """Get complete organizational hierarchy starting from CEO."""
+
+    # Find the CEO
+    ceo_result = await db.execute(
+        select(Employee).where(
+            Employee.status == "active",
+            Employee.role == "CEO"
+        )
+    )
+    ceo = ceo_result.scalar_one_or_none()
+
+    if not ceo:
+        return {"error": "CEO not found", "hierarchy": []}
+
+    async def build_hierarchy_node(employee: Employee) -> dict:
+        """Recursively build hierarchy tree."""
+        # Get direct reports
+        reports_result = await db.execute(
+            select(Employee).where(
+                Employee.manager_id == employee.id,
+                Employee.status == "active"
+            ).order_by(Employee.name)
+        )
+        reports = reports_result.scalars().all()
+
+        # Recursively build children nodes
+        children = []
+        for report in reports:
+            children.append(await build_hierarchy_node(report))
+
+        return {
+            "id": employee.id,
+            "name": employee.name,
+            "title": employee.title,
+            "role": employee.role,
+            "department": employee.department,
+            "avatar_path": employee.avatar_path if hasattr(employee, 'avatar_path') else None,
+            "direct_reports_count": len(reports),
+            "children": children
+        }
+
+    # Build complete hierarchy starting from CEO
+    hierarchy = await build_hierarchy_node(ceo)
+
+    # Get stats
+    all_employees_result = await db.execute(
+        select(Employee).where(Employee.status == "active")
+    )
+    all_employees = all_employees_result.scalars().all()
+
+    executives_count = len([e for e in all_employees if e.role in ["CEO", "CTO", "COO", "CFO"]])
+    managers_count = len([e for e in all_employees if e.role == "Manager"])
+    employees_count = len([e for e in all_employees if e.role == "Employee"])
+
+    return {
+        "hierarchy": hierarchy,
+        "stats": {
+            "total": len(all_employees),
+            "executives": executives_count,
+            "managers": managers_count,
+            "employees": employees_count,
+            "ratio": f"1:{employees_count // managers_count if managers_count > 0 else 0}"
+        }
+    }
 

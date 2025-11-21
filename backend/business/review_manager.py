@@ -30,11 +30,13 @@ class ReviewManager:
         )
         all_employees = result.scalars().all()
         
-        # Get employees who need reviews (non-managers, non-executives, non-terminated)
-        # Be more lenient - include all employees except executives and terminated employees
+        # Get employees who need reviews
+        # Regular employees get reviewed by managers
+        # Managers get reviewed by executives (CEO, CTO, COO, CFO)
+        # Executives (CEO, CTO, COO, CFO) do NOT get reviewed (they review others)
         employees_to_review = [
             emp for emp in all_employees 
-            if emp.role not in ["CEO", "Manager", "CTO", "COO", "CFO"]
+            if emp.role not in ["CEO", "CTO", "COO", "CFO"]  # Only exclude top executives
             and emp.status != "fired"
             and not emp.fired_at
         ]
@@ -177,28 +179,47 @@ class ReviewManager:
         # Store employee name early to avoid lazy loading issues later
         employee_name = employee.name
         
-        # Find a manager to conduct the review
-        result = await self.db.execute(
-            select(Employee).where(
-                Employee.role.in_(["Manager", "CEO", "CTO", "COO", "CFO"]),
-                Employee.status == "active"
+        # Determine who should conduct the review:
+        # - Regular employees get reviewed by managers
+        # - Managers get reviewed by executives (CEO, CTO, COO, CFO)
+        if employee.role == "Manager":
+            # Manager being reviewed - find an executive to conduct the review
+            result = await self.db.execute(
+                select(Employee).where(
+                    Employee.role.in_(["CEO", "CTO", "COO", "CFO"]),
+                    Employee.status == "active"
+                )
             )
-        )
-        managers = result.scalars().all()
+            reviewers = result.scalars().all()
+        else:
+            # Regular employee being reviewed - find a manager to conduct the review
+            result = await self.db.execute(
+                select(Employee).where(
+                    Employee.role.in_(["Manager", "CEO", "CTO", "COO", "CFO"]),
+                    Employee.status == "active"
+                )
+            )
+            reviewers = result.scalars().all()
         
-        if not managers:
-            print(f"  [!] No active managers found to review {employee_name}")
+        if not reviewers:
+            if employee.role == "Manager":
+                print(f"  [!] No active executives found to review manager {employee_name}")
+            else:
+                print(f"  [!] No active managers found to review {employee_name}")
             return None
         
-        # Prefer manager in same department
-        manager = next((m for m in managers if m.department == employee.department), None)
-        if not manager:
-            manager = managers[0]
+        # Prefer reviewer in same department, otherwise use first available
+        reviewer = next((r for r in reviewers if r.department == employee.department), None)
+        if not reviewer:
+            reviewer = reviewers[0]
+        
+        # Use 'manager' variable name for consistency with rest of code
+        manager = reviewer
         
         # Store manager name early to avoid lazy loading issues later
         manager_name = manager.name
         
-        print(f"  👤 Found {len(managers)} manager(s) - assigning to {manager_name}")
+        print(f"  [*] Found {len(reviewers)} reviewer(s) - assigning to {manager_name}")
         
         # Determine review period (last 6 hours or since last review)
         review_period_end = datetime.utcnow()

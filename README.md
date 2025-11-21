@@ -6,7 +6,8 @@ A fully autonomous office simulation where AI employees make decisions, work on 
 
 - **Fully Autonomous**: The office runs completely on its own - no user interaction required
 - **AI-Powered Employees**: Each employee uses LLM to make decisions based on their role, personality, and backstory
-- **Employee Hierarchy**: CEO, Managers, and Employees with different decision-making capabilities
+- **Employee Hierarchy**: CEO, Managers, and Employees with proper 1:10 manager-to-employee ratio and reporting structure
+- **Organizational Structure**: Complete organizational chart with manager-employee relationships
 - **Multi-Floor Office System**: 4 floors with specialized rooms and intelligent room assignment
 - **Smart Room Management**: Room capacity tracking, overflow handling, and intelligent movement
 - **Real-time Web Interface**: Watch the office operate in real-time through a modern web dashboard
@@ -263,7 +264,10 @@ The web interface provides several views:
   - Calendar integration for holiday events with special styling
   - Automatic holiday meeting generation for next 3 years
 - **Coffee Breaks**: Natural break system for employees
-  - Automatic coffee break scheduling
+  - Automatic coffee break scheduling with strict timing rules
+  - Manager restrictions to prevent abuse
+  - Meeting awareness (breaks denied before meetings)
+  - Breakroom capacity management
   - Breakroom movement and social interactions
 - **Gossip System**: AI-generated workplace gossip between employees
   - Realistic workplace conversations
@@ -348,6 +352,10 @@ All views update in real-time as the simulation runs via WebSocket.
 Comprehensive documentation is available in the `docs/` folder:
 
 - **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)** - Complete system documentation
+- **[docs/ORGANIZATIONAL_STRUCTURE.md](docs/ORGANIZATIONAL_STRUCTURE.md)** - Organizational structure system with manager-employee relationships
+- **[docs/CLOCK_SYSTEM.md](docs/CLOCK_SYSTEM.md)** - Clock in/out system for time tracking
+- **[docs/SLEEP_SYSTEM.md](docs/SLEEP_SYSTEM.md)** - Sleep schedule management for employees and families
+- **[docs/COFFEE_BREAK_SYSTEM.md](docs/COFFEE_BREAK_SYSTEM.md)** - Coffee break system with timing rules and capacity management
 - **[docs/POSTGRESQL_OPTIMIZATIONS.md](docs/POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
 - **[docs/COMMUNICATION_FIXES.md](docs/COMMUNICATION_FIXES.md)** - Communication system fixes and improvements
 - **[docs/DATABASE_CONNECTION_FIX.md](docs/DATABASE_CONNECTION_FIX.md)** - Database connection pool fixes
@@ -396,6 +404,14 @@ The project includes utility scripts for testing and debugging:
 
 - `new_game.bat` / `new_game.sh` - Start a new game/simulation with fresh company data
 - `backend/new_game.py` - New game script (run directly)
+- `backend/reorganize_company.py` - Reorganize company structure to maintain 1:10 manager-to-employee ratio
+- `backend/add_manager_column.py` - Add manager_id column to employees table
+- `backend/backfill_clock_outs.py` - Backfill clock out events
+- `backend/check_sleep_status.py` - Check sleep status of employees and families
+- `backend/force_employee_reviews.py` - Force employee review generation
+- `backend/migrate_pet_roaming.py` - Migrate pet roaming data
+- `backend/test_sleep_enforcement.py` - Test sleep system enforcement
+- `backend/verify_migrations.py` - Verify database migrations
 - `backend/test_meetings.py` - Check meeting status and test meeting system
 - `backend/force_meeting_update.py` - Force immediate meeting updates
 - `backend/generate_meetings_now.py` - Generate meetings for testing

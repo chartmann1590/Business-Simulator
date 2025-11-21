@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parker Clark IT Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background-color: #f2f2f2;
+            text-align: left;
+            white-space: nowrap;
+
+            &.zebra-row {
+                background-color: #f2f2f2;
+            }
+
+            &.totals-row {
+                background-color: #e7f3ff;
+                font-weight: bold;
+                border-top: 2px solid #e7f3ff;
+            }
+        }
+
+        .green {
+            color: green;
+        }
+
+        .red {
+            color: red;
+        }
+
+        .blue {
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+<table>
+    <tr>
+        <td colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Parker Clark IT Dashboard</td>
+    </tr>
+
+    <tr>
+        <th>**Employee Information**</th>
+        <th>Name</th>
+        <th>Title</th>
+        <th>Department</th>
+    </tr>
+    <tr class="zebra-row">
+        <td colspan="4">Parker Clark</td>
+        <td>IT Senior</td>
+        <td>IT</td>
+    </tr>
+
+    <tr>
+        <th>**Business Metrics**</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Total Expenses ($)</th>
+        <th>Profit Margin (%)</th>
+        <th>Active Projects (Count)</th>
+        <th>Total Employees (Count)</th>
+    </tr>
+    <tr class="zebra-row">
+        <td colspan="7">$848,324.28</td>
+    </tr>
+
+    <tr>
+        <th colspan="2">Total Profit ($)</th>
+        <th>$361,970.04</th>
+        <th></th>
+        <th>(42.67%)</th>
+        <th>15</th>
+        <th>1417</th>
+    </tr>
+
+    <tr class="totals-row">
+        <td colspan="7">$848,324.28</td>
+    </tr>
+
+    <tr>
+        <th>**Active Projects**</th>
+        <th>Customer Portal Redesign ($)</th>
+        <th>API Infrastructure Upgrade ($)</th>
+        <th>Digital Transformation Project ($)</th>
+        <th>Strategic Partnership Development ($)</th>
+        <th>Product Innovation Program ($)</th>
+    </tr>
+
+    <tr class="zebra-row">
+        <td colspan="5">$75,000.00</td>
+        <td>$100,000.00</td>
+        <td>$196,119.03</td>
+        <td>$156,356.16</td>
+    </tr>
+
+    <tr>
+        <th>**Active Projects (Continue)**</th>
+        <th>Revenue ($)</th>
+        <th>Profit ($)</th>
+        <th>Project ROI (%)</th>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>$25,831.02</td>
+        <td>$28,996.55</td>
+        <td>(17.64%)</td>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>$100,000.00</td>
+        <td>$70,675.89</td>
+        <td>(30.67%)</td>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>$196,119.03</td>
+        <td>$17,080.48</td>
+        <td>(8.74%)</td>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>$156,356.16</td>
+        <td>$15,460.78</td>
+        <td>(9.90%)</td>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>$141,155.29</td>
+        <td>$15,460.78</td>
+        <td>(11.02%)</td>
+    </tr>
+
+    <tr>
+        <th>**Department Breakdown (Quarter 1)**</th>
+        <th>Design Count</th>
+        <th>Finance Count</th>
+        <th>Sales Count</th>
+        <th>Marketing Count</th>
+        <th>IT Count</th>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>50</td>
+        <td>1</td>
+        <td>43</td>
+        <td>63</td>
+        <td>45</td>
+    </tr>
+
+    <tr>
+        <th>**Department Breakdown (Quarter 2)**</th>
+        <th>Design Count</th>
+        <th>Finance Count</th>
+        <th>Sales Count</th>
+        <th>Marketing Count</th>
+        <th>IT Count</th>
+    </tr>
+
+    <tr class="zebra-row">
+        <td>47</td>
+        <td>1</td>
+        <td>42</td>
+        <td>62</td>
+        <td>44</td>
+    </tr>
+
+    <tr>
+        <th>**Summary Metrics (Quarter 1)**</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Profit Margin (%)</th>
+    </tr>
+
+    <tr class="totals-row">
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>(42.67%)</td>
+    </tr>
+
+    <tr>
+        <th>**Summary Metrics (Quarter 2)**</th>
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Profit Margin (%)</th>
+    </tr>
+
+    <tr class="totals-row">
+        <td>$841,234.56</td>
+        <td>$348,970.04</td>
+        <td>(41.66%)</td>
+    </tr>
+
+    <tr>
+        <th>**Notes and Assumptions**</th>
+        <td>Revenue and profit figures sourced from historical data.</td>
+        <td>The financial metrics are based on a quarterly review, with the most recent update being from Q1 2023.</td>
+        <td>Assumptions were made for the calculations of profit margin, growth rate, and ROI.</td>
+    </tr>
+
+</table>
+</body>
+</html>

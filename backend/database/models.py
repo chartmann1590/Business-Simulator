@@ -27,6 +27,7 @@ class Employee(Base):
     role = Column(String, nullable=False)  # CEO, Manager, Employee
     hierarchy_level = Column(Integer, nullable=False)  # 1 = CEO, 2 = Manager, 3 = Employee
     department = Column(String, nullable=True)
+    manager_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # ID of direct manager
     status = Column(String, default="active")  # active, busy, idle, fired
     current_task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
     personality_traits = Column(JSON, default=list)
@@ -48,6 +49,9 @@ class Employee(Base):
     last_coffee_break = Column(DateTime(timezone=True), nullable=True)  # Last coffee break time
     online_status = Column(String, default="online")  # online, offline, away, busy - for Teams presence
     sleep_state = Column(String, default="awake")  # awake, sleeping, in_bed - for tracking sleep schedule (10pm-7am)
+
+    # Organizational hierarchy relationships
+    manager = relationship("Employee", remote_side=[id], foreign_keys=[manager_id], backref="direct_reports")
 
     tasks = relationship("Task", back_populates="employee", foreign_keys="Task.employee_id")
     decisions = relationship("Decision", back_populates="employee")
@@ -302,7 +306,7 @@ class Meeting(Base):
 
 class OfficePet(Base):
     __tablename__ = "office_pets"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     pet_type = Column(String, nullable=False)  # cat, dog
@@ -311,8 +315,9 @@ class OfficePet(Base):
     floor = Column(Integer, default=1)  # Current floor
     personality = Column(Text, nullable=True)  # Pet personality description
     favorite_employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)  # Favorite employee
+    last_room_change = Column(DateTime(timezone=True), nullable=True)  # When pet last changed rooms
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     favorite_employee = relationship("Employee", foreign_keys=[favorite_employee_id])
     care_logs = relationship("PetCareLog", back_populates="pet")
 

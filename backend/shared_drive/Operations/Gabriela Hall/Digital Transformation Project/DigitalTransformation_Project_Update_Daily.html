@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* 
+         * Spreadsheet Title Section
+         */
+        .spreadsheet-title {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        /* 
+         * Header Row Styles
+         */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        th:first-child, th:last-child {
+            padding-right: 12px;
+        }
+
+        /* 
+         * Data Row Styles
+         */
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+        }
+        td:nth-child(odd) {
+            background: #f2f2f2;
+        }
+        td:last-child {
+            text-align: right;
+        }
+
+        /* 
+         * Totals Row Styles
+         */
+        th:last-child {
+            font-weight: bold;
+            border-top: 2px solid white;
+            border-bottom: 1px solid #e7f3ff;
+        }
+        td:nth-child(8) {
+            background: #e7f3ff;
+        }
+
+        /* 
+         * Font and Number Formatting
+         */
+        span {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+        }
+        span.numbers {
+            color: black;
+        }
+        span.percentage {
+            color: #008000;
+        }
+        span.decrease {
+            color: #ff0000;
+        }
+
+        /* 
+         * Conditional Formatting
+         */
+        td.value {
+            background: green;
+        }
+        td.decrease {
+            background: red;
+        }
+    </style>
+</head>
+<body>
+    <table border-collapse="collapse">
+        <tr class="spreadsheet-title">
+            <td colspan="10">Financial Dashboard - Digital Transformation Project</td>
+        </tr>
+        <tr>
+            <th>Department</th>
+            <th>Project Name</th>
+            <th>Budget ($)</th>
+            <th>Revenue ($)</th>
+            <th>Margin (%)</th>
+            <th>Active Employees</th>
+        </tr>
+        <tr>
+            <td style="text-align: left;">Operations</td>
+            <td>Gabriela Hall</td>
+            <td>$196,119.03</td>
+            <td>$70,675.89</td>
+            <td>42.67%</td>
+            <td>52 employees</td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Department</th>
+            <th style="text-align: left;">Project Name</th>
+            <th style="text-align: right;">Budget ($)</th>
+            <th style="text-align: right;">Revenue ($)</th>
+            <th style="text-align: right;">Margin (%)</th>
+            <th style="text-align: left;">Active Employees</th>
+        </tr>
+
+        <!-- Add more rows with data -->
+        <tr>
+            <td>Marketing</td>
+            <td>Customer Portal Redesign</td>
+            <td>$75,000.00</td>
+            <td>$25,831.02</td>
+            <td>33.57%</td>
+            <td>63 employees</td>
+        </tr>
+
+        <tr>
+            <td style="text-align: left;">Operations</td>
+            <td style="text-align: left;">API Infrastructure Upgrade</td>
+            <td>$100,000.00</td>
+            <td>$28,996.55</td>
+            <td>29.10%</td>
+            <td>45 employees</td>
+        </tr>
+
+        <!-- Add more rows with data -->
+
+        <tr>
+            <th style="text-align: left;">Department</th>
+            <th style="text-align: left;">Project Name</th>
+            <th style="text-align: right;">Budget ($)</th>
+            <th style="text-align: right;">Revenue ($)</th>
+            <th style="text-align: right;">Margin (%)</th>
+            <th style="text-align: left;">Active Employees</th>
+        </tr>
+
+        <!-- Add more rows with data -->
+
+    </table>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Caleb Foster's Business Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #d0d0d0;
+        }
+
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+        }
+
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        tr td:first-child, tr th:first-child {
+            text-align: left;
+        }
+        
+        tr td:last-child, tr th:last-child {
+            text-align: right;
+        }
+        
+        tr td:nth-child(2), tr th:nth-child(2) {
+            text-align: center;
+        }
+        
+        #TotalsRow {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+
+        .green {
+            color: green;
+        }
+        
+        .red {
+            color: red;
+        }
+        
+        .blue {
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+<table>
+    <tr style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">
+        Caleb Foster's Business Dashboard
+        <sub>Financial Analysis and Performance Tracking</sub>
+    </tr>
+    <tr>
+        <th>Employee Information</th>
+        <th>Name</th>
+        <th>Title</th>
+        <th>Department</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Name</td>
+        <td>Caleb Foster</td>
+        <td>Design Senior</td>
+        <td>Engineering</td>
+    </tr>
+    <tr>
+        <th>Budget Breakdown</th>
+        <th>Total Revenue</th>
+        <th>Total Profit</th>
+        <th>Total Expenses</th>
+        <th>Profit Margin (%)</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <th>Active Projects</th>
+        <th>Project Name</th>
+        <th>Budget</th>
+        <th>Revenue</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Customer Portal Redesign</td>
+        <td>$75,000.00</td>
+        <td>$25,831.02</td>
+    </tr>
+    <tr>
+        <th>API Infrastructure Upgrade</th>
+        <th>$100,000.00</th>
+        <td>$28,996.55</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Mobile App Development</td>
+        <td>$150,000.00</td>
+        <td>$32,045.32</td>
+    </tr>
+    <tr>
+        <th>Digital Transformation Project</th>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Strategic Partnership Development</td>
+        <td>$156,356.16</td>
+        <td>$17,080.48</td>
+    </tr>
+    <tr>
+        <th>Department Performance</th>
+        <th>Employee Count</th>
+        <th>Profit Margin (%)</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Marketing</td>
+        <td>63</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <th>IT</th>
+        <td>45</td>
+        <td>35.00%</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Design</td>
+        <td>50</td>
+        <td>38.46%</td>
+    </tr>
+    <tr>
+        <th>Product</th>
+        <td>44</td>
+        <td>42.00%</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Operations</td>
+        <td>52</td>
+        <td>40.38%</td>
+    </tr>
+    <tr>
+        <th>Administration</th>
+        <td>57</td>
+        <td>41.00%</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Engineering</td>
+        <td>49</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <th>HR</th>
+        <td>47</td>
+        <td>40.00%</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Sales</td>
+        <td>43</td>
+        <td>38.10%</td>
+    </tr>
+    <tr>
+        <th>Executive</th>
+        <td>1</td>
+        <td>50.00%</td>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Finance</td>
+        <td>1</td>
+        <td>40.00%</td>
+    </tr>
+    <tr id="TotalsRow">
+        <th>Total Revenue ($)</th>
+        <th>Total Profit ($)</th>
+        <th>Total Expenses ($)</th>
+        <th>Profit Margin (%)</th>
+    </tr>
+    <tr style="background: #e7f3ff;">
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    <tr>
+        <th>CALCULATED METRICS</th>
+        <th>Growth Rate (%)</th>
+        <th>Trends Analysis</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Revenue Growth (QoQ)</td>
+        <td>0.50%</td>
+        <td>Variance Analysis</td>
+    </tr>
+    <tr>
+        <th>Profitability Comparison</th>
+        <th>Comparison to Last Q</th>
+        <th>Trends Analysis</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Profit Margin Trend (QoQ)</td>
+        <td>-0.13%</td>
+        <td>Departmental Variance Analysis</td>
+    </tr>
+    <tr>
+        <th>Quarterly Breakdown</th>
+        <th>Current Q</th>
+        <th>Trend Analysis</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Q1 Revenue ($)</td>
+        <td>$848,324.28</td>
+        <td>Comparison to Last Q</td>
+    </tr>
+    <tr>
+        <th>Sales Performance</th>
+        <th>Revenue by Product/Service</th>
+        <th>Conversion Metrics</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Sales Revenue ($)</td>
+        <td>$848,324.28</td>
+        <td>Conversion Rate (QoQ)</td>
+    </tr>
+    <tr>
+        <th>Operations Performance</th>
+        <th>Resource Allocation & Efficiency Metrics</th>
+        <th>Cost Analysis</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Operation Revenue ($)</td>
+        <td>$848,324.28</td>
+        <td>Cost of Operations (QoQ)</td>
+    </tr>
+    <tr>
+        <th>HR Performance</th>
+        <th>Employee Cost Analysis & Department Headcount</th>
+        <th>Salary Breakdown</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Human Resource Revenue ($)</td>
+        <td>$848,324.28</td>
+        <td>Salaries Paid (QoQ)</td>
+    </tr>
+    <tr>
+        <th>Data Source & Notes</th>
+        <th>Last Updated Date</th>
+        <th>Notes</th>
+    </tr>
+    <tr style="background: #f2f2f2;">
+        <td>Data from Caleb Foster's Finance Department</td>
+        <td>2023-12-01</td>
+        <td>No Assumptions or Variance Analysis</td>
+    </tr>
+</table>
+
+</body>
+</html>

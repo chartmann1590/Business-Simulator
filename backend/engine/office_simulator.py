@@ -2,6 +2,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from database.models import Employee, Activity, BusinessMetric, Financial, EmployeeReview, Project
+from sqlalchemy import select
 from database.database import async_session_maker
 from employees.roles import create_employee_agent
 from employees.room_assigner import assign_home_room, assign_rooms_to_existing_employees
@@ -490,20 +491,17 @@ class OfficeSimulator:
                 else:
                     # It's 7am-7pm: employees should be at office
                     # Update employees who are currently at home to be at office
+                    from engine.movement_system import update_employee_location
                     for employee in employees:
                         if employee.activity_state in ["at_home", "sleeping"]:
-                            # Transition employee to office
+                            # Transition employee to office - send them to their home room
                             if employee.home_room:
                                 # Send them to their home room (office desk/workspace)
-                                employee.current_room = employee.home_room
-                                employee.floor = 1  # Default to floor 1
+                                await update_employee_location(employee, employee.home_room, "working", db)
                             else:
                                 # No home room assigned, put them in a common area
-                                employee.current_room = "Open Workspace"
+                                await update_employee_location(employee, "Open Workspace", "working", db)
                                 employee.floor = 1
-
-                            employee.activity_state = "working"
-                            employee.target_room = None
 
                 await db.commit()
         except Exception as e:
@@ -733,10 +731,11 @@ class OfficeSimulator:
             except Exception as e:
                 print(f"❌ Error publishing newsletter: {e}")
         
-        # Move pets occasionally (every 50 ticks = ~6.5 minutes)
+        # Move pets occasionally (every 15 ticks = ~2 minutes)
+        # Pets are forced to move if they've been in the same room for over 1 hour
         # Only move pets during work hours
         from config import is_work_hours
-        if self.quick_wins_counter % 50 == 0 and is_work_hours():
+        if self.quick_wins_counter % 15 == 0 and is_work_hours():
             try:
                 async with async_session_maker() as pet_db:
                     from business.pet_manager import PetManager
@@ -1230,6 +1229,7 @@ class OfficeSimulator:
         from sqlalchemy import select
         from datetime import datetime
         from business.financial_manager import FinancialManager
+        from config import now, is_work_hours
         
         financial_manager = FinancialManager(db)
         profit = await financial_manager.get_profit()
@@ -1253,14 +1253,21 @@ class OfficeSimulator:
         # Maximum staffing cap: Don't hire beyond 500 employees
         MAX_EMPLOYEES = 500
         
+        # CRITICAL: Only allow terminations during work hours (7am-7pm weekdays)
+        # Employees should not be terminated when they're at home (7pm-7am or weekends)
+        current_time = now()
+        is_work_time = is_work_hours()
+        
         print(f"📊 Employee Management: {active_count} active, profit: ${profit:,.2f}, revenue: ${revenue:,.2f}, max: {MAX_EMPLOYEES}")
         
         # Firing logic: Can fire employees with cause (performance issues, budget cuts, restructuring, etc.)
         # But we must maintain minimum staffing
+        # NOTE: Terminations ONLY allowed during work hours (7am-7pm weekdays)
+        # Employees should never be terminated when they're at home
         fired_this_tick = False
-        if active_count > MIN_EMPLOYEES:
+        if active_count > MIN_EMPLOYEES and is_work_time:
             # Priority 1: Check for employees with consistently bad performance reviews
-            # These should be terminated regardless of budget
+            # These should be terminated regardless of budget, but only during work hours
             employees_with_bad_reviews = await self._check_employees_with_bad_reviews(db, active_employees)
             if employees_with_bad_reviews:
                 print(f"[!] Found {len(employees_with_bad_reviews)} employee(s) with consistently bad performance reviews - terminating")
@@ -1274,11 +1281,13 @@ class OfficeSimulator:
                         active_employees = result.scalars().all()
             
             # Priority 2: Check for restructuring needs (overstaffing, department changes, etc.)
+            # Reduced probability and only during work hours
             if active_count > MIN_EMPLOYEES:
                 restructuring_needed, restructuring_reason = await self._check_restructuring_needs(db, active_employees, business_context)
                 if restructuring_needed:
                     logger.warning(f"[!] Restructuring needed: {restructuring_reason}")
-                    if random.random() < 0.3:  # 30% chance to fire for restructuring
+                    # Reduced from 30% to 10% chance to fire for restructuring
+                    if random.random() < 0.1:
                         await self._fire_employee_for_restructuring(db, active_employees, restructuring_reason)
                         fired_this_tick = True
                         # Re-fetch active count after firing
@@ -1287,17 +1296,19 @@ class OfficeSimulator:
                         active_count = len(active_employees_after)
             
             # Priority 3: Budget-based termination (if losing money)
+            # Significantly reduced probabilities and only during work hours
             if active_count > MIN_EMPLOYEES:
                 should_fire = False
-                if profit < -20000:
-                    # Financial reasons - 40% chance
-                    should_fire = random.random() < 0.4
+                if profit < -50000:  # Only when losing a LOT of money
+                    # Financial reasons - reduced from 40% to 15% chance
+                    should_fire = random.random() < 0.15
+                elif profit < -20000:
+                    # Significant losses - reduced from 40% to 8% chance
+                    should_fire = random.random() < 0.08
                 elif profit < 0:
-                    # Minor losses - 10% chance (performance-based firing)
-                    should_fire = random.random() < 0.1
-                else:
-                    # Even when profitable, might fire for performance (5% chance)
-                    should_fire = random.random() < 0.05
+                    # Minor losses - reduced from 10% to 2% chance
+                    should_fire = random.random() < 0.02
+                # Removed the 5% chance when profitable - no random firings when making money
                 
                 if should_fire:
                     await self._fire_employee(db, active_employees)
@@ -1306,140 +1317,172 @@ class OfficeSimulator:
                     result = await db.execute(select(Employee).where(Employee.status == "active"))
                     active_employees_after = result.scalars().all()
                     active_count = len(active_employees_after)
+        elif not is_work_time and active_count > MIN_EMPLOYEES:
+            # Outside work hours - log that we're skipping all terminations
+            logger.debug(f"[EMPLOYEE MANAGEMENT] Outside work hours ({current_time.strftime('%I:%M %p')}) - skipping all terminations (employees are at home)")
         
-        # Priority 1: Hire to meet minimum staffing requirement (including replacing fired employees)
-        if active_count < MIN_EMPLOYEES and active_count < MAX_EMPLOYEES:
-            # Hire multiple employees if we're far below minimum
-            employees_needed = MIN_EMPLOYEES - active_count
-            # Don't exceed max cap
-            employees_needed = min(employees_needed, MAX_EMPLOYEES - active_count)
-            # Hire 1-3 employees per tick until we reach minimum
-            hires_this_tick = min(employees_needed, random.randint(1, 3))
-            for _ in range(hires_this_tick):
-                await self._hire_employee(db, business_context)
-            print(f"Hiring to meet minimum staffing: {hires_this_tick} new employee(s) hired. Current: {active_count}, Target: {MIN_EMPLOYEES}, Max: {MAX_EMPLOYEES}")
-        
-        # Priority 2: Project-based hiring (if we have many projects/tasks, hire to support them)
-        else:
-            from database.models import Task, Project
-            from business.project_manager import ProjectManager
-            
-            project_manager = ProjectManager(db)
-            active_projects = await project_manager.get_active_projects()
-            
-            # Count unassigned tasks
-            result = await db.execute(
-                select(Task).where(
-                    Task.employee_id.is_(None),
-                    Task.status.in_(["pending", "in_progress"])
-                )
-            )
-            unassigned_tasks = result.scalars().all()
-            unassigned_count = len(unassigned_tasks)
-            
-            # Count employees without tasks
-            result = await db.execute(
-                select(Employee).where(
-                    Employee.status == "active",
-                    Employee.current_task_id.is_(None)
-                )
-            )
-            available_employees = result.scalars().all()
-            available_count = len(available_employees)
-            
-            # Check if we're over capacity for projects
-            project_count = len(active_projects)
-            max_projects = max(1, int(active_count / 3))
-            is_over_capacity = project_count > max_projects
-            
-            tasks_per_employee = unassigned_count / max(1, active_count)
-            projects_per_employee = project_count / max(1, active_count)
-            
-            # AGGRESSIVE HIRING: If over capacity, hire immediately and multiple employees
-            if is_over_capacity and active_count < MAX_EMPLOYEES:
-                # Calculate how many employees we need
-                # Each project needs ~3 employees, so if we have N projects, we need N*3 employees
-                employees_needed_for_projects = project_count * 3
-                employees_short = max(0, employees_needed_for_projects - active_count)
+        # HIRING LOGIC: Only hire during work hours (7am-7pm weekdays)
+        if not is_work_time:
+            logger.debug(f"[EMPLOYEE MANAGEMENT] Outside work hours ({current_time.strftime('%I:%M %p')}) - skipping all hiring (not business hours)")
+        elif is_work_time:
+            # Priority 1: Hire to meet minimum staffing requirement (including replacing fired employees)
+            if active_count < MIN_EMPLOYEES and active_count < MAX_EMPLOYEES:
+                # Hire multiple employees if we're far below minimum
+                employees_needed = MIN_EMPLOYEES - active_count
                 # Don't exceed max cap
-                employees_short = min(employees_short, MAX_EMPLOYEES - active_count)
-                
-                # Hire aggressively: 2-4 employees per tick when over capacity
-                # For severe overload, hire more aggressively
-                if employees_short > 20:  # Very short on employees
-                    hires_needed = min(employees_short, random.randint(5, 8))  # Hire 5-8
-                else:
-                    hires_needed = min(employees_short, random.randint(2, 4))  # Hire 2-4
-                
-                if hires_needed > 0:
-                    for _ in range(hires_needed):
-                        await self._hire_employee(db, business_context)
-                    print(f"AGGRESSIVE HIRING: Hired {hires_needed} employee(s) to handle {project_count} projects (capacity: {max_projects}, current: {active_count}, short: {employees_short}, max: {MAX_EMPLOYEES})")
-            
-            # PROACTIVE HIRING: Hire to maintain strong workload even when not over capacity
-            # If we have capacity for more projects, hire to enable growth
-            elif project_count < max_projects * 0.7 and active_count < MAX_EMPLOYEES:  # If we're using less than 70% of capacity
-                # We have room for more projects - hire to enable growth
-                capacity_available = max_projects - project_count
-                if capacity_available >= 2:
-                    # Hire 1-2 employees to enable project growth (don't exceed max)
-                    hire_chance = 0.4 if profit > 0 else 0.2
-                    if random.random() < hire_chance:
-                        hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))
-                        if hires > 0:
-                            for _ in range(hires):
-                                await self._hire_employee(db, business_context)
-                            print(f"PROACTIVE HIRING: Hired {hires} employee(s) to enable growth (capacity: {max_projects}, current projects: {project_count}, employees: {active_count}, max: {MAX_EMPLOYEES})")
-            
-            # EMERGENCY HIRING: If extreme task overload, hire aggressively (but respect max cap)
-            # With 1032 tasks and 51 employees, that's ~20 tasks per employee - need to hire NOW!
-            if unassigned_count > active_count * 10 and active_count < MAX_EMPLOYEES:  # More than 10 tasks per employee = emergency
-                # EMERGENCY: Hire 5-10 employees immediately, but don't exceed max
-                hires_needed = min(unassigned_count // 20, 10)  # Hire up to 10 at once
-                hires_needed = max(3, hires_needed)  # At least 3
-                hires_needed = min(hires_needed, MAX_EMPLOYEES - active_count)  # Don't exceed max
-                if hires_needed > 0:
-                    for _ in range(hires_needed):
-                        await self._hire_employee(db, business_context)
-                    print(f"🚨 EMERGENCY HIRING: Hired {hires_needed} employee(s) for extreme task overload ({unassigned_count} tasks, {active_count} employees, {unassigned_count/active_count:.1f} tasks/employee, max: {MAX_EMPLOYEES})")
-            
-            # Also hire if we have many unassigned tasks
-            should_hire_for_tasks = False
-            if unassigned_count > 3 and available_count < 2:
-                # Many unassigned tasks, few available employees
-                should_hire_for_tasks = True
-            elif tasks_per_employee > 1.5:  # Removed employee limit check - always hire if overloaded
-                # More than 1.5 tasks per employee on average
-                should_hire_for_tasks = True
-            
-            if should_hire_for_tasks and active_count < MAX_EMPLOYEES:
-                # Higher chance to hire if we're profitable, but still possible if breaking even
-                # More aggressive hiring for severe overload
-                if tasks_per_employee > 5:  # Severe overload
-                    hire_chance = 1.0  # 100% chance - always hire
-                    hires = min(MAX_EMPLOYEES - active_count, random.randint(3, 5))  # Hire 3-5 employees
-                elif tasks_per_employee > 2:  # Moderate overload
-                    hire_chance = 0.9 if profit > 0 else 0.7
-                    hires = min(MAX_EMPLOYEES - active_count, random.randint(2, 4))  # Hire 2-4 employees
-                else:  # Mild overload
-                    hire_chance = 0.7 if profit > 0 else 0.5
-                    hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))  # Hire 1-2 employees
-                
-                if random.random() < hire_chance and hires > 0:
-                    for _ in range(hires):
-                        await self._hire_employee(db, business_context)
-                    print(f"Hiring for task workload: {unassigned_count} unassigned tasks ({tasks_per_employee:.1f} per employee), {available_count} available employees, hired {hires}, max: {MAX_EMPLOYEES}")
-            
-            # Also hire if projects per employee ratio is high (even if not over capacity)
-            if projects_per_employee > 0.25 and active_count < MAX_EMPLOYEES:
-                hire_chance = 0.6 if profit > 0 else 0.4  # Increased chances
-                if random.random() < hire_chance:
+                employees_needed = min(employees_needed, MAX_EMPLOYEES - active_count)
+                # Hire 1-3 employees per tick until we reach minimum
+                hires_this_tick = min(employees_needed, random.randint(1, 3))
+                for _ in range(hires_this_tick):
                     await self._hire_employee(db, business_context)
-                    print(f"Hiring for project ratio: {projects_per_employee:.2f} projects per employee (current: {active_count}, max: {MAX_EMPLOYEES})")
+                print(f"Hiring to meet minimum staffing: {hires_this_tick} new employee(s) hired. Current: {active_count}, Target: {MIN_EMPLOYEES}, Max: {MAX_EMPLOYEES}")
             
-            # ENSURE WORKLOAD: If many employees are idle, we need more projects or tasks
-            # This is a signal that we should create more projects or hire more strategically
-            idle_ratio = available_count / max(1, active_count)
+            # Priority 2: Hire to reach MAX_EMPLOYEES (500) - maintain full staffing
+            elif active_count < MAX_EMPLOYEES:
+                # Calculate how many employees we need to reach max
+                employees_needed = MAX_EMPLOYEES - active_count
+                
+                # Hire gradually: 1-3 employees per check to build up to 500
+                # More aggressive if we're far below max
+                if employees_needed > 100:
+                    # Very far below - hire 3-5 per check
+                    hires_this_tick = min(employees_needed, random.randint(3, 5))
+                elif employees_needed > 50:
+                    # Moderately below - hire 2-4 per check
+                    hires_this_tick = min(employees_needed, random.randint(2, 4))
+                else:
+                    # Close to max - hire 1-2 per check
+                    hires_this_tick = min(employees_needed, random.randint(1, 2))
+                
+                if hires_this_tick > 0:
+                    for _ in range(hires_this_tick):
+                        await self._hire_employee(db, business_context)
+                    print(f"📈 Hiring to reach max capacity: {hires_this_tick} new employee(s) hired. Current: {active_count}, Target: {MAX_EMPLOYEES}, Remaining: {employees_needed - hires_this_tick}")
+            
+            # Priority 3: Project-based hiring (if we have many projects/tasks, hire to support them)
+            if active_count >= MIN_EMPLOYEES:
+                from database.models import Task, Project
+                from business.project_manager import ProjectManager
+                
+                project_manager = ProjectManager(db)
+                active_projects = await project_manager.get_active_projects()
+                
+                # Count unassigned tasks
+                result = await db.execute(
+                    select(Task).where(
+                        Task.employee_id.is_(None),
+                        Task.status.in_(["pending", "in_progress"])
+                    )
+                )
+                unassigned_tasks = result.scalars().all()
+                unassigned_count = len(unassigned_tasks)
+                
+                # Count employees without tasks
+                result = await db.execute(
+                    select(Employee).where(
+                        Employee.status == "active",
+                        Employee.current_task_id.is_(None)
+                    )
+                )
+                available_employees = result.scalars().all()
+                available_count = len(available_employees)
+                
+                # Check if we're over capacity for projects
+                project_count = len(active_projects)
+                max_projects = max(1, int(active_count / 3))
+                is_over_capacity = project_count > max_projects
+                
+                tasks_per_employee = unassigned_count / max(1, active_count)
+                projects_per_employee = project_count / max(1, active_count)
+                
+                tasks_per_employee = unassigned_count / max(1, active_count)
+                projects_per_employee = project_count / max(1, active_count)
+                
+                # AGGRESSIVE HIRING: If over capacity, hire immediately and multiple employees
+                if is_over_capacity and active_count < MAX_EMPLOYEES:
+                    # Calculate how many employees we need
+                    # Each project needs ~3 employees, so if we have N projects, we need N*3 employees
+                    employees_needed_for_projects = project_count * 3
+                    employees_short = max(0, employees_needed_for_projects - active_count)
+                    # Don't exceed max cap
+                    employees_short = min(employees_short, MAX_EMPLOYEES - active_count)
+                    
+                    # Hire aggressively: 2-4 employees per tick when over capacity
+                    # For severe overload, hire more aggressively
+                    if employees_short > 20:  # Very short on employees
+                        hires_needed = min(employees_short, random.randint(5, 8))  # Hire 5-8
+                    else:
+                        hires_needed = min(employees_short, random.randint(2, 4))  # Hire 2-4
+                    
+                    if hires_needed > 0:
+                        for _ in range(hires_needed):
+                            await self._hire_employee(db, business_context)
+                        print(f"AGGRESSIVE HIRING: Hired {hires_needed} employee(s) to handle {project_count} projects (capacity: {max_projects}, current: {active_count}, short: {employees_short}, max: {MAX_EMPLOYEES})")
+                
+                # PROACTIVE HIRING: Hire to maintain strong workload even when not over capacity
+                # If we have capacity for more projects, hire to enable growth
+                elif project_count < max_projects * 0.7 and active_count < MAX_EMPLOYEES:  # If we're using less than 70% of capacity
+                    # We have room for more projects - hire to enable growth
+                    capacity_available = max_projects - project_count
+                    if capacity_available >= 2:
+                        # Hire 1-2 employees to enable project growth (don't exceed max)
+                        hire_chance = 0.4 if profit > 0 else 0.2
+                        if random.random() < hire_chance:
+                            hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))
+                            if hires > 0:
+                                for _ in range(hires):
+                                    await self._hire_employee(db, business_context)
+                                print(f"PROACTIVE HIRING: Hired {hires} employee(s) to enable growth (capacity: {max_projects}, current projects: {project_count}, employees: {active_count}, max: {MAX_EMPLOYEES})")
+                
+                # EMERGENCY HIRING: If extreme task overload, hire aggressively (but respect max cap)
+                # With 1032 tasks and 51 employees, that's ~20 tasks per employee - need to hire NOW!
+                if unassigned_count > active_count * 10 and active_count < MAX_EMPLOYEES:  # More than 10 tasks per employee = emergency
+                    # EMERGENCY: Hire 5-10 employees immediately, but don't exceed max
+                    hires_needed = min(unassigned_count // 20, 10)  # Hire up to 10 at once
+                    hires_needed = max(3, hires_needed)  # At least 3
+                    hires_needed = min(hires_needed, MAX_EMPLOYEES - active_count)  # Don't exceed max
+                    if hires_needed > 0:
+                        for _ in range(hires_needed):
+                            await self._hire_employee(db, business_context)
+                        print(f"🚨 EMERGENCY HIRING: Hired {hires_needed} employee(s) for extreme task overload ({unassigned_count} tasks, {active_count} employees, {unassigned_count/active_count:.1f} tasks/employee, max: {MAX_EMPLOYEES})")
+                
+                # Also hire if we have many unassigned tasks
+                should_hire_for_tasks = False
+                if unassigned_count > 3 and available_count < 2:
+                    # Many unassigned tasks, few available employees
+                    should_hire_for_tasks = True
+                elif tasks_per_employee > 1.5:  # Removed employee limit check - always hire if overloaded
+                    # More than 1.5 tasks per employee on average
+                    should_hire_for_tasks = True
+                
+                if should_hire_for_tasks and active_count < MAX_EMPLOYEES:
+                    # Higher chance to hire if we're profitable, but still possible if breaking even
+                    # More aggressive hiring for severe overload
+                    if tasks_per_employee > 5:  # Severe overload
+                        hire_chance = 1.0  # 100% chance - always hire
+                        hires = min(MAX_EMPLOYEES - active_count, random.randint(3, 5))  # Hire 3-5 employees
+                    elif tasks_per_employee > 2:  # Moderate overload
+                        hire_chance = 0.9 if profit > 0 else 0.7
+                        hires = min(MAX_EMPLOYEES - active_count, random.randint(2, 4))  # Hire 2-4 employees
+                    else:  # Mild overload
+                        hire_chance = 0.7 if profit > 0 else 0.5
+                        hires = min(MAX_EMPLOYEES - active_count, random.randint(1, 2))  # Hire 1-2 employees
+                    
+                    if random.random() < hire_chance and hires > 0:
+                        for _ in range(hires):
+                            await self._hire_employee(db, business_context)
+                        print(f"Hiring for task workload: {unassigned_count} unassigned tasks ({tasks_per_employee:.1f} per employee), {available_count} available employees, hired {hires}, max: {MAX_EMPLOYEES}")
+                
+                # Also hire if projects per employee ratio is high (even if not over capacity)
+                if projects_per_employee > 0.25 and active_count < MAX_EMPLOYEES:
+                    hire_chance = 0.6 if profit > 0 else 0.4  # Increased chances
+                    if random.random() < hire_chance:
+                        await self._hire_employee(db, business_context)
+                        print(f"Hiring for project ratio: {projects_per_employee:.2f} projects per employee (current: {active_count}, max: {MAX_EMPLOYEES})")
+                
+                # ENSURE WORKLOAD: If many employees are idle, we need more projects or tasks
+                # This is a signal that we should create more projects or hire more strategically
+                idle_ratio = available_count / max(1, active_count)
             if idle_ratio > 0.3 and active_count < MAX_EMPLOYEES:
                 # Either create more projects (handled by CEO) or hire to balance workload
                 # For now, we'll note this - CEO should create more projects
@@ -1772,6 +1815,61 @@ class OfficeSimulator:
             db.add(new_employee)
             await db.flush()  # Flush to get the employee ID
             
+            # Assign manager from same department (only for regular employees, not executives/managers)
+            if new_employee.role == "Employee" and new_employee.hierarchy_level == 3:
+                from sqlalchemy import select
+                # Find managers in the same department
+                manager_result = await db.execute(
+                    select(Employee).where(
+                        Employee.role == "Manager",
+                        Employee.department == department,
+                        Employee.status == "active"
+                    )
+                )
+                matching_managers = manager_result.scalars().all()
+                
+                if matching_managers:
+                    # If multiple managers in same department, pick one with fewest direct reports
+                    import random
+                    manager_reports = {}
+                    for mgr in matching_managers:
+                        reports_result = await db.execute(
+                            select(Employee).where(
+                                Employee.manager_id == mgr.id,
+                                Employee.status == "active"
+                            )
+                        )
+                        manager_reports[mgr.id] = len(reports_result.scalars().all())
+                    
+                    # Sort by report count and pick one with fewest (or random if tied)
+                    sorted_managers = sorted(matching_managers, key=lambda m: manager_reports.get(m.id, 0))
+                    min_reports = manager_reports.get(sorted_managers[0].id, 0)
+                    candidates = [m for m in sorted_managers if manager_reports.get(m.id, 0) == min_reports]
+                    new_employee.manager_id = random.choice(candidates).id
+                else:
+                    # No manager in same department - find any available manager
+                    all_managers_result = await db.execute(
+                        select(Employee).where(
+                            Employee.role == "Manager",
+                            Employee.status == "active"
+                        )
+                    )
+                    all_managers = all_managers_result.scalars().all()
+                    if all_managers:
+                        # Pick manager with fewest reports
+                        manager_reports = {}
+                        for mgr in all_managers:
+                            reports_result = await db.execute(
+                                select(Employee).where(
+                                    Employee.manager_id == mgr.id,
+                                    Employee.status == "active"
+                                )
+                            )
+                            manager_reports[mgr.id] = len(reports_result.scalars().all())
+                        
+                        sorted_managers = sorted(all_managers, key=lambda m: manager_reports.get(m.id, 0))
+                        new_employee.manager_id = sorted_managers[0].id
+            
             # Assign home room and floor based on role/department
             home_room, floor = await assign_home_room(new_employee, db)
             new_employee.home_room = home_room
@@ -1944,6 +2042,61 @@ class OfficeSimulator:
         )
         db.add(new_employee)
         await db.flush()  # Flush to get the employee ID
+        
+        # Assign manager from same department (only for regular employees, not executives/managers)
+        if new_employee.role == "Employee" and new_employee.hierarchy_level == 3:
+            from sqlalchemy import select
+            # Find managers in the same department
+            manager_result = await db.execute(
+                select(Employee).where(
+                    Employee.role == "Manager",
+                    Employee.department == department,
+                    Employee.status == "active"
+                )
+            )
+            matching_managers = manager_result.scalars().all()
+            
+            if matching_managers:
+                # If multiple managers in same department, pick one with fewest direct reports
+                import random
+                manager_reports = {}
+                for mgr in matching_managers:
+                    reports_result = await db.execute(
+                        select(Employee).where(
+                            Employee.manager_id == mgr.id,
+                            Employee.status == "active"
+                        )
+                    )
+                    manager_reports[mgr.id] = len(reports_result.scalars().all())
+                
+                # Sort by report count and pick one with fewest (or random if tied)
+                sorted_managers = sorted(matching_managers, key=lambda m: manager_reports.get(m.id, 0))
+                min_reports = manager_reports.get(sorted_managers[0].id, 0)
+                candidates = [m for m in sorted_managers if manager_reports.get(m.id, 0) == min_reports]
+                new_employee.manager_id = random.choice(candidates).id
+            else:
+                # No manager in same department - find any available manager
+                all_managers_result = await db.execute(
+                    select(Employee).where(
+                        Employee.role == "Manager",
+                        Employee.status == "active"
+                    )
+                )
+                all_managers = all_managers_result.scalars().all()
+                if all_managers:
+                    # Pick manager with fewest reports
+                    manager_reports = {}
+                    for mgr in all_managers:
+                        reports_result = await db.execute(
+                            select(Employee).where(
+                                Employee.manager_id == mgr.id,
+                                Employee.status == "active"
+                            )
+                        )
+                        manager_reports[mgr.id] = len(reports_result.scalars().all())
+                    
+                    sorted_managers = sorted(all_managers, key=lambda m: manager_reports.get(m.id, 0))
+                    new_employee.manager_id = sorted_managers[0].id
         
         # Assign home room and floor based on role/department
         home_room, floor = await assign_home_room(new_employee, db)
@@ -3005,6 +3158,53 @@ Return ONLY the termination reason text, nothing else."""
                 # If error occurs, wait 1 hour before retrying
                 await asyncio.sleep(3600)
     
+    async def conduct_employee_reviews_periodically(self):
+        """Background task to conduct employee reviews every 6 hours."""
+        print("[*] Starting employee review generation background task (runs immediately, then every 6 hours)...")
+        
+        # Run immediately on startup
+        first_run = True
+        
+        while self.running:
+            try:
+                async with async_session_maker() as review_db:
+                    from business.review_manager import ReviewManager
+                    review_manager = ReviewManager(review_db)
+                    
+                    print("[REVIEW] Running periodic employee review generation...")
+                    reviews_created = await review_manager.conduct_periodic_reviews(hours_since_last_review=6.0)
+                    
+                    if reviews_created:
+                        print(f"[+] [REVIEW] Conducted {len(reviews_created)} employee performance review(s)")
+                        # Log details for first few reviews
+                        for i, review in enumerate(reviews_created[:5]):
+                            try:
+                                emp_result = await review_db.execute(
+                                    select(Employee).where(Employee.id == review.employee_id)
+                                )
+                                emp = emp_result.scalar_one_or_none()
+                                mgr_result = await review_db.execute(
+                                    select(Employee).where(Employee.id == review.manager_id)
+                                )
+                                mgr = mgr_result.scalar_one_or_none()
+                                if emp and mgr:
+                                    print(f"   [*] {mgr.name} reviewed {emp.name} ({emp.role}) - Rating: {review.overall_rating}/5.0")
+                            except:
+                                pass
+                    else:
+                        if first_run:
+                            print("[i] [REVIEW] No reviews needed at this time (employees may not have been hired long enough)")
+            except Exception as e:
+                print(f"❌ [REVIEW] Error conducting employee reviews: {e}")
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+                continue
+            
+            first_run = False
+            # Wait 6 hours (21600 seconds) before next review cycle
+            await asyncio.sleep(21600)
+    
     async def generate_customer_reviews_periodically(self):
         """Background task to generate customer reviews every 30 minutes."""
         print("[*] Starting customer review generation background task (runs immediately, then every 30 minutes)...")
@@ -3347,22 +3547,29 @@ Return ONLY the termination reason text, nothing else."""
             except Exception as e:
                 logger.error(f"[-] Error in project capacity management: {e}", exc_info=True)
             
-            # Wait 30-60 seconds before next check
-            wait_time = random.randint(30, 60)
+            # Wait 2-4 minutes before next check (reduced frequency to prevent excessive terminations)
+            wait_time = random.randint(120, 240)  # 2-4 minutes
             await asyncio.sleep(wait_time)
     
     async def process_clock_events_periodically(self):
-        """Background task to process employee clock in/out events every 2 minutes."""
+        """Background task to process employee clock in/out events every 2 minutes (or every 1 minute during departure hours)."""
+        from config import now as local_now
         while self.running:
             try:
                 async with async_session_maker() as db:
                     from business.clock_manager import ClockManager
                     clock_manager = ClockManager(db)
 
-                    # Process end-of-day departures (6:45pm-7:15pm)
+                    # Process end-of-day departures (5:00pm-7:15pm)
                     departure_stats = await clock_manager.process_end_of_day_departures()
                     if departure_stats["departed"] > 0:
                         logger.info(f"[CLOCK OUT] {departure_stats['message']}")
+                    
+                    # Backfill missing clock-outs for employees who already left
+                    # This ensures employees who left before the fix have clock-out records
+                    backfill_stats = await clock_manager.backfill_missing_clock_outs()
+                    if backfill_stats["backfilled"] > 0:
+                        logger.info(f"[CLOCK OUT BACKFILL] {backfill_stats['message']}")
 
                     # Process commuting employees (transition leaving_work -> at_home)
                     commute_stats = await clock_manager.process_commuting_employees()
@@ -3377,8 +3584,13 @@ Return ONLY the termination reason text, nothing else."""
             except Exception as e:
                 logger.error(f"Error in clock event processing: {e}", exc_info=True)
 
-            # Run every 2 minutes (120 seconds)
-            await asyncio.sleep(120)
+            # Run more frequently during departure hours (5pm-7:15pm) - every 1 minute
+            # Otherwise run every 2 minutes
+            current_time = local_now()
+            current_hour = current_time.hour
+            is_departure_hours = (17 <= current_hour <= 19) and current_time.weekday() < 5
+            wait_time = 60 if is_departure_hours else 120  # 1 minute during departure hours, 2 minutes otherwise
+            await asyncio.sleep(wait_time)
 
     async def process_sleep_schedules_periodically(self):
         """Background task to process sleep schedules (bedtime 10pm-12am, wake 5:30am-9am)."""
@@ -3387,6 +3599,11 @@ Return ONLY the termination reason text, nothing else."""
                 async with async_session_maker() as db:
                     from business.sleep_manager import SleepManager
                     sleep_manager = SleepManager(db)
+
+                    # First, enforce sleep rules to ensure everyone follows the schedule
+                    enforce_stats = await sleep_manager.enforce_sleep_rules()
+                    if enforce_stats["enforced_sleep"] > 0 or enforce_stats["enforced_wake"] > 0:
+                        logger.info(f"[SLEEP ENFORCE] {enforce_stats['message']}")
 
                     # Process bedtime (10pm-12am)
                     bedtime_stats = await sleep_manager.process_bedtime()
@@ -3404,6 +3621,126 @@ Return ONLY the termination reason text, nothing else."""
             # Run every 2 minutes (120 seconds)
             await asyncio.sleep(120)
 
+    async def generate_random_breaks_periodically(self):
+        """Background task to randomly send employees on breaks every 3-5 minutes."""
+        logger.info("☕ Starting random break generation task (every 3-5 minutes)...")
+
+        while self.running:
+            try:
+                from config import is_work_hours
+
+                # Only generate breaks during work hours
+                if not is_work_hours():
+                    await asyncio.sleep(300)  # Check again in 5 minutes
+                    continue
+
+                async with async_session_maker() as db:
+                    from business.coffee_break_manager import CoffeeBreakManager
+                    from sqlalchemy import select
+
+                    break_manager = CoffeeBreakManager(db)
+
+                    # Get all active employees who are working (not on break, not in meetings)
+                    result = await db.execute(
+                        select(Employee).where(
+                            Employee.status == "active",
+                            Employee.activity_state == "working"
+                        )
+                    )
+                    working_employees = result.scalars().all()
+
+                    if not working_employees:
+                        await asyncio.sleep(random.randint(180, 300))
+                        continue
+
+                    # Randomly select 10-20% of working employees to check for breaks
+                    num_to_check = max(1, int(len(working_employees) * random.uniform(0.10, 0.20)))
+                    employees_to_check = random.sample(working_employees, min(num_to_check, len(working_employees)))
+
+                    breaks_taken = 0
+                    breaks_denied = 0
+                    denial_reasons = {
+                        "capacity": 0,
+                        "meeting": 0,
+                        "too_soon": 0,
+                        "manager_abuse": 0,
+                        "other": 0
+                    }
+
+                    for employee in employees_to_check:
+                        try:
+                            # Check if employee should take a break
+                            if await break_manager.should_take_coffee_break(employee):
+                                # Send employee on break
+                                activity = await break_manager.take_coffee_break(employee)
+
+                                # Broadcast break activity
+                                await self.broadcast_activity({
+                                    "type": "activity",
+                                    "data": {
+                                        "id": activity.id,
+                                        "employee_id": employee.id,
+                                        "employee_name": employee.name,
+                                        "activity_type": activity.activity_type,
+                                        "description": activity.description
+                                    }
+                                })
+
+                                breaks_taken += 1
+                                logger.info(f"☕ {employee.name} is taking a break")
+
+                        except ValueError as ve:
+                            # Break was denied - categorize the reason
+                            breaks_denied += 1
+                            reason_str = str(ve).lower()
+
+                            if "capacity" in reason_str or "break rooms are" in reason_str:
+                                denial_reasons["capacity"] += 1
+                                # logger.debug(f"🚫 Break denied for {employee.name}: Break rooms at capacity")
+                            elif "meeting" in reason_str:
+                                denial_reasons["meeting"] += 1
+                                # logger.debug(f"🚫 Break denied for {employee.name}: Has upcoming meeting")
+                            elif "hours since" in reason_str or "too soon" in reason_str:
+                                denial_reasons["too_soon"] += 1
+                                # logger.debug(f"🚫 Break denied for {employee.name}: Too soon since last break")
+                            elif "abuse" in reason_str or "manager" in reason_str:
+                                denial_reasons["manager_abuse"] += 1
+                                logger.warning(f"🚫 Break denied for {employee.name}: {ve}")
+                            else:
+                                denial_reasons["other"] += 1
+                                # logger.debug(f"🚫 Break denied for {employee.name}: {ve}")
+
+                        except Exception as e:
+                            # Other errors, log and continue
+                            logger.error(f"Error processing break for {employee.name}: {e}")
+                            continue
+
+                    if breaks_taken > 0:
+                        logger.info(f"☕ Generated {breaks_taken} random breaks")
+
+                    # Log denial summary if there were denials
+                    if breaks_denied > 0:
+                        summary_parts = []
+                        if denial_reasons["capacity"] > 0:
+                            summary_parts.append(f"{denial_reasons['capacity']} capacity")
+                        if denial_reasons["meeting"] > 0:
+                            summary_parts.append(f"{denial_reasons['meeting']} meeting")
+                        if denial_reasons["too_soon"] > 0:
+                            summary_parts.append(f"{denial_reasons['too_soon']} too soon")
+                        if denial_reasons["manager_abuse"] > 0:
+                            summary_parts.append(f"{denial_reasons['manager_abuse']} manager abuse")
+                        if denial_reasons["other"] > 0:
+                            summary_parts.append(f"{denial_reasons['other']} other")
+
+                        logger.debug(f"☕ Denied {breaks_denied} breaks: {', '.join(summary_parts)}")
+
+            except Exception as e:
+                logger.error(f"Error in random break generation: {e}", exc_info=True)
+
+            # Run every 3-5 minutes (randomized to feel natural)
+            wait_time = random.randint(180, 300)
+            await asyncio.sleep(wait_time)
+
     async def run(self):
         """Run the simulation loop."""
         self.running = True
@@ -3416,6 +3753,10 @@ Return ONLY the termination reason text, nothing else."""
         # Start the daily goal update task in the background
         goal_task = asyncio.create_task(self.update_goals_daily())
         logger.info(f"[+] Created daily goal update background task: {goal_task}")
+        
+        # Start the employee review generation task in the background (runs immediately, then every 6 hours)
+        employee_review_task = asyncio.create_task(self.conduct_employee_reviews_periodically())
+        logger.info(f"[+] Created employee review generation background task (runs immediately, then every 6 hours): {employee_review_task}")
         
         # Start the customer review generation task in the background (runs immediately, then every 30 minutes)
         customer_review_task = asyncio.create_task(self.generate_customer_reviews_periodically())
@@ -3452,6 +3793,10 @@ Return ONLY the termination reason text, nothing else."""
         # Start the sleep schedule processing task (every 2 minutes for bedtime/wake-up)
         sleep_task = asyncio.create_task(self.process_sleep_schedules_periodically())
         logger.info(f"[+] Created sleep schedule processing background task (every 2 minutes): {sleep_task}")
+
+        # Start the random break generation task (every 3-5 minutes for natural break patterns)
+        breaks_task = asyncio.create_task(self.generate_random_breaks_periodically())
+        logger.info(f"[+] Created random break generation background task (every 3-5 minutes): {breaks_task}")
 
         while self.running:
             try:
