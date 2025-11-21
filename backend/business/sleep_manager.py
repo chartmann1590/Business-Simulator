@@ -89,6 +89,9 @@ class SleepManager:
                 employee.sleep_state = "sleeping"
                 employee.activity_state = "sleeping"
 
+                # Update sleep metrics (track bedtime)
+                await self.update_sleep_metrics(employee)
+
                 # Create activity log
                 activity = Activity(
                     employee_id=employee.id,
@@ -189,6 +192,9 @@ class SleepManager:
                         # Wake up employee
                         employee.sleep_state = "awake"
                         employee.activity_state = "at_home"  # At home preparing for work
+
+                        # Update sleep metrics (track wake time, calculate quality and debt)
+                        await self.update_sleep_metrics(employee)
 
                         # Create activity log
                         activity = Activity(
@@ -452,4 +458,156 @@ class SleepManager:
             "awake_employees": awake_employees,
             "sleeping_family": sleeping_family,
             "total_employees": sleeping_employees + awake_employees
+        }
+
+    async def calculate_sleep_quality(self, employee: Employee) -> float:
+        """
+        Calculate sleep quality score based on sleep duration and timing.
+
+        Args:
+            employee: Employee object
+
+        Returns:
+            Sleep quality score (0-100, higher is better)
+        """
+        if not employee.last_sleep_time or not employee.last_wake_time:
+            return 100.0  # Default perfect score if no data
+
+        # Calculate sleep duration
+        sleep_duration = employee.last_wake_time - employee.last_sleep_time
+        hours_slept = sleep_duration.total_seconds() / 3600
+
+        # Optimal sleep is 7-9 hours
+        # Calculate quality based on deviation from optimal
+        quality = 100.0
+
+        if hours_slept < 4:
+            # Very poor sleep
+            quality = 20.0
+        elif hours_slept < 6:
+            # Poor sleep (4-6 hours)
+            quality = 40.0 + (hours_slept - 4) * 15
+        elif hours_slept < 7:
+            # Fair sleep (6-7 hours)
+            quality = 70.0 + (hours_slept - 6) * 20
+        elif hours_slept <= 9:
+            # Optimal sleep (7-9 hours)
+            quality = 100.0
+        elif hours_slept <= 10:
+            # Slightly too much (9-10 hours)
+            quality = 100.0 - (hours_slept - 9) * 10
+        else:
+            # Too much sleep (10+ hours)
+            quality = max(60.0, 90.0 - (hours_slept - 10) * 10)
+
+        # Check bedtime quality (optimal bedtime is 10pm-11pm)
+        bedtime_hour = employee.last_sleep_time.hour + employee.last_sleep_time.minute / 60
+
+        # Penalize very late bedtimes (after 1am) or very early (before 9pm)
+        if bedtime_hour >= 1 and bedtime_hour < 3:  # After 1am
+            quality -= 10
+        elif bedtime_hour >= 3 and bedtime_hour < 5:  # After 3am
+            quality -= 20
+
+        return max(0.0, min(100.0, quality))
+
+    async def update_sleep_metrics(self, employee: Employee) -> dict:
+        """
+        Update sleep metrics when employee goes to sleep or wakes up.
+
+        Args:
+            employee: Employee object
+
+        Returns:
+            Dictionary with updated metrics
+        """
+        current_time = now()
+
+        # Update sleep/wake times
+        if employee.sleep_state == "sleeping" and not employee.last_sleep_time:
+            # Just went to sleep
+            employee.last_sleep_time = current_time
+
+            # Update average bedtime
+            bedtime_hour = current_time.hour + current_time.minute / 60
+            if employee.average_bedtime_hour is None:
+                employee.average_bedtime_hour = bedtime_hour
+            else:
+                # Exponential moving average (weight recent more heavily)
+                employee.average_bedtime_hour = (
+                    employee.average_bedtime_hour * 0.7 + bedtime_hour * 0.3
+                )
+
+        elif employee.sleep_state == "awake" and employee.last_sleep_time and not employee.last_wake_time:
+            # Just woke up
+            employee.last_wake_time = current_time
+
+            # Calculate sleep duration
+            sleep_duration = current_time - employee.last_sleep_time
+            hours_slept = sleep_duration.total_seconds() / 3600
+
+            # Update total hours this week
+            employee.total_sleep_hours_week = (employee.total_sleep_hours_week or 0) + hours_slept
+
+            # Update average wake time
+            wake_hour = current_time.hour + current_time.minute / 60
+            if employee.average_wake_hour is None:
+                employee.average_wake_hour = wake_hour
+            else:
+                employee.average_wake_hour = (
+                    employee.average_wake_hour * 0.7 + wake_hour * 0.3
+                )
+
+            # Calculate sleep quality
+            quality = await self.calculate_sleep_quality(employee)
+
+            # Update quality score (exponential moving average)
+            if employee.sleep_quality_score is None:
+                employee.sleep_quality_score = quality
+            else:
+                employee.sleep_quality_score = (
+                    employee.sleep_quality_score * 0.8 + quality * 0.2
+                )
+
+            # Update sleep debt
+            optimal_sleep = 8.0  # 8 hours
+            sleep_deficit = optimal_sleep - hours_slept
+
+            if sleep_deficit > 0:
+                # Accumulated debt
+                employee.sleep_debt_hours = (employee.sleep_debt_hours or 0) + sleep_deficit
+            else:
+                # Paying off debt
+                payoff = min(abs(sleep_deficit), employee.sleep_debt_hours or 0)
+                employee.sleep_debt_hours = max(0, (employee.sleep_debt_hours or 0) - payoff)
+
+            return {
+                "hours_slept": round(hours_slept, 2),
+                "sleep_quality": round(quality, 1),
+                "sleep_debt": round(employee.sleep_debt_hours, 2),
+                "total_week": round(employee.total_sleep_hours_week, 1)
+            }
+
+        return {}
+
+    async def reset_weekly_counters(self) -> dict:
+        """
+        Reset weekly sleep counters (run at start of each week).
+
+        Returns:
+            Dictionary with reset statistics
+        """
+        result = await self.db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        employees = result.scalars().all()
+
+        for emp in employees:
+            emp.total_sleep_hours_week = 0.0
+
+        await self.db.commit()
+
+        return {
+            "reset": len(employees),
+            "message": f"Reset weekly sleep counters for {len(employees)} employees"
         }

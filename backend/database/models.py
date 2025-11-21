@@ -50,6 +50,22 @@ class Employee(Base):
     online_status = Column(String, default="online")  # online, offline, away, busy - for Teams presence
     sleep_state = Column(String, default="awake")  # awake, sleeping, in_bed - for tracking sleep schedule (10pm-7am)
 
+    # Sleep metrics
+    last_sleep_time = Column(DateTime(timezone=True), nullable=True)  # When employee went to bed last
+    last_wake_time = Column(DateTime(timezone=True), nullable=True)  # When employee woke up last
+    sleep_quality_score = Column(Float, default=100.0)  # Sleep quality score (0-100, higher is better)
+    sleep_debt_hours = Column(Float, default=0.0)  # Cumulative sleep debt in hours
+    total_sleep_hours_week = Column(Float, default=0.0)  # Total hours slept this week
+    average_bedtime_hour = Column(Float, nullable=True)  # Average bedtime hour (decimal, e.g., 22.5 = 10:30pm)
+    average_wake_hour = Column(Float, nullable=True)  # Average wake time hour (decimal)
+
+    # Sick day tracking
+    is_sick = Column(Boolean, default=False)  # Currently sick
+    sick_since = Column(DateTime(timezone=True), nullable=True)  # When employee called in sick
+    sick_reason = Column(String, nullable=True)  # Reason for sick day
+    sick_days_this_month = Column(Integer, default=0)  # Number of sick days taken this month
+    sick_days_this_year = Column(Integer, default=0)  # Number of sick days taken this year
+
     # Organizational hierarchy relationships
     manager = relationship("Employee", remote_side=[id], foreign_keys=[manager_id], backref="direct_reports")
 

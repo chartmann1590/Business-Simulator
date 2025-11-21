@@ -32,15 +32,20 @@ if not DATABASE_URL:
 # pool_pre_ping: verify connections before using them (prevents stale connections)
 # pool_recycle: recycle connections after this many seconds (prevents connection timeout)
 # connect_args: PostgreSQL-specific connection optimizations
+#
+# NOTE: If you see "too many clients already" errors, you may need to increase PostgreSQL's
+# max_connections setting. Check with: SHOW max_connections;
+# Default is usually 100. To increase, edit postgresql.conf and set max_connections = 200 (or higher)
+# Then restart PostgreSQL. The pool size (150 total) should be less than max_connections.
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     future=True,
-    pool_size=50,  # INCREASED: More persistent connections for high concurrency
-    max_overflow=30,  # INCREASED: More overflow capacity for peak loads (80 total)
-    pool_timeout=60,  # INCREASED: Give more time to acquire connections during high load
+    pool_size=100,  # SIGNIFICANTLY INCREASED: More persistent connections for high concurrency
+    max_overflow=50,  # SIGNIFICANTLY INCREASED: More overflow capacity for peak loads (150 total)
+    pool_timeout=120,  # INCREASED: Give more time to acquire connections during high load
     pool_pre_ping=True,  # Verify connections before using them
-    pool_recycle=1800,  # REDUCED: Recycle connections every 30 min to prevent staleness
+    pool_recycle=1800,  # Recycle connections every 30 min to prevent staleness
     # PostgreSQL-specific optimizations
     connect_args={
         "server_settings": {
@@ -49,8 +54,8 @@ engine = create_async_engine(
             "work_mem": "16MB",  # Increase work memory for sorts/joins
             "maintenance_work_mem": "64MB",  # For index creation/maintenance
         },
-        "timeout": 60,  # Connection timeout in seconds
-        "command_timeout": 60,  # Command execution timeout
+        "timeout": 120,  # Connection timeout in seconds (increased)
+        "command_timeout": 120,  # Command execution timeout (increased)
     },
     # Use connection pooling with statement caching
     execution_options={
@@ -780,6 +785,65 @@ async def _run_migrations():
                     print("Migration completed: Foreign key constraint added for manager_id.")
                 except Exception as e:
                     print(f"Note: Foreign key constraint may already exist or could not be added: {e}")
+
+            # Migration: Add sleep metrics columns to employees table
+            sleep_metric_columns = {
+                'last_sleep_time': 'TIMESTAMP WITH TIME ZONE',
+                'last_wake_time': 'TIMESTAMP WITH TIME ZONE',
+                'sleep_quality_score': 'DOUBLE PRECISION DEFAULT 100.0',
+                'sleep_debt_hours': 'DOUBLE PRECISION DEFAULT 0.0',
+                'total_sleep_hours_week': 'DOUBLE PRECISION DEFAULT 0.0',
+                'average_bedtime_hour': 'DOUBLE PRECISION',
+                'average_wake_hour': 'DOUBLE PRECISION',
+            }
+
+            for col_name, col_type in sleep_metric_columns.items():
+                if col_name not in column_names:
+                    print(f"Running migration: Adding {col_name} column...")
+                    try:
+                        await conn.execute(text(f"ALTER TABLE employees ADD COLUMN {col_name} {col_type}"))
+                        print(f"Migration completed: {col_name} column added.")
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            print(f"Note: {col_name} column migration issue: {e}")
+
+            # Migration: Add sick day tracking columns to employees table
+            sick_day_columns = {
+                'is_sick': 'BOOLEAN DEFAULT FALSE',
+                'sick_since': 'TIMESTAMP WITH TIME ZONE',
+                'sick_reason': 'TEXT',
+                'sick_days_this_month': 'INTEGER DEFAULT 0',
+                'sick_days_this_year': 'INTEGER DEFAULT 0',
+            }
+
+            for col_name, col_type in sick_day_columns.items():
+                if col_name not in column_names:
+                    print(f"Running migration: Adding {col_name} column...")
+                    try:
+                        await conn.execute(text(f"ALTER TABLE employees ADD COLUMN {col_name} {col_type}"))
+                        print(f"Migration completed: {col_name} column added.")
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            print(f"Note: {col_name} column migration issue: {e}")
+
+            # Create indexes for performance
+            try:
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_employees_is_sick
+                    ON employees(is_sick)
+                    WHERE is_sick = TRUE
+                """))
+            except Exception as e:
+                pass  # Index may already exist
+
+            try:
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_employees_sleep_quality
+                    ON employees(sleep_quality_score)
+                """))
+            except Exception as e:
+                pass  # Index may already exist
+
     except Exception as e:
         print(f"Warning: Migration failed: {e}")
         import traceback

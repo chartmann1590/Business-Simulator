@@ -634,6 +634,104 @@ function EmployeeDetail() {
           )}
         </div>
 
+        {/* Sick Day Status - Show if employee is currently sick */}
+        {employee.is_sick && (
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg border border-red-200 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-red-900 mb-4 flex items-center gap-2">
+              <span className="text-xl">🤒</span>
+              Currently Out Sick
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm text-red-700 font-medium">Reason</span>
+                <p className="text-base text-red-900 mt-1">{employee.sick_reason || 'Not specified'}</p>
+              </div>
+              <div>
+                <span className="text-sm text-red-700 font-medium">Out Since</span>
+                <p className="text-base text-red-900 mt-1">
+                  {employee.sick_since ? formatDateTime(employee.sick_since) : 'Unknown'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-red-200 grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs text-red-600 font-medium">Sick Days This Month</span>
+                <p className="text-lg font-bold text-red-800">{employee.sick_days_this_month || 0}</p>
+              </div>
+              <div>
+                <span className="text-xs text-red-600 font-medium">Sick Days This Year</span>
+                <p className="text-lg font-bold text-red-800">{employee.sick_days_this_year || 0}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sleep Metrics - Show sleep quality and patterns */}
+        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="text-xl">😴</span>
+            Sleep Metrics
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <span className="text-sm text-purple-700 font-medium">Sleep Quality</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-bold text-purple-900">
+                  {employee.sleep_quality_score ? employee.sleep_quality_score.toFixed(1) : '100.0'}
+                </p>
+                <span className="text-sm text-purple-600">/100</span>
+              </div>
+              <div className="w-full bg-purple-200 rounded-full h-2 mt-2">
+                <div
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                  style={{width: `${employee.sleep_quality_score || 100}%`}}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <span className="text-sm text-purple-700 font-medium">Sleep Debt</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-bold text-purple-900">
+                  {employee.sleep_debt_hours ? employee.sleep_debt_hours.toFixed(1) : '0.0'}
+                </p>
+                <span className="text-sm text-purple-600">hours</span>
+              </div>
+              {employee.sleep_debt_hours > 0 && (
+                <p className="text-xs text-orange-600 mt-1">⚠️ Needs more sleep</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-purple-700 font-medium">Sleep This Week</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-bold text-purple-900">
+                  {employee.total_sleep_hours_week ? employee.total_sleep_hours_week.toFixed(1) : '0.0'}
+                </p>
+                <span className="text-sm text-purple-600">hours</span>
+              </div>
+            </div>
+          </div>
+          {(employee.average_bedtime_hour !== null || employee.average_wake_hour !== null) && (
+            <div className="mt-4 pt-4 border-t border-purple-200 grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs text-purple-600 font-medium">Average Bedtime</span>
+                <p className="text-base font-semibold text-purple-900">
+                  {employee.average_bedtime_hour !== null
+                    ? `${Math.floor(employee.average_bedtime_hour)}:${String(Math.round((employee.average_bedtime_hour % 1) * 60)).padStart(2, '0')}`
+                    : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-purple-600 font-medium">Average Wake Time</span>
+                <p className="text-base font-semibold text-purple-900">
+                  {employee.average_wake_hour !== null
+                    ? `${Math.floor(employee.average_wake_hour)}:${String(Math.round((employee.average_wake_hour % 1) * 60)).padStart(2, '0')}`
+                    : 'N/A'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
             <span className="text-sm text-gray-500">Status</span>

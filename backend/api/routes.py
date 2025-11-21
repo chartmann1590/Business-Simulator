@@ -450,7 +450,19 @@ async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
         ],
         "next_review": next_review_info,
         "birthday_month": emp.birthday_month if hasattr(emp, 'birthday_month') else None,
-        "birthday_day": emp.birthday_day if hasattr(emp, 'birthday_day') else None
+        "birthday_day": emp.birthday_day if hasattr(emp, 'birthday_day') else None,
+        # Sleep metrics
+        "sleep_quality_score": round(emp.sleep_quality_score, 1) if hasattr(emp, 'sleep_quality_score') and emp.sleep_quality_score else 100.0,
+        "sleep_debt_hours": round(emp.sleep_debt_hours, 2) if hasattr(emp, 'sleep_debt_hours') and emp.sleep_debt_hours else 0.0,
+        "total_sleep_hours_week": round(emp.total_sleep_hours_week, 1) if hasattr(emp, 'total_sleep_hours_week') and emp.total_sleep_hours_week else 0.0,
+        "average_bedtime_hour": round(emp.average_bedtime_hour, 2) if hasattr(emp, 'average_bedtime_hour') and emp.average_bedtime_hour else None,
+        "average_wake_hour": round(emp.average_wake_hour, 2) if hasattr(emp, 'average_wake_hour') and emp.average_wake_hour else None,
+        # Sick day tracking
+        "is_sick": bool(emp.is_sick) if hasattr(emp, 'is_sick') else False,
+        "sick_since": emp.sick_since.isoformat() if hasattr(emp, 'sick_since') and emp.sick_since else None,
+        "sick_reason": emp.sick_reason if hasattr(emp, 'sick_reason') else None,
+        "sick_days_this_month": int(emp.sick_days_this_month) if hasattr(emp, 'sick_days_this_month') else 0,
+        "sick_days_this_year": int(emp.sick_days_this_year) if hasattr(emp, 'sick_days_this_year') else 0
     }
 
 @router.get("/employees/{employee_id}/reviews")
@@ -8212,4 +8224,102 @@ async def get_company_hierarchy(db: AsyncSession = Depends(get_db)):
             "ratio": f"1:{employees_count // managers_count if managers_count > 0 else 0}"
         }
     }
+
+
+# ==================== SICK DAY & SLEEP METRICS ENDPOINTS ====================
+
+@router.get("/employees/{employee_id}/sleep-metrics")
+async def get_employee_sleep_metrics(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Get sleep metrics for a specific employee."""
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    employee = result.scalar_one_or_none()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # Calculate last sleep duration if both times are set
+    last_sleep_duration = None
+    if employee.last_sleep_time and employee.last_wake_time:
+        duration = employee.last_wake_time - employee.last_sleep_time
+        last_sleep_duration = round(duration.total_seconds() / 3600, 2)
+
+    return {
+        "employee_id": employee.id,
+        "employee_name": employee.name,
+        "sleep_state": employee.sleep_state,
+        "last_sleep_time": employee.last_sleep_time.isoformat() if employee.last_sleep_time else None,
+        "last_wake_time": employee.last_wake_time.isoformat() if employee.last_wake_time else None,
+        "last_sleep_duration_hours": last_sleep_duration,
+        "sleep_quality_score": round(employee.sleep_quality_score, 1) if employee.sleep_quality_score else 100.0,
+        "sleep_debt_hours": round(employee.sleep_debt_hours, 2) if employee.sleep_debt_hours else 0.0,
+        "total_sleep_hours_week": round(employee.total_sleep_hours_week, 1) if employee.total_sleep_hours_week else 0.0,
+        "average_bedtime_hour": round(employee.average_bedtime_hour, 2) if employee.average_bedtime_hour else None,
+        "average_wake_hour": round(employee.average_wake_hour, 2) if employee.average_wake_hour else None,
+    }
+
+
+@router.get("/sick-days/statistics")
+async def get_sick_day_statistics(db: AsyncSession = Depends(get_db)):
+    """Get company-wide sick day statistics."""
+    from business.sick_day_manager import SickDayManager
+    sick_manager = SickDayManager(db)
+    return await sick_manager.get_sick_day_statistics()
+
+
+@router.get("/sick-days/employees")
+async def get_sick_employees(db: AsyncSession = Depends(get_db)):
+    """Get all currently sick employees."""
+    from business.sick_day_manager import SickDayManager
+    sick_manager = SickDayManager(db)
+    return await sick_manager.get_sick_employees()
+
+
+@router.post("/employees/{employee_id}/call-in-sick")
+async def call_in_sick(
+    employee_id: int,
+    reason: str = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually call in an employee as sick."""
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    employee = result.scalar_one_or_none()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    from business.sick_day_manager import SickDayManager
+    sick_manager = SickDayManager(db)
+
+    sick_result = await sick_manager.call_in_sick(
+        employee=employee,
+        reason=reason,
+        auto_generated=False
+    )
+
+    if not sick_result["success"]:
+        raise HTTPException(status_code=400, detail=sick_result["message"])
+
+    await db.commit()
+
+    return sick_result
+
+
+@router.post("/employees/{employee_id}/return-from-sick")
+async def return_from_sick(employee_id: int, db: AsyncSession = Depends(get_db)):
+    """Return an employee from sick leave."""
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    employee = result.scalar_one_or_none()
+
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    from business.sick_day_manager import SickDayManager
+    sick_manager = SickDayManager(db)
+
+    return_result = await sick_manager.return_from_sick(employee)
+
+    if not return_result["success"]:
+        raise HTTPException(status_code=400, detail=return_result["message"])
+
+    return return_result
 

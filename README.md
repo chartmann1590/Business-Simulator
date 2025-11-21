@@ -308,11 +308,20 @@ The web interface provides several views:
     - Evening departures (6:45pm-7:15pm) with staggered timing
     - Clock event history tracking
     - Automatic online/offline status updates
-  - **Sleep System**: Realistic sleep schedules
+  - **Sleep System**: Realistic sleep schedules with comprehensive metrics
     - Bedtime transitions (10pm-12am) for employees and families
     - Morning wake-ups (employees: 5:30am-6:45am, family: 7:30am-9am)
     - Sleep state tracking for employees, family members, and pets
     - Weekend sleep schedule variations
+    - Sleep quality scoring (0-100) based on duration and consistency
+    - Sleep debt tracking (cumulative hours of sleep deficit)
+    - Weekly sleep hour totals and average sleep patterns
+  - **Sick Day Management**: Employee illness tracking and recovery
+    - Automatic sick call generation (2-4% of employees per day)
+    - Manual sick call-ins via API
+    - Automatic recovery after 1-3 days
+    - Sick day tracking (monthly and yearly)
+    - Company-wide sick day statistics
 
 All views update in real-time as the simulation runs via WebSocket.
 
@@ -354,7 +363,8 @@ Comprehensive documentation is available in the `docs/` folder:
 - **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)** - Complete system documentation
 - **[docs/ORGANIZATIONAL_STRUCTURE.md](docs/ORGANIZATIONAL_STRUCTURE.md)** - Organizational structure system with manager-employee relationships
 - **[docs/CLOCK_SYSTEM.md](docs/CLOCK_SYSTEM.md)** - Clock in/out system for time tracking
-- **[docs/SLEEP_SYSTEM.md](docs/SLEEP_SYSTEM.md)** - Sleep schedule management for employees and families
+- **[docs/SLEEP_SYSTEM.md](docs/SLEEP_SYSTEM.md)** - Sleep schedule management with quality metrics and sleep debt tracking
+- **[docs/SICK_DAY_SYSTEM.md](docs/SICK_DAY_SYSTEM.md)** - Sick day management system with automatic call-ins and recovery
 - **[docs/COFFEE_BREAK_SYSTEM.md](docs/COFFEE_BREAK_SYSTEM.md)** - Coffee break system with timing rules and capacity management
 - **[docs/POSTGRESQL_OPTIMIZATIONS.md](docs/POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
 - **[docs/COMMUNICATION_FIXES.md](docs/COMMUNICATION_FIXES.md)** - Communication system fixes and improvements

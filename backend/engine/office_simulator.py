@@ -3741,6 +3741,39 @@ Return ONLY the termination reason text, nothing else."""
             wait_time = random.randint(180, 300)
             await asyncio.sleep(wait_time)
 
+    async def process_sick_days_periodically(self):
+        """Background task to process sick day call-ins and auto-recovery."""
+        logger.info("🤒 Starting sick day processing task (every 5 minutes)...")
+
+        while self.running:
+            try:
+                async with async_session_maker() as db:
+                    from business.sick_day_manager import SickDayManager
+                    sick_manager = SickDayManager(db)
+
+                    # Generate random sick calls (5am-8am weekdays only)
+                    sick_call_result = await sick_manager.generate_random_sick_calls()
+                    if sick_call_result["sick_calls"] > 0:
+                        logger.info(f"🤒 [SICK CALLS] {sick_call_result['message']}")
+
+                        # Broadcast sick call notifications
+                        for notification in sick_call_result.get("notifications", []):
+                            await self.broadcast_activity({
+                                "type": "sick_call",
+                                "data": notification
+                            })
+
+                    # Auto-recover sick employees (check throughout the day)
+                    recovery_result = await sick_manager.auto_recover_sick_employees()
+                    if recovery_result["recovered"] > 0:
+                        logger.info(f"🏥 [RECOVERY] {recovery_result['message']}")
+
+            except Exception as e:
+                logger.error(f"Error in sick day processing: {e}", exc_info=True)
+
+            # Run every 5 minutes (300 seconds)
+            await asyncio.sleep(300)
+
     async def run(self):
         """Run the simulation loop."""
         self.running = True
@@ -3797,6 +3830,10 @@ Return ONLY the termination reason text, nothing else."""
         # Start the random break generation task (every 3-5 minutes for natural break patterns)
         breaks_task = asyncio.create_task(self.generate_random_breaks_periodically())
         logger.info(f"[+] Created random break generation background task (every 3-5 minutes): {breaks_task}")
+
+        # Start the sick day processing task (every 5 minutes for sick calls and recovery)
+        sick_days_task = asyncio.create_task(self.process_sick_days_periodically())
+        logger.info(f"[+] Created sick day processing background task (every 5 minutes): {sick_days_task}")
 
         while self.running:
             try:

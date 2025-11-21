@@ -305,12 +305,13 @@ class ClockManager:
         if current_hour == 7 and current_minute > 45:
             return {"arrived": 0, "message": "Too late - after 7:45am"}
 
-        # Get all active employees currently at home
+        # Get all active employees currently at home (excluding sick employees)
         result = await self.db.execute(
             select(Employee).where(
                 and_(
                     Employee.status == "active",
-                    Employee.activity_state.in_(["at_home", "sleeping"])
+                    Employee.activity_state.in_(["at_home", "sleeping"]),
+                    Employee.is_sick == False  # Sick employees stay home
                 )
             )
         )

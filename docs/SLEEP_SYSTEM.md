@@ -12,6 +12,10 @@ The sleep system manages realistic sleep/wake cycles for employees, family membe
 - **Coordinated Sleep**: When employees go to sleep, their family members and pets also sleep
 - **Weekend Variations**: Family members can wake later on weekends
 - **Pet Sleep**: Home pets follow sleep schedules
+- **Sleep Metrics**: Comprehensive sleep tracking including quality scores, sleep debt, and weekly totals
+- **Sleep Quality Scoring**: 0-100 score based on sleep duration and consistency
+- **Sleep Debt Tracking**: Cumulative hours of sleep deficit
+- **Average Sleep Patterns**: Tracks average bedtime and wake times
 
 ## How It Works
 
@@ -76,6 +80,27 @@ The sleep system manages realistic sleep/wake cycles for employees, family membe
 - Values: "awake", "sleeping", "in_bed"
 - Default: "awake"
 
+### Employee Sleep Metrics
+
+**Fields on `employees` table**:
+- `last_sleep_time` (DateTime): When employee went to bed last
+- `last_wake_time` (DateTime): When employee woke up last
+- `sleep_quality_score` (Float): Sleep quality score (0-100, higher is better)
+  - Default: 100.0
+  - Calculated based on sleep duration and consistency
+- `sleep_debt_hours` (Float): Cumulative sleep debt in hours
+  - Default: 0.0
+  - Increases when sleep is insufficient
+  - Decreases when sleep is adequate
+- `total_sleep_hours_week` (Float): Total hours slept this week
+  - Default: 0.0
+  - Resets weekly
+- `average_bedtime_hour` (Float): Average bedtime hour (decimal, e.g., 22.5 = 10:30pm)
+- `average_wake_hour` (Float): Average wake time hour (decimal)
+
+**Indexes**:
+- `idx_employees_sleep_quality`: Index on `sleep_quality_score` for performance
+
 ### Family Member Sleep State
 
 **Field**: `sleep_state` on `family_members` table
@@ -120,6 +145,29 @@ GET /api/employees/{id}
 }
 ```
 
+### Get Employee Sleep Metrics
+
+```
+GET /api/employees/{employee_id}/sleep-metrics
+```
+
+**Response**:
+```json
+{
+  "employee_id": 123,
+  "employee_name": "John Doe",
+  "sleep_state": "awake",
+  "last_sleep_time": "2024-01-15T22:30:00-05:00",
+  "last_wake_time": "2024-01-16T06:15:00-05:00",
+  "last_sleep_duration_hours": 7.75,
+  "sleep_quality_score": 85.5,
+  "sleep_debt_hours": 2.5,
+  "total_sleep_hours_week": 52.3,
+  "average_bedtime_hour": 22.5,
+  "average_wake_hour": 6.25
+}
+```
+
 ## Implementation
 
 ### SleepManager Class
@@ -132,8 +180,17 @@ GET /api/employees/{id}
 async def process_bedtime(self) -> dict:
     """Process bedtime transitions (10pm-12am)."""
     
-async def process_morning_wakeups(self) -> dict:
+async def process_wake_up(self) -> dict:
     """Process morning wake-ups (employees: 5:30am-6:45am, family: 7:30am-9am)."""
+    
+async def enforce_sleep_rules(self) -> dict:
+    """Enforce sleep rules based on current time."""
+    
+async def update_sleep_metrics(self, employee: Employee) -> dict:
+    """Update sleep metrics when employee wakes up."""
+    
+async def calculate_sleep_quality(self, employee: Employee) -> float:
+    """Calculate sleep quality score (0-100) based on sleep duration."""
 ```
 
 ### Integration with Office Simulator
@@ -227,13 +284,62 @@ The sleep system integrates with the home system:
 4. **Activity Logging**: Create activity entries for all sleep transitions
 5. **Weekend Handling**: Apply weekend variations for family members
 
+## Sleep Metrics
+
+### Sleep Quality Scoring
+
+Sleep quality is calculated based on:
+- **Sleep Duration**: Optimal 7-9 hours per night
+- **Sleep Consistency**: Regular bedtime and wake times
+- **Sleep Debt**: Accumulated sleep deficit
+
+**Scoring Algorithm**:
+- Base score: 100
+- Deductions for insufficient sleep (< 7 hours)
+- Deductions for excessive sleep (> 9 hours)
+- Deductions for inconsistent sleep patterns
+- Bonus for consistent sleep schedule
+
+**Score Range**: 0-100
+- 90-100: Excellent sleep quality
+- 70-89: Good sleep quality
+- 50-69: Fair sleep quality
+- 0-49: Poor sleep quality
+
+### Sleep Debt Tracking
+
+Sleep debt accumulates when:
+- Employee gets less than 7 hours of sleep
+- Employee has irregular sleep patterns
+- Employee misses sleep entirely
+
+Sleep debt decreases when:
+- Employee gets adequate sleep (7-9 hours)
+- Employee maintains consistent sleep schedule
+- Employee gets extra sleep to "pay off" debt
+
+### Weekly Sleep Totals
+
+Tracks total hours slept per week:
+- Resets at start of each week
+- Used for weekly sleep pattern analysis
+- Helps identify sleep trends
+
+### Average Sleep Patterns
+
+Tracks average bedtime and wake times:
+- Calculated from last 7-14 sleep cycles
+- Helps identify individual sleep preferences
+- Used for sleep quality scoring
+
 ## Future Enhancements
 
 Potential improvements:
 - Individual sleep schedules (early birds vs night owls)
-- Sleep quality tracking
+- Sleep quality impact on productivity
 - Napping support
 - Sleep disorders simulation
 - Alarm clock system
 - Sleep statistics and analytics
+- Sleep recommendations based on metrics
 
