@@ -358,18 +358,38 @@ All views update in real-time as the simulation runs via WebSocket.
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` folder:
+Comprehensive documentation is available in the `docs/` folder. See **[docs/INDEX.md](docs/INDEX.md)** for a complete index.
 
+### Core Documentation
+- **[docs/INDEX.md](docs/INDEX.md)** - Documentation index and quick reference
 - **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)** - Complete system documentation
+- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI assistants
+
+### Employee Management Systems
 - **[docs/ORGANIZATIONAL_STRUCTURE.md](docs/ORGANIZATIONAL_STRUCTURE.md)** - Organizational structure system with manager-employee relationships
 - **[docs/CLOCK_SYSTEM.md](docs/CLOCK_SYSTEM.md)** - Clock in/out system for time tracking
 - **[docs/SLEEP_SYSTEM.md](docs/SLEEP_SYSTEM.md)** - Sleep schedule management with quality metrics and sleep debt tracking
 - **[docs/SICK_DAY_SYSTEM.md](docs/SICK_DAY_SYSTEM.md)** - Sick day management system with automatic call-ins and recovery
 - **[docs/COFFEE_BREAK_SYSTEM.md](docs/COFFEE_BREAK_SYSTEM.md)** - Coffee break system with timing rules and capacity management
-- **[docs/POSTGRESQL_OPTIMIZATIONS.md](docs/POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
+
+### Home & Family Systems
+- **[docs/HOME_SYSTEM.md](docs/HOME_SYSTEM.md)** - Home system with family members, pets, and home activities
+- **[docs/PET_CARE_SYSTEM.md](docs/PET_CARE_SYSTEM.md)** - Office and home pet care system with interactive gameplay
+
+### Communication & Collaboration Systems
+- **[docs/MEETING_SYSTEM.md](docs/MEETING_SYSTEM.md)** - Meeting management system with calendar views and live transcripts
+- **[docs/BOARDROOM_SYSTEM.md](docs/BOARDROOM_SYSTEM.md)** - Boardroom strategic discussions and executive decision-making
 - **[docs/COMMUNICATION_FIXES.md](docs/COMMUNICATION_FIXES.md)** - Communication system fixes and improvements
+
+### Business Systems
+- **[docs/TRAINING_SYSTEM.md](docs/TRAINING_SYSTEM.md)** - Employee training session management with AI-generated materials
+- **[docs/SHARED_DRIVE_SYSTEM.md](docs/SHARED_DRIVE_SYSTEM.md)** - AI-powered document management with version control
+- **[docs/OTHER_SYSTEMS.md](docs/OTHER_SYSTEMS.md)** - Gossip, Weather, Random Events, Newsletter, and Suggestion systems
+
+### Technical Documentation
+- **[docs/POSTGRESQL_OPTIMIZATIONS.md](docs/POSTGRESQL_OPTIMIZATIONS.md)** - Database performance optimizations
 - **[docs/DATABASE_CONNECTION_FIX.md](docs/DATABASE_CONNECTION_FIX.md)** - Database connection pool fixes
-- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI assistants
+- **[docs/FIXES_APPLIED.md](docs/FIXES_APPLIED.md)** - Historical fixes and improvements log
 
 ## Starting a New Game
 
