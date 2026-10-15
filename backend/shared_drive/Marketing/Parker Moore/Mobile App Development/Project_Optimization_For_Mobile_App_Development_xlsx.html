@@ -1,0 +1,159 @@
+<table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt;"><!DOCTYPE html>
+<html>
+<head>
+  <title>Business Dashboard</title>
+  <style>
+    /* Table styles */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+
+    .header-row {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+      padding: 8px;
+    }
+
+    .data-row {
+      background-color: white;
+      z-index: auto;
+      border-top: 1px solid #f2f2f2;
+    }
+
+    .total-row {
+      background-color: #e7f3ff;
+      color: black;
+      font-weight: bold;
+      border-top: 2px solid black;
+    }
+
+    /* Header row styles */
+    header-row th {
+      text-align: left;
+    }
+    header-row td {
+      text-align: right;
+    }
+
+    /* Data row styles */
+    .summary-row {
+      background-color: white;
+      z-index: auto;
+      border-bottom: 1px solid #f2f2f2;
+    }
+
+    /* Totals row styles */
+    .totals-row th, .totals-row td {
+      text-align: right;
+    }
+    .totals-row td {
+      padding-right: 10px;
+    }
+
+    /* Number formatting */
+    /* currency */
+    input[type="number"][value] {
+      padding-left: 6px;
+    }
+    input[type="number"][value].amount {
+      font-family: 'Arial Narrow', sans-serif;
+      font-size: 10pt;
+    }
+    /* percentages */
+    .percentages-row th, .percentages-row td {
+      text-align: right;
+    }
+    .percentages-row td {
+      padding-right: 5px;
+    }
+
+    /* Conditional formatting */
+    .green {
+      background-color: #C6F4D6;
+    }
+    .red {
+      background-color: #FFB6C1;
+    }
+    .blue {
+      background-color: #ADD8E6;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Spreadsheet title -->
+  <tr><td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td></tr>
+
+  <!-- Header row -->
+  <tr class="header-row">
+    <th>Employee Information</th>
+    <th>Project Details</th>
+    <th>Budget and Revenue</th>
+    <th>Department Performance</th>
+    <th>Company Overview</th>
+    <th>KPI Dashboard</th>
+  </tr>
+
+  <!-- Data rows -->
+  <tr class="data-row">
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Parker Moore<br> Sales Senior<br> Marketing<br> (123) 456-7890</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Mobile App Development<br>$150,000.00<br>$32,045.32</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">$848,324.28<br>($361,970.04)<br>42.67%</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">50 employees<br>$486,354.24<br>-21.23%</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">1417 employees<br>$848,324.28<br>42.67%<br>Digital Transformation Project<br>$196,119.03<br>$70,675.89<br>-23.57%</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">16 Active Projects<br>$486,354.24<br>-21.23%<br>Operations Efficiency<br>45 employees<br>$486,354.24<br>-21.23%</td>
+  </tr>
+
+  <tr class="data-row">
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Customer Portal Redesign<br>$75,000.00<br>$25,831.02</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">API Infrastructure Upgrade<br>$100,000.00<br>$28,996.55</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Mobile App Development<br>$150,000.00<br>$32,045.32</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Design<br>50 employees<br>$486,354.24<br>-21.23%</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Engineering<br>49 employees<br>$486,354.24<br>-21.23%<br>IT<br>45 employees<br>$486,354.24<br>-21.23%</td>
+    <td style="padding: 8px; border: 1px solid #d0d0d0;">Strategic Partnership Development<br>$156,356.16<br>$17,080.48</td>
+  </tr>
+
+  <!-- Summary row -->
+  <tr class="summary-row">
+    <th style="text-align: right">Total Revenue:</th>
+    <th style="padding-right: 10px;">$848,324.28</th>
+    <th style="padding-right: 10px;">($361,970.04)</th>
+    <th style="padding-right: 10px;">42.67%</th>
+    <th style="padding-right: 10px;">1417 employees<br>$486,354.24<br>-21.23%</th>
+  </tr>
+
+  <!-- Totals row -->
+  <tr class="total-row">
+    <th style="text-align: right">Total Revenue:</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">$848,324.28</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">($361,970.04)</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">42.67%</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">1417 employees<br>$486,354.24<br>-21.23%</th>
+  </tr>
+
+  <!-- Totals row -->
+  <tr class="total-row">
+    <th style="text-align: right">Total Expenses:</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">$486,354.24</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">($361,970.04)</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">-21.23%</th>
+    <th style="background-color: #e7f3ff; padding-right: 10px;">1417 employees<br>$486,354.24<br>-21.23%</th>
+  </tr>
+
+  <!-- Footer row -->
+  <tr>
+    <td colspan="5" style="padding-top: 8px;">Data Source: Actual Business Data</td>
+    <td style="padding-left: 12px;">Last Updated: March 10, 2023</td>
+  </tr>
+
+</table>
+
+</body>
+</html></table>

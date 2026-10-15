@@ -83,21 +83,21 @@ class HolidayManager:
         
         # Create celebration message based on holiday
         celebration_messages = {
-            "New Year's Day": f"🎉 Happy New Year! Let's celebrate {holiday_name} together!",
-            "Martin Luther King Jr. Day": f"✊ Honoring {holiday_name} - a day of reflection and celebration!",
-            "Presidents' Day": f"🇺🇸 Celebrating {holiday_name} with the team!",
-            "Memorial Day": f"🇺🇸 Honoring {holiday_name} - remembering those who served!",
-            "Independence Day": f"🎆 Happy {holiday_name}! Let's celebrate America's birthday!",
-            "Labor Day": f"💼 Celebrating {holiday_name} - honoring the American worker!",
-            "Columbus Day": f"🌎 Celebrating {holiday_name} with the office!",
-            "Veterans Day": f"🇺🇸 Honoring {holiday_name} - thank you to all who served!",
-            "Thanksgiving": f"🦃 Happy {holiday_name}! Let's give thanks together!",
-            "Christmas": f"🎄 Merry {holiday_name}! Time for holiday cheer!",
+            "New Year's Day": f" Happy New Year! Let's celebrate {holiday_name} together!",
+            "Martin Luther King Jr. Day": f" Honoring {holiday_name} - a day of reflection and celebration!",
+            "Presidents' Day": f" Celebrating {holiday_name} with the team!",
+            "Memorial Day": f" Honoring {holiday_name} - remembering those who served!",
+            "Independence Day": f" Happy {holiday_name}! Let's celebrate America's birthday!",
+            "Labor Day": f" Celebrating {holiday_name} - honoring the American worker!",
+            "Columbus Day": f" Celebrating {holiday_name} with the office!",
+            "Veterans Day": f" Honoring {holiday_name} - thank you to all who served!",
+            "Thanksgiving": f" Happy {holiday_name}! Let's give thanks together!",
+            "Christmas": f" Merry {holiday_name}! Time for holiday cheer!",
         }
         
         celebration_message = celebration_messages.get(
             holiday_name, 
-            f"🎉 Happy {holiday_name}! Let's celebrate together!"
+            f" Happy {holiday_name}! Let's celebrate together!"
         )
         
         # Create celebration with party details
@@ -123,7 +123,7 @@ class HolidayManager:
             activity = Activity(
                 employee_id=attendee.id,
                 activity_type="holiday_celebration",
-                description=f"🎉 Celebrating {holiday_name} in the breakroom with {len(attendees)} colleagues!",
+                description=f" Celebrating {holiday_name} in the breakroom with {len(attendees)} colleagues!",
                 activity_metadata={
                     "celebration_id": celebration.id,
                     "holiday_name": holiday_name,
@@ -147,7 +147,7 @@ class HolidayManager:
             notification = await create_notification_if_not_duplicate(
                 self.db,
                 notification_type="holiday_party",
-                title=f"🎉 Holiday Celebration: {holiday_name}!",
+                title=f" Holiday Celebration: {holiday_name}!",
                 message=f"Office holiday party for {holiday_name} is happening now in the {room_name} on Floor {party_floor}!",
                 employee_id=emp.id,
                 duplicate_window_minutes=10  # 10 minute window for holiday parties
@@ -237,13 +237,13 @@ class HolidayManager:
         all_employees = result.scalars().all()
         
         if len(all_employees) == 0:
-            print("⚠️ WARNING: No active employees found! Holiday parties cannot be generated.")
+            print(" WARNING: No active employees found! Holiday parties cannot be generated.")
             return 0
         
-        print(f"📋 Generating holiday meetings for next {days_ahead} days ({days_ahead // 365} years)...")
-        print(f"📅 Today: {today_start.strftime('%Y-%m-%d %H:%M:%S %Z') if today_start.tzinfo else today_start.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"📅 End date: {end_date.strftime('%Y-%m-%d %H:%M:%S %Z') if end_date.tzinfo else end_date.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🌍 Timezone: {today.tzinfo if today.tzinfo else 'America/New_York'}")
+        print(f" Generating holiday meetings for next {days_ahead} days ({days_ahead // 365} years)...")
+        print(f" Today: {today_start.strftime('%Y-%m-%d %H:%M:%S %Z') if today_start.tzinfo else today_start.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f" End date: {end_date.strftime('%Y-%m-%d %H:%M:%S %Z') if end_date.tzinfo else end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f" Timezone: {today.tzinfo if today.tzinfo else 'America/New_York'}")
         
         meetings_created = 0
         skipped_existing = 0
@@ -290,7 +290,7 @@ class HolidayManager:
                             existing = meeting
                             break
                     # Also check the title for holiday party indicators
-                    if meeting.title and ('Office Party' in meeting.title or '🎉' in meeting.title):
+                    if meeting.title and ('Office Party' in meeting.title or '' in meeting.title):
                         if holiday_name in meeting.title:
                             existing = meeting
                             break
@@ -298,7 +298,7 @@ class HolidayManager:
                 if existing:
                     skipped_existing += 1
                     if skipped_existing <= 5:  # Only log first few to avoid spam
-                        print(f"  ⏭️  Skipped {holiday_name} on {check_date.strftime('%Y-%m-%d')} (meeting already exists)")
+                        print(f"    Skipped {holiday_name} on {check_date.strftime('%Y-%m-%d')} (meeting already exists)")
                     continue
                 
                 # Get attendees (up to 20 employees for holidays)
@@ -316,44 +316,44 @@ class HolidayManager:
                 
                 # Create celebration message based on holiday
                 celebration_messages = {
-                    "New Year's Day": "🎉 Happy New Year! Let's celebrate together!",
-                    "Martin Luther King Jr. Day": "✊ Honoring MLK Day - a day of reflection and celebration!",
-                    "Presidents' Day": "🇺🇸 Celebrating Presidents' Day with the team!",
-                    "Washington's Birthday": "🇺🇸 Celebrating Presidents' Day with the team!",
-                    "Memorial Day": "🇺🇸 Honoring Memorial Day - remembering those who served!",
-                    "Independence Day": "🎆 Happy Independence Day! Let's celebrate America's birthday!",
-                    "Independence Day (Observed)": "🎆 Happy Independence Day! Let's celebrate America's birthday!",
-                    "Labor Day": "💼 Celebrating Labor Day - honoring the American worker!",
-                    "Columbus Day": "🌎 Celebrating Columbus Day with the office!",
-                    "Veterans Day": "🇺🇸 Honoring Veterans Day - thank you to all who served!",
-                    "Thanksgiving": "🦃 Happy Thanksgiving! Let's give thanks together!",
-                    "Christmas": "🎄 Merry Christmas! Time for holiday cheer!",
-                    "Christmas Day": "🎄 Merry Christmas! Time for holiday cheer!",
-                    "Juneteenth National Independence Day": "🎉 Celebrating Juneteenth - freedom and equality for all!",
+                    "New Year's Day": " Happy New Year! Let's celebrate together!",
+                    "Martin Luther King Jr. Day": " Honoring MLK Day - a day of reflection and celebration!",
+                    "Presidents' Day": " Celebrating Presidents' Day with the team!",
+                    "Washington's Birthday": " Celebrating Presidents' Day with the team!",
+                    "Memorial Day": " Honoring Memorial Day - remembering those who served!",
+                    "Independence Day": " Happy Independence Day! Let's celebrate America's birthday!",
+                    "Independence Day (Observed)": " Happy Independence Day! Let's celebrate America's birthday!",
+                    "Labor Day": " Celebrating Labor Day - honoring the American worker!",
+                    "Columbus Day": " Celebrating Columbus Day with the office!",
+                    "Veterans Day": " Honoring Veterans Day - thank you to all who served!",
+                    "Thanksgiving": " Happy Thanksgiving! Let's give thanks together!",
+                    "Christmas": " Merry Christmas! Time for holiday cheer!",
+                    "Christmas Day": " Merry Christmas! Time for holiday cheer!",
+                    "Juneteenth National Independence Day": " Celebrating Juneteenth - freedom and equality for all!",
                 }
                 
                 celebration_message = celebration_messages.get(
                     holiday_name, 
-                    f"🎉 Happy {holiday_name}! Let's celebrate together!"
+                    f" Happy {holiday_name}! Let's celebrate together!"
                 )
                 
                 # Create meeting description
                 attendee_names = [e.name for e in attendees]
-                description = f"🎉 Office Holiday Party: {holiday_name}!\n\n"
+                description = f" Office Holiday Party: {holiday_name}!\n\n"
                 description += f"{celebration_message}\n"
-                description += f"📍 Location: {room_name} on Floor {party_floor}\n"
-                description += f"👥 Attendees: {', '.join(attendee_names[:5])}"
+                description += f" Location: {room_name} on Floor {party_floor}\n"
+                description += f" Attendees: {', '.join(attendee_names[:5])}"
                 if len(attendee_names) > 5:
                     description += f", and {len(attendee_names) - 5} more"
                 description += f"\n\n"
-                description += "✨ All employees are welcome to join the celebration!"
+                description += " All employees are welcome to join the celebration!"
                 
                 # Get a random employee as organizer (or first employee if none)
                 organizer = random.choice(all_employees) if all_employees else None
                 
                 # Create the meeting
                 meeting = Meeting(
-                    title=f"🎉 {holiday_name} Office Party",
+                    title=f" {holiday_name} Office Party",
                     description=description,
                     organizer_id=organizer.id if organizer else None,
                     attendee_ids=attendee_ids,
@@ -383,19 +383,19 @@ class HolidayManager:
                 if final_existing:
                     skipped_existing += 1
                     if skipped_existing <= 5:
-                        print(f"  ⏭️  Skipped {holiday_name} on {check_date.strftime('%Y-%m-%d')} (duplicate detected in final check)")
+                        print(f"    Skipped {holiday_name} on {check_date.strftime('%Y-%m-%d')} (duplicate detected in final check)")
                     continue
                 
                 self.db.add(meeting)
                 meetings_created += 1
                 if meetings_created <= 15:
                     tz_str = f" {holiday_start.strftime('%Z')}" if holiday_start.tzinfo else ""
-                    print(f"  ✅ Created holiday party for {holiday_name} on {holiday_start.strftime('%Y-%m-%d')} at {holiday_start.strftime('%H:%M')}{tz_str}")
+                    print(f"   Created holiday party for {holiday_name} on {holiday_start.strftime('%Y-%m-%d')} at {holiday_start.strftime('%H:%M')}{tz_str}")
                 
             except Exception as e:
                 errors += 1
                 if errors <= 5:
-                    print(f"❌ Error generating holiday meeting for {holiday_name}: {e}")
+                    print(f" Error generating holiday meeting for {holiday_name}: {e}")
                     import traceback
                     traceback.print_exc()
                 continue
@@ -404,23 +404,23 @@ class HolidayManager:
         try:
             if meetings_created > 0:
                 await self.db.commit()
-                print(f"✅ Committed {meetings_created} new holiday party meetings to database")
+                print(f" Committed {meetings_created} new holiday party meetings to database")
                 print(f"   No duplicates created - all meetings are unique.")
             else:
                 await self.db.commit()
-                print(f"ℹ️ No new meetings to commit (all holidays already scheduled - no duplicates)")
+                print(f" No new meetings to commit (all holidays already scheduled - no duplicates)")
         except Exception as commit_error:
-            print(f"❌ Error committing meetings: {commit_error}")
+            print(f" Error committing meetings: {commit_error}")
             await self.db.rollback()
             import traceback
             traceback.print_exc()
             return 0
         
         if skipped_existing > 0:
-            print(f"ℹ️ Skipped {skipped_existing} holidays (meetings already exist)")
+            print(f" Skipped {skipped_existing} holidays (meetings already exist)")
         
-        print(f"📊 Summary: Created {meetings_created} holiday meetings, Skipped {skipped_existing}, Errors {errors}")
+        print(f" Summary: Created {meetings_created} holiday meetings, Skipped {skipped_existing}, Errors {errors}")
         if meetings_created > 0:
-            print(f"✅ All holiday parties are scheduled with proper NY timezone and will appear on the calendar.")
+            print(f" All holiday parties are scheduled with proper NY timezone and will appear on the calendar.")
         return meetings_created
 

@@ -139,7 +139,7 @@ class GoalSystem:
                 await self.db.commit()
             else:
                 await self.db.flush()
-            print(f"🧹 Cleaned up {duplicates_found} duplicate active goals")
+            print(f" Cleaned up {duplicates_found} duplicate active goals")
         
         return duplicates_found
     
@@ -285,7 +285,7 @@ class GoalSystem:
             self.db.add(new_goal)
         
         await self.db.commit()
-        print(f"✅ Updated business goals for {today} - deactivated {len(old_goals)} old goals, created {len(goals_data)} new goals")
+        print(f" Updated business goals for {today} - deactivated {len(old_goals)} old goals, created {len(goals_data)} new goals")
     
     async def evaluate_goals(self) -> Dict[str, bool]:
         """Evaluate progress towards goals."""
@@ -438,11 +438,11 @@ class GoalSystem:
         
         # Log workload status if there are issues
         if workload_ratio < 0.7:  # Less than 70% of employees working
-            print(f"⚠️  WORKLOAD WARNING: Only {workload_ratio:.1%} of employees have tasks ({employees_with_tasks}/{employee_count})")
+            print(f"  WORKLOAD WARNING: Only {workload_ratio:.1%} of employees have tasks ({employees_with_tasks}/{employee_count})")
         if capacity_utilization < 0.5:  # Using less than 50% of capacity
-            print(f"⚠️  CAPACITY WARNING: Only {capacity_utilization:.1%} capacity utilized ({active_projects_count}/{max_projects} projects)")
+            print(f"  CAPACITY WARNING: Only {capacity_utilization:.1%} capacity utilized ({active_projects_count}/{max_projects} projects)")
         if unassigned_count > employee_count * 2:  # Too many unassigned tasks
-            print(f"⚠️  TASK OVERLOAD: {unassigned_count} unassigned tasks for {employee_count} employees")
+            print(f"  TASK OVERLOAD: {unassigned_count} unassigned tasks for {employee_count} employees")
         
         # Emergency task assignment if severe overload detected
         if tasks_per_employee > 3.0 or (workload_ratio < 0.5 and unassigned_count > 0):
@@ -553,6 +553,6 @@ class GoalSystem:
                         project.status = "active"
         
         if assigned_count > 0:
-            print(f"🚨 EMERGENCY: Assigned {assigned_count} tasks to idle employees")
+            print(f" EMERGENCY: Assigned {assigned_count} tasks to idle employees")
 
 

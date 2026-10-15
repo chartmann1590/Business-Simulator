@@ -54,18 +54,18 @@ class OllamaClient:
         except Exception as e:
             # If main URL fails and we have a fallback URL, try it
             if self.fallback_url:
-                print(f"⚠️  Main Ollama server ({self.base_url}) failed: {e}")
-                print(f"🔄 Attempting fallback to {self.fallback_url}")
+                print(f"  Main Ollama server ({self.base_url}) failed: {e}")
+                print(f" Attempting fallback to {self.fallback_url}")
                 try:
                     response = await client.post(
                         f"{self.fallback_url}{endpoint}",
                         json=json_data
                     )
                     response.raise_for_status()
-                    print(f"✅ Successfully connected to fallback Ollama server")
+                    print(f" Successfully connected to fallback Ollama server")
                     return response
                 except Exception as fallback_error:
-                    print(f"❌ Fallback Ollama server ({self.fallback_url}) also failed: {fallback_error}")
+                    print(f" Fallback Ollama server ({self.fallback_url}) also failed: {fallback_error}")
                     raise fallback_error
             else:
                 # No fallback URL configured, raise the original error
@@ -1314,7 +1314,7 @@ Generate the name now (ONLY the name, nothing else):"""
                 return name
             else:
                 # Invalid name generated - log and use fallback
-                print(f"⚠️  AI generated invalid name: '{response_text}' - using fallback")
+                print(f"  AI generated invalid name: '{response_text}' - using fallback")
                 return await self._generate_name_fallback(existing_names)
                 
         except Exception as e:
@@ -1371,7 +1371,7 @@ Generate the name now (ONLY the name):"""
                         return name
             
             # Invalid or duplicate - use fallback
-            print(f"⚠️  Retry generated invalid/duplicate name: '{response_text}' - using fallback")
+            print(f"  Retry generated invalid/duplicate name: '{response_text}' - using fallback")
             return await self._generate_name_fallback(existing_names)
         except:
             return await self._generate_name_fallback(existing_names)

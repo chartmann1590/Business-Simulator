@@ -146,25 +146,22 @@ class ClockManager:
 
             if should_leave:
                 # Check if already clocked out today
-                # Use timezone-aware datetime for comparison (New York timezone)
-                # current_time is already timezone-aware from now() function
-                today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-                # Ensure timezone is preserved (should already be set from now() but double-check)
-                if today_start.tzinfo is None:
-                    from config import get_timezone
-                    tz = get_timezone()  # This returns America/New_York timezone
-                    today_start = tz.localize(today_start)
+                # Use New York timezone from config, convert to UTC for database comparison
+                from config import get_midnight_today, local_to_utc
+                today_start_ny = get_midnight_today()
+                today_start_utc = local_to_utc(today_start_ny)
                 
                 existing_clock_out = await self.db.execute(
                     select(ClockInOut).where(
                         and_(
                             ClockInOut.employee_id == employee.id,
                             ClockInOut.event_type == "clock_out",
-                            ClockInOut.timestamp >= today_start
+                            ClockInOut.timestamp >= today_start_utc
                         )
                     )
                 )
-                if existing_clock_out.scalar_one_or_none():
+                # Check if any clock-out exists (handle multiple records)
+                if existing_clock_out.first():
                     logger.debug(f"[CLOCK OUT] {time_str} - Employee {employee.name} already clocked out today, skipping")
                     continue  # Already clocked out today
 
@@ -199,9 +196,9 @@ class ClockManager:
         if departed_count > 0 or len(activities_created) > 0:
             try:
                 await self.db.commit()
-                logger.info(f"[CLOCK OUT] {time_str} - ✅ COMMITTED: {departed_count} employees left work, {len(activities_created)} activities created (out of {len(employees)} at work)")
+                logger.info(f"[CLOCK OUT] {time_str} -  COMMITTED: {departed_count} employees left work, {len(activities_created)} activities created (out of {len(employees)} at work)")
             except Exception as e:
-                logger.error(f"[CLOCK OUT] {time_str} - ❌ COMMIT FAILED: {e}", exc_info=True)
+                logger.error(f"[CLOCK OUT] {time_str} -  COMMIT FAILED: {e}", exc_info=True)
                 await self.db.rollback()
         else:
             # Log at info level if it's after 6:30pm so we can see what's happening
@@ -342,23 +339,21 @@ class ClockManager:
 
             if should_arrive:
                 # Check if already clocked in today
-                # Use timezone-aware datetime (New York timezone)
-                today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-                # Ensure timezone is preserved
-                if today_start.tzinfo is None:
-                    from config import get_timezone
-                    tz = get_timezone()  # America/New_York
-                    today_start = tz.localize(today_start)
+                # Use New York timezone from config, convert to UTC for database comparison
+                from config import get_midnight_today, local_to_utc
+                today_start_ny = get_midnight_today()
+                today_start_utc = local_to_utc(today_start_ny)
                 existing_clock_in = await self.db.execute(
                     select(ClockInOut).where(
                         and_(
                             ClockInOut.employee_id == employee.id,
                             ClockInOut.event_type == "clock_in",
-                            ClockInOut.timestamp >= today_start
+                            ClockInOut.timestamp >= today_start_utc
                         )
                     )
                 )
-                if existing_clock_in.scalar_one_or_none():
+                # Check if any clock-in exists (handle multiple records)
+                if existing_clock_in.first():
                     continue  # Already clocked in today
 
                 # Log leaving home
@@ -442,23 +437,21 @@ class ClockManager:
     async def get_all_clock_events_today(self) -> list[ClockInOut]:
         """
         Get all clock events for today across all employees.
-        Uses New York timezone for "today" calculation.
+        Uses New York timezone for "today" calculation (from config).
 
         Returns:
             List of ClockInOut events for today
         """
-        # now() returns timezone-aware datetime in configured timezone (America/New_York)
-        current_time = now()
-        today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Ensure timezone is preserved
-        if today_start.tzinfo is None:
-            from config import get_timezone
-            tz = get_timezone()  # America/New_York
-            today_start = tz.localize(today_start)
+        from config import get_midnight_today, local_to_utc
+        
+        # Get today's start in New York timezone (midnight New York time)
+        today_start_ny = get_midnight_today()
+        # Convert to UTC for database comparison (database stores timestamps in UTC)
+        today_start_utc = local_to_utc(today_start_ny)
 
         result = await self.db.execute(
             select(ClockInOut).where(
-                ClockInOut.timestamp >= today_start
+                ClockInOut.timestamp >= today_start_utc
             ).order_by(ClockInOut.timestamp.desc())
         )
 
@@ -478,12 +471,10 @@ class ClockManager:
         current_time = now()
         time_str = current_time.strftime("%I:%M %p")
         
-        # Get today's start in New York timezone
-        today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        if today_start.tzinfo is None:
-            from config import get_timezone
-            tz = get_timezone()
-            today_start = tz.localize(today_start)
+        # Get today's start in New York timezone (from config), convert to UTC for database comparison
+        from config import get_midnight_today, local_to_utc
+        today_start_ny = get_midnight_today()
+        today_start_utc = local_to_utc(today_start_ny)
         
         # Find employees who are at home, leaving, or commuting but don't have a clock-out for today
         result = await self.db.execute(
@@ -509,24 +500,27 @@ class ClockManager:
                     and_(
                         ClockInOut.employee_id == employee.id,
                         ClockInOut.event_type == "clock_out",
-                        ClockInOut.timestamp >= today_start
+                        ClockInOut.timestamp >= today_start_utc
                     )
                 )
             )
-            if existing_clock_out.scalar_one_or_none():
+            # Check if any clock-out exists (handle multiple records)
+            if existing_clock_out.first():
                 continue  # Already has clock-out for today
             
             # Check if they have a clock-in for today (to estimate when they left)
+            # Get the most recent clock-in if multiple exist
             clock_in_result = await self.db.execute(
                 select(ClockInOut).where(
                     and_(
                         ClockInOut.employee_id == employee.id,
                         ClockInOut.event_type == "clock_in",
-                        ClockInOut.timestamp >= today_start
+                        ClockInOut.timestamp >= today_start_utc
                     )
                 ).order_by(ClockInOut.timestamp.desc())
             )
-            clock_in = clock_in_result.scalar_one_or_none()
+            clock_in_row = clock_in_result.first()
+            clock_in = clock_in_row[0] if clock_in_row else None
             
             # Estimate clock-out time: if they clocked in, use 8-10 hours later, otherwise use 6:30pm as default
             if clock_in and clock_in.timestamp:
@@ -537,12 +531,8 @@ class ClockManager:
                 if estimated_leave_time > current_time:
                     estimated_leave_time = current_time - timedelta(minutes=30)  # 30 minutes ago
             else:
-                # No clock-in found, estimate they left around 6:30pm today
-                estimated_leave_time = today_start.replace(hour=18, minute=30)  # 6:30pm
-                if estimated_leave_time.tzinfo is None:
-                    from config import get_timezone
-                    tz = get_timezone()
-                    estimated_leave_time = tz.localize(estimated_leave_time)
+                # No clock-in found, estimate they left around 6:30pm today (New York time)
+                estimated_leave_time = today_start_ny.replace(hour=18, minute=30)  # 6:30pm NY time
                 # Don't set it later than current time
                 if estimated_leave_time > current_time:
                     estimated_leave_time = current_time - timedelta(minutes=30)
@@ -573,9 +563,9 @@ class ClockManager:
         if backfilled_count > 0:
             try:
                 await self.db.commit()
-                logger.info(f"[CLOCK OUT BACKFILL] {time_str} - ✅ COMMITTED: {backfilled_count} clock-out events backfilled, {len(activities_created)} activities created")
+                logger.info(f"[CLOCK OUT BACKFILL] {time_str} -  COMMITTED: {backfilled_count} clock-out events backfilled, {len(activities_created)} activities created")
             except Exception as e:
-                logger.error(f"[CLOCK OUT BACKFILL] {time_str} - ❌ COMMIT FAILED: {e}", exc_info=True)
+                logger.error(f"[CLOCK OUT BACKFILL] {time_str} -  COMMIT FAILED: {e}", exc_info=True)
                 await self.db.rollback()
                 return {"backfilled": 0, "message": f"Error committing backfill: {e}"}
         
@@ -583,5 +573,108 @@ class ClockManager:
             "backfilled": backfilled_count,
             "total_checked": len(employees_at_home),
             "message": f"Backfilled {backfilled_count} missing clock-out events",
+            "activities_created": len(activities_created)
+        }
+
+    async def backfill_missing_clock_ins(self) -> dict:
+        """
+        Backfill missing clock-in events for employees who are currently at work
+        but don't have a clock-in event for today.
+        
+        Returns:
+            Dictionary with backfill statistics
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        current_time = now()
+        time_str = current_time.strftime("%I:%M %p")
+        
+        # Get today's start in New York timezone (from config), convert to UTC for database comparison
+        from config import get_midnight_today, local_to_utc
+        today_start_ny = get_midnight_today()
+        today_start_utc = local_to_utc(today_start_ny)
+        
+        # Find employees who are at work but don't have a clock-in for today
+        # Employees at work are those not at home, sleeping, leaving, or commuting
+        result = await self.db.execute(
+            select(Employee).where(
+                and_(
+                    Employee.status == "active",
+                    Employee.activity_state.notin_(["at_home", "sleeping", "leaving_work", "commuting_home"]),
+                    Employee.is_sick == False  # Don't backfill for sick employees
+                )
+            )
+        )
+        employees_at_work = result.scalars().all()
+        
+        if not employees_at_work:
+            return {"backfilled": 0, "message": "No employees at work to check"}
+        
+        backfilled_count = 0
+        activities_created = []
+        
+        for employee in employees_at_work:
+            # Check if they already have a clock-in for today
+            existing_clock_in = await self.db.execute(
+                select(ClockInOut).where(
+                    and_(
+                        ClockInOut.employee_id == employee.id,
+                        ClockInOut.event_type == "clock_in",
+                        ClockInOut.timestamp >= today_start_utc
+                    )
+                )
+            )
+            # Check if any clock-in exists (handle multiple records)
+            if existing_clock_in.first():
+                continue  # Already has clock-in for today
+            
+            # Estimate clock-in time: use 7:00am-7:30am window (typical arrival time, New York time)
+            # Use a random time in that window for realism
+            estimated_arrival_hour = 7
+            estimated_arrival_minute = random.randint(0, 30)
+            estimated_arrival_time = today_start_ny.replace(hour=estimated_arrival_hour, minute=estimated_arrival_minute)
+            
+            # Don't set it later than current time
+            if estimated_arrival_time > current_time:
+                # If current time is before 7am, use current time minus a bit
+                estimated_arrival_time = current_time - timedelta(minutes=random.randint(30, 120))
+            
+            # Create clock-in event with estimated timestamp
+            clock_event = ClockInOut(
+                employee_id=employee.id,
+                event_type="clock_in",
+                location="office",
+                notes="Backfilled - Morning arrival",
+                timestamp=estimated_arrival_time
+            )
+            self.db.add(clock_event)
+            await self.db.flush()
+            
+            # Create activity log
+            activity = Activity(
+                employee_id=employee.id,
+                activity_type="clock_in",
+                description=f"{employee.name} clocked in and started work (backfilled)"
+            )
+            self.db.add(activity)
+            activities_created.append(activity)
+            
+            backfilled_count += 1
+            logger.info(f"[CLOCK IN BACKFILL] {time_str} - Backfilled clock-in for {employee.name} (estimated time: {estimated_arrival_time.strftime('%I:%M %p')})")
+        
+        if backfilled_count > 0:
+            try:
+                await self.db.commit()
+                logger.info(f"[CLOCK IN BACKFILL] {time_str} -  COMMITTED: {backfilled_count} clock-in events backfilled, {len(activities_created)} activities created")
+            except Exception as e:
+                logger.error(f"[CLOCK IN BACKFILL] {time_str} -  COMMIT FAILED: {e}", exc_info=True)
+                await self.db.rollback()
+                return {"backfilled": 0, "message": f"Error committing backfill: {e}"}
+        
+        return {
+            "backfilled": backfilled_count,
+            "total_checked": len(employees_at_work),
+            "message": f"Backfilled {backfilled_count} missing clock-in events",
             "activities_created": len(activities_created)
         }

@@ -377,7 +377,7 @@ This training provides a foundation in {topic} that can be applied to improve jo
                         
                         try:
                             await update_employee_location(employee, target_room, "working", db_session)
-                            print(f"✅ Moved {employee.name} out of training room after {session.duration_minutes} minutes")
+                            print(f" Moved {employee.name} out of training room after {session.duration_minutes} minutes")
                         except Exception as e:
                             print(f"Error moving employee {employee.name} out of training room: {e}")
                             import traceback
@@ -392,7 +392,7 @@ This training provides a foundation in {topic} that can be applied to improve jo
         
         if ended_count > 0:
             await db_session.flush()
-            print(f"✅ Ended {ended_count} expired training sessions")
+            print(f" Ended {ended_count} expired training sessions")
         
         return ended_count
     
@@ -508,10 +508,10 @@ This training provides a foundation in {topic} that can be applied to improve jo
             if len(para) < 100 and (para.isupper() or para.endswith(':')):
                 html_parts.append(f'<h2 style="font-size: 14pt; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #333;">{para}</h2>')
             # Check if paragraph is a list item
-            elif para.startswith('- ') or para.startswith('* ') or para.startswith('1. ') or para.startswith('• '):
+            elif para.startswith('- ') or para.startswith('* ') or para.startswith('1. ') or para.startswith(' '):
                 if '<ul>' not in html_parts[-1] if html_parts else True:
                     html_parts.append('<ul style="margin-left: 20px; margin-bottom: 15px;">')
-                list_item = para.lstrip('- *• 1234567890. ')
+                list_item = para.lstrip('- * 1234567890. ')
                 html_parts.append(f'<li style="margin-bottom: 5px;">{list_item}</li>')
             else:
                 # Close any open list
@@ -570,7 +570,7 @@ This training provides a foundation in {topic} that can be applied to improve jo
                 with open(existing.file_path, 'w', encoding='utf-8') as f:
                     f.write(content_html)
                 
-                print(f"  ✓ Updated training material in shared drive: {material.topic}")
+                print(f"   Updated training material in shared drive: {material.topic}")
                 return existing
             
             # Create new file
@@ -608,7 +608,7 @@ This training provides a foundation in {topic} that can be applied to improve jo
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content_html)
             
-            print(f"  ✓ Saved training material to shared drive: {material.topic}")
+            print(f"   Saved training material to shared drive: {material.topic}")
             return drive_file
             
         except Exception as e:

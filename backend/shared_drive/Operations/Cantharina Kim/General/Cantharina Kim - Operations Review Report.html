@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    padding: 8px;
+    border: 1px solid #d0d0d0;
+  }
+  
+  th {
+    background-color: #366092;
+    color: white;
+    font-weight: bold;
+  }
+  
+  th:first-child, th:last-child {
+    text-align: right;
+  }
+  
+  td:nth-child(even) {
+    background: #f2f2f2;
+  }
+  
+  tr:nth-child(odd) {
+    background-color: #f7f7f7;
+  }
+  
+  th, td {
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+  }
+  
+  .header-row {
+    background-color: #366092;
+    color: white;
+  }
+  
+  .totals-row {
+    background-color: #e7f3ff;
+    border-top: 2px solid black;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<table>
+  <tr class="header-row">
+    <th colspan="8" style="text-align: center; font-size: 16pt; font-weight: bold;">Financial Dashboard</th>
+  </tr>
+  <tr>
+    <th>Department</th>
+    <th>Total Revenue ($)</th>
+    <th>Total Profit ($) </th>
+    <th>Total Expenses ($)</th>
+    <th>Profit Margin (%)</th>
+    <th>Active Projects</th>
+    <th>Total Employees</th>
+  </tr>
+  <tr class="totals-row">
+    <td colspan="7">Total:</td>
+    <td>$848,324.28</td>
+    <td>$361,970.04</td>
+    <td>$486,354.24</td>
+    <td>42.67%</td>
+    <td>16</td>
+    <td>1417</td>
+  </tr>
+  
+  <!-- Data rows will be populated here -->
+  <tr>
+    <th style="text-align: left;">Operations</th>
+    <td>$346,219.50</td>
+    <td>$143,819.80</td>
+    <td>$299,534.44</td>
+    <td>42.00%</td>
+    <td>52</td>
+    <td>1417 - 52 = 1365</td>
+  </tr>
+  
+  <!-- Other data rows will be populated here -->
+  <tr>
+    <th style="text-align: left;">HR</th>
+    <td>$123,456.78</td>
+    <td>$45,678.90</td>
+    <td>$77,777.88</td>
+    <td>36.67%</td>
+    <td>47</td>
+    <td>1417 - 47 = 1370</td>
+  </tr>
+  
+  <!-- Other data rows will be populated here -->
+  </table>
+
+</body>
+</html>

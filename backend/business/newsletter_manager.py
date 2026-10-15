@@ -136,7 +136,7 @@ class NewsletterManager:
             notification = await create_notification_if_not_duplicate(
                 self.db,
                 notification_type="newsletter",
-                title=f"📰 New Newsletter Published",
+                title=f" New Newsletter Published",
                 message=f"Issue #{issue_number} is now available!",
                 employee_id=emp.id,
                 duplicate_window_minutes=60  # 1 hour window for newsletters
@@ -150,7 +150,7 @@ class NewsletterManager:
         activity = Activity(
             employee_id=author.id,
             activity_type="newsletter_published",
-            description=f"📰 Published Weekly Newsletter Issue #{issue_number}",
+            description=f" Published Weekly Newsletter Issue #{issue_number}",
             activity_metadata={
                 "newsletter_id": newsletter.id,
                 "issue_number": issue_number

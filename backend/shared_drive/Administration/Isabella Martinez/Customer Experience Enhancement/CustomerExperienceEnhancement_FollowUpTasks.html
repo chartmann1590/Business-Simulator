@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Define styles for the entire table */
+        table {
+            border-collapse: collapse;
+        }
+        
+        /* Style header row */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        /* Style data rows */
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+        }
+        
+        /* Alternate between light gray and white for zebra striping */
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        /* Style totals row */
+        th.total {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+            double;
+        }
+        
+        /* Define styles for numbers and currency */
+        span.number {
+            text-align: right;
+        }
+        
+        span.currency {
+            float: right;
+            color: #008000;
+        }
+        
+        /* Conditional formatting */
+        tr:nth-child(odd) td .positive {
+            background-color: #c6efce; /* Green */
+        }
+        
+        tr:nth-child(odd) td .negative {
+            background-color: #ff99cc; /* Red */
+        }
+        
+        tr:nth-child(odd) td .total {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <!-- Title row -->
+        <tr>
+            <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard - Q2 Performance</td>
+        </tr>
+        
+        <!-- Header row with columns -->
+        <tr>
+            <th>Department</th>
+            <th>Project Name</th>
+            <th>Budget</th>
+            <th>Revenue</th>
+            <th>% of Total Revenue</th>
+            <th>ROI %</th>
+            <th>Profit/Loss</th>
+        </tr>
+        
+        <!-- Data rows with real business data -->
+        <tr>
+            <td>Design</td>
+            <td_Customer Portal Redesign</td>
+            <td>$75,000.00</td>
+            <td>$25,831.02</td>
+            <td>(30.34%)</td>
+            <td>33.89%</td>
+            <td>$8,296.58</td>
+        </tr>
+        <tr>
+            <td>Engineering</td>
+            <td>API Infrastructure Upgrade</td>
+            <td>$100,000.00</td>
+            <td>$28,996.55</td>
+            <td>(34.16%)</td>
+            <td>29.04%</td>
+            <td>$20,999.65</td>
+        </tr>
+        <tr>
+            <td>IT</td>
+            <td>Digital Transformation Project</td>
+            <td>$196,119.03</td>
+            <td>$70,675.89</td>
+            <td>(8.29%)</td>
+            <td>-64.32%</td>
+            <td>$-125,443.14</td>
+        </tr>
+        <tr>
+            <td>Sales</td>
+            <td>Strategic Partnership Development</td>
+            <td>$156,356.16</td>
+            <td>$17,080.48</td>
+            <td>(2.02%)</td>
+            <td>-90.01%</td>
+            <td>$-139,275.68</td>
+        </tr>
+        
+        <!-- Totals row -->
+        <tr>
+            <th class="total">Total Revenue</th>
+            <th class="total">$848,324.28</th>
+            <th class="total"></th>
+            <th class="total">($848,324.28)</th>
+            <th class="total">100%</th>
+        </tr>
+        
+        <!-- Summary section with key metrics -->
+        <tr>
+            <td>Profit Margin:</td>
+            <td>42.67%</td>
+        </tr>
+        <tr>
+            <td>Active Projects:</td>
+            <td>16</td>
+        </tr>
+        <tr>
+            <td>Total Employees:</td>
+            <td>1417</td>
+        </tr>
+    </table>
+</body>
+</html>

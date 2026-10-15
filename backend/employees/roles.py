@@ -71,10 +71,10 @@ class CEOAgent(EmployeeAgent):
                 break_manager = CoffeeBreakManager(self.db)
                 enforcement_stats = await break_manager.enforce_break_limits_system_level()
                 if enforcement_stats["managers_returned"] > 0:
-                    print(f"👔 CEO {self.employee.name} detected and corrected {enforcement_stats['managers_returned']} manager(s) abusing breaks")
+                    print(f" CEO {self.employee.name} detected and corrected {enforcement_stats['managers_returned']} manager(s) abusing breaks")
             except Exception as e:
                 import traceback
-                print(f"❌ Error in CEO break monitoring: {e}")
+                print(f" Error in CEO break monitoring: {e}")
                 traceback.print_exc()
         
         # PRIORITY 1: Make strategic business decisions (increased frequency - 80% chance)
@@ -594,10 +594,10 @@ class ManagerAgent(EmployeeAgent):
                 manager_name=self.employee.name
             )
             if returned_employees:
-                print(f"⏰ Manager {self.employee.name} returned {len(returned_employees)} employee(s) to work from extended breaks")
+                print(f" Manager {self.employee.name} returned {len(returned_employees)} employee(s) to work from extended breaks")
         except Exception as e:
             import traceback
-            print(f"❌ Error checking long breaks: {e}")
+            print(f" Error checking long breaks: {e}")
             print(traceback.format_exc())
         
         # PRIORITY 1: Focus on getting projects completed

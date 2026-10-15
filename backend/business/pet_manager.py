@@ -75,7 +75,7 @@ class PetManager:
             activity = Activity(
                 employee_id=None,
                 activity_type="pet_arrival",
-                description=f"🐾 {pet.name} the {pet_type} has joined the office!",
+                description=f" {pet.name} the {pet_type} has joined the office!",
                 activity_metadata={
                     "pet_id": pet.id,
                     "pet_name": pet.name,
@@ -215,7 +215,7 @@ class PetManager:
                 happiness_increase = 3 + random.randint(0, 10)  # 3-13
                 stats_after["hunger"] = max(0, stats_after["hunger"] - hunger_reduction)
                 stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
-                interaction_desc = f"🍖 {employee.name} fed {pet.name} treats"
+                interaction_desc = f" {employee.name} fed {pet.name} treats"
             elif stats_before["energy"] > 40 and stats_before["happiness"] < 70:
                 action = "play"
                 stats_after = stats_before.copy()
@@ -223,7 +223,7 @@ class PetManager:
                 happiness_increase = 5 + random.randint(0, 15)  # 5-20
                 stats_after["energy"] = max(0, stats_after["energy"] - energy_reduction)
                 stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
-                interaction_desc = f"🎾 {employee.name} played with {pet.name}"
+                interaction_desc = f" {employee.name} played with {pet.name}"
             else:
                 action = "pet"
                 stats_after = stats_before.copy()
@@ -231,7 +231,7 @@ class PetManager:
                 energy_increase = 1 + random.randint(0, 5)  # 1-6
                 stats_after["happiness"] = min(100, stats_after["happiness"] + happiness_increase)
                 stats_after["energy"] = min(100, stats_after["energy"] + energy_increase)
-                interaction_desc = f"❤️ {employee.name} petted {pet.name}"
+                interaction_desc = f" {employee.name} petted {pet.name}"
             
             # Create PetCareLog entry
             care_log = PetCareLog(
@@ -287,11 +287,11 @@ class PetManager:
     async def pet_interaction(self, pet: OfficePet, employee: Employee) -> Activity:
         """Create a pet interaction activity (legacy method for direct calls)."""
         interactions = [
-            f"🐾 {employee.name} is petting {pet.name}",
-            f"🐾 {pet.name} is keeping {employee.name} company",
-            f"🐾 {employee.name} is playing with {pet.name}",
-            f"🐾 {pet.name} is sitting with {employee.name}",
-            f"🐾 {employee.name} is feeding {pet.name} treats"
+            f" {employee.name} is petting {pet.name}",
+            f" {pet.name} is keeping {employee.name} company",
+            f" {employee.name} is playing with {pet.name}",
+            f" {pet.name} is sitting with {employee.name}",
+            f" {employee.name} is feeding {pet.name} treats"
         ]
         
         activity = Activity(
@@ -615,15 +615,15 @@ Respond in JSON format:
         
         # Create activity
         action_descriptions = {
-            "feed": f"🍖 {employee.name} fed {pet.name}",
-            "play": f"🎾 {employee.name} played with {pet.name}",
-            "pet": f"❤️ {employee.name} petted and comforted {pet.name}"
+            "feed": f" {employee.name} fed {pet.name}",
+            "play": f" {employee.name} played with {pet.name}",
+            "pet": f" {employee.name} petted and comforted {pet.name}"
         }
         
         activity = Activity(
             employee_id=employee.id,
             activity_type="pet_care",
-            description=action_descriptions.get(action, f"🐾 {employee.name} cared for {pet.name}"),
+            description=action_descriptions.get(action, f" {employee.name} cared for {pet.name}"),
             activity_metadata={
                 "pet_id": pet.id,
                 "pet_name": pet.name,
@@ -691,7 +691,7 @@ Respond in JSON format:
                 care_log = await self.execute_pet_care(pet, selected_employee, action, stats, full_reasoning)
                 care_logs.append(care_log)
                 
-                print(f"✅ {selected_employee.name} {action}ed {pet.name} (Happiness: {stats['happiness']:.1f}→{care_log.pet_happiness_after:.1f}, Hunger: {stats['hunger']:.1f}→{care_log.pet_hunger_after:.1f}, Energy: {stats['energy']:.1f}→{care_log.pet_energy_after:.1f})")
+                print(f" {selected_employee.name} {action}ed {pet.name} (Happiness: {stats['happiness']:.1f}{care_log.pet_happiness_after:.1f}, Hunger: {stats['hunger']:.1f}{care_log.pet_hunger_after:.1f}, Energy: {stats['energy']:.1f}{care_log.pet_energy_after:.1f})")
                 
             except Exception as e:
                 print(f"Error providing care for {pet.name}: {e}")

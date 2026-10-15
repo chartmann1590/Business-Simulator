@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Title */
+    th:first-child {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+      padding: 12px;
+      border-bottom: 2px solid #d0d0d0;
+    }
+
+    /* Header row */
+    tr:nth-child(1) td {
+      font-size: 11pt;
+      font-weight: bold;
+      text-align: left;
+    }
+
+    /* Data rows */
+    tr:nth-child(n+2) td:nth-child(odd) {
+      background-color: #f2f2f2;
+    }
+    tr:nth-child(n+2) td:nth-child(even) {
+      background-color: #d0d0d0;
+    }
+
+    /* Totals row */
+    th:last-child {
+      font-weight: bold;
+      padding-bottom: 12px;
+    }
+    tr.last-row td {
+      background-color: #e7f3ff;
+      border-bottom: 2px solid #007bff;
+    }
+
+    /* Number formatting */
+    .currency {
+      font-size: 11pt;
+      text-align: right;
+      margin-right: 8px;
+    }
+    .percentage {
+      font-size: 11pt;
+      text-align: right;
+      margin-right: 10px;
+    }
+
+    /* Conditional formatting */
+    .green {
+      background-color: #c6efce;
+    }
+    .red {
+      background-color: #ffe5e5;
+    }
+    .blue {
+      background-color: #a1c9f2;
+    }
+
+    /* Font and padding */
+    table td, th {
+      font-family: Arial;
+      font-size: 11pt;
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+      vertical-align: top;
+      width: calc(33.3% - 4 * 10px);
+    }
+    table th {
+      text-align: left;
+    }
+
+    /* Data validation notes */
+    .note {
+      font-size: 9pt;
+      color: #999;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<table border-collapse="collapse" width="100%">
+  <tr>
+    <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Digital Transformation Project Financial Dashboard</td>
+  </tr>
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Name
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Title
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Department
+    </th>
+  </tr>
+
+  <!-- Employee Information -->
+  <tr>
+    <td></td>
+    <td>Amira Tran</td>
+    <td>Sales Senior</td>
+    <td>Operations</td>
+  </tr>
+
+  <!-- Current Project -->
+  <tr>
+    <td colspan="3"></td>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Project Name
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Budget (USD)
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Revenue (USD)
+    </th>
+    <td class="note">Note: Actual data used.</td>
+  </tr>
+
+  <tr>
+    <td colspan="3"></td>
+    <td class="currency">$196,119.03</td>
+    <td class="currency">$70,675.89</td>
+    <td class="percentage">42.67%</td>
+  </tr>
+
+  <!-- Business Metrics -->
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Revenue
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Profit
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Expenses
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Profit Margin
+    </th>
+    <td class="percentage">42.67%</td>
+  </tr>
+
+  <tr>
+    <td class="currency">$848,324.28</td>
+    <td class="currency">$361,970.04</td>
+    <td class="currency">$486,354.24</td>
+    <td class="percentage">42.67%</td>
+  </tr>
+
+  <!-- Active Projects -->
+  <table border-collapse="collapse">
+    <tr>
+      <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+        Project Name
+      </th>
+      <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+        Budget (USD)
+      </th>
+      <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+        Revenue (USD)
+      </th>
+    </tr>
+
+    <!-- Digital Transformation Project -->
+    <tr>
+      <td class="green">Digital Transformation Project</td>
+      <td class="currency">$196,119.03</td>
+      <td class="currency">$70,675.89</td>
+    </tr>
+
+    <!-- Strategic Partnership Development -->
+    <tr>
+      <td class="red">Strategic Partnership Development</td>
+      <td class="currency">$156,356.16</td>
+      <td class="currency">$17,080.48</td>
+    </tr>
+
+    <!-- Customer Experience Enhancement -->
+    <tr>
+      <td class="green">Customer Experience Enhancement</td>
+      <td class="currency">$88,137.90</td>
+      <td class="currency">$10,036.51</td>
+    </tr>
+
+    <tr>
+      <td class="green">Customer Experience Enhancement</td>
+      <td class="currency">$115,778.81</td>
+      <td class="currency">$43,994.25</td>
+    </tr>
+
+    <!-- Market Expansion Initiative -->
+    <tr>
+      <td class="red">Market Expansion Initiative</td>
+      <td class="currency">$55,020.72</td>
+      <td class="currency">$0.00</td>
+    </tr>
+  </table>
+
+  <!-- Department Data -->
+  <table border-collapse="collapse">
+    <tr>
+      <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+        Department
+      </th>
+      <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+        Employee Count
+      </th>
+    </tr>
+
+    <!-- Operations -->
+    <tr>
+      <td class="green">Operations</td>
+      <td>52 employees</td>
+    </tr>
+
+    <!-- HR -->
+    <tr>
+      <td class="blue">HR</td>
+      <td>47 employees</td>
+    </tr>
+
+    <!-- Engineering -->
+    <tr>
+      <td class="blue">Engineering</td>
+      <td>47 employees</td>
+    </tr>
+
+    <!-- Marketing -->
+    <tr>
+      <td class="green">Marketing</td>
+      <td>61 employees</td>
+    </tr>
+
+    <!-- Product -->
+    <tr>
+      <td class="blue">Product</td>
+      <td>42 employees</td>
+    </tr>
+
+    <!-- IT -->
+    <tr>
+      <td class="blue">IT</td>
+      <td>44 employees</td>
+    </tr>
+
+    <!-- Design -->
+    <tr>
+      <td class="green">Design</td>
+      <td>50 employees</td>
+    </tr>
+
+    <!-- Administration -->
+    <tr>
+      <td class="green">Administration</td>
+      <td>57 employees</td>
+    </tr>
+
+    <!-- Sales -->
+    <tr>
+      <td class="blue">Sales</td>
+      <td>43 employees</td>
+    </tr>
+
+    <!-- Finance -->
+    <tr>
+      <td class="red">Finance</td>
+      <td>1 employee</td>
+    </tr>
+
+    <!-- Executive -->
+    <tr>
+      <td class="red">Executive</td>
+      <td>1 employee</td>
+    </tr>
+  </table>
+
+  <!-- Critical Requirements - Calculated Columns -->
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Revenue by Project
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Profit by Project
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Total Expenses by Project
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Profit Margin by Project
+    </th>
+  </tr>
+
+  <tr>
+    <td class="currency">$70,675.89</td>
+    <td class="currency">$36,141.71</td>
+    <td class="currency">$484,222.53</td>
+    <td class="percentage">42.67%</td>
+  </tr>
+
+  <!-- Summary Section -->
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Active Projects
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Project Count
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Budget Total (USD)
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Revenue Total (USD)
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Profit Margin
+    </th>
+  </tr>
+
+  <tr>
+    <td class="green">16</td>
+    <td></td>
+    <td class="currency">$196,119.03 + $156,356.16 + $88,137.90 + $115,778.81 + $55,020.72 = $616,212.66</td>
+    <td class="currency">$70,675.89 + $17,080.48 + $10,036.51 + $43,994.25 + $0.00 = $141,786.13</td>
+    <td class="percentage">42.67% / 616,212.66 = 22.75%</td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Data Source
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Last Updated Date
+    </th>
+    <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">
+      Notes
+    </th>
+  </tr>
+
+  <tr>
+    <td>Actual data used.</td>
+    <td>Last updated: March 2023</td>
+    <td class="note">Assumptions made: All calculations based on historical data, no projections or forecasts included. Actual results may vary.</td>
+  </tr>
+</table>
+
+</body>
+</html>

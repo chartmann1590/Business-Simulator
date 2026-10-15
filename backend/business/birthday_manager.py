@@ -101,7 +101,7 @@ class BirthdayManager:
             # Create the meeting
             room_name = party_breakroom.replace("_floor2", "").replace("_", " ").title()
             birthday_meeting = Meeting(
-                title=f"🎂 {employee.name}'s Birthday Party",
+                title=f" {employee.name}'s Birthday Party",
                 description=f"Birthday party for {employee.name}",
                 organizer_id=employee.id,
                 attendee_ids=attendee_ids + [employee.id],
@@ -142,7 +142,7 @@ class BirthdayManager:
             celebration_date=today,
             year=age,
             attendees=attendee_ids,
-            celebration_message=f"Happy {age}th birthday, {employee.name}! 🎉",
+            celebration_message=f"Happy {age}th birthday, {employee.name}! ",
             party_room=party_breakroom,
             party_floor=party_floor,
             party_time=party_time  # Use scheduled meeting time (2 PM)
@@ -171,7 +171,7 @@ class BirthdayManager:
         activity = Activity(
             employee_id=employee.id,
             activity_type="birthday_celebration",
-            description=f"🎂 Birthday party! {employee.name} turned {age} today! {len(attendees)} colleagues joined the celebration in the breakroom!",
+            description=f" Birthday party! {employee.name} turned {age} today! {len(attendees)} colleagues joined the celebration in the breakroom!",
             activity_metadata={
                 "celebration_id": celebration.id,
                 "attendees": attendee_ids,
@@ -194,7 +194,7 @@ class BirthdayManager:
             attendee_activity = Activity(
                 employee_id=attendee.id,
                 activity_type="birthday_party",
-                description=f"🎉 Attending {employee.name}'s birthday party in the breakroom!",
+                description=f" Attending {employee.name}'s birthday party in the breakroom!",
                 activity_metadata={
                     "celebration_id": celebration.id,
                     "birthday_person_id": employee.id,
@@ -224,7 +224,7 @@ class BirthdayManager:
             notification = await create_notification_if_not_duplicate(
                 self.db,
                 notification_type="birthday_party",
-                title=f"🎉 Birthday Party: {employee.name}!",
+                title=f" Birthday Party: {employee.name}!",
                 message=f"{employee.name}'s birthday party is happening now in the {room_name} on Floor {party_floor}!",
                 employee_id=emp.id,
                 duplicate_window_minutes=10  # 10 minute window for birthday parties
@@ -274,7 +274,7 @@ class BirthdayManager:
                     })
             except (ValueError, AttributeError) as e:
                 # Invalid date (e.g., Feb 30) or timezone issue
-                print(f"⚠️  Error processing birthday for {emp.name}: {e}")
+                print(f"  Error processing birthday for {emp.name}: {e}")
                 continue
         
         return sorted(upcoming, key=lambda x: x["days_until"])
@@ -499,29 +499,29 @@ class BirthdayManager:
             is_milestone = age % 10 == 0 or age in [18, 21, 25, 30, 40, 50, 60]
             special_notes = []
             if is_milestone:
-                special_notes.append(f"🎉 Milestone birthday - {age} years old!")
+                special_notes.append(f" Milestone birthday - {age} years old!")
             if age >= 50:
-                special_notes.append("🎂 Special cake ordered")
+                special_notes.append(" Special cake ordered")
             if employee.has_performance_award:
-                special_notes.append("⭐ Performance award winner - extra celebration!")
+                special_notes.append(" Performance award winner - extra celebration!")
             
             # Create meeting description with all details
             attendee_names = [e.name for e in attendees]
-            description = f"🎂 Birthday Party for {employee.name}!\n\n"
-            description += f"🎂 Turning {age} years old!\n"
-            description += f"📍 Location: {room_name} on Floor {party_floor}\n"
-            description += f"👥 Attendees: {employee.name}, {', '.join(attendee_names[:5])}"
+            description = f" Birthday Party for {employee.name}!\n\n"
+            description += f" Turning {age} years old!\n"
+            description += f" Location: {room_name} on Floor {party_floor}\n"
+            description += f" Attendees: {employee.name}, {', '.join(attendee_names[:5])}"
             if len(attendee_names) > 5:
                 description += f", and {len(attendee_names) - 5} more"
             description += f"\n\n"
             if special_notes:
-                description += "✨ Special Notes:\n"
+                description += " Special Notes:\n"
                 for note in special_notes:
-                    description += f"  • {note}\n"
+                    description += f"   {note}\n"
             
             # Create the meeting
             meeting = Meeting(
-                title=f"🎂 {employee.name}'s Birthday Party",
+                title=f" {employee.name}'s Birthday Party",
                 description=description,
                 organizer_id=employee.id,  # Birthday person is the organizer
                 attendee_ids=attendee_ids,
@@ -594,15 +594,15 @@ class BirthdayManager:
         )
         total_employees = total_result.scalars().all()
         
-        print(f"🔍 Total active employees: {len(total_employees)}")
-        print(f"🔍 Employees with birthday data: {len(employees)}")
-        print(f"📅 Today: {today_start}, End date: {end_date}")
+        print(f" Total active employees: {len(total_employees)}")
+        print(f" Employees with birthday data: {len(employees)}")
+        print(f" Today: {today_start}, End date: {end_date}")
         
         if len(employees) == 0:
-            print("⚠️ WARNING: No employees found with birthday data! Birthday parties cannot be generated.")
+            print(" WARNING: No employees found with birthday data! Birthday parties cannot be generated.")
             return 0
         
-        print(f"📋 Processing {len(employees)} employees...")
+        print(f" Processing {len(employees)} employees...")
         meetings_created = 0
         skipped_existing = 0
         skipped_out_of_range = 0
@@ -613,7 +613,7 @@ class BirthdayManager:
         for emp in employees:
             processed += 1
             if processed % 50 == 0:
-                print(f"  📊 Processed {processed}/{len(employees)} employees...")
+                print(f"   Processed {processed}/{len(employees)} employees...")
             try:
                 # Calculate birthday date for this year with proper timezone
                 try:
@@ -637,7 +637,7 @@ class BirthdayManager:
                 
                 in_range_count += 1
                 if in_range_count <= 5:
-                    print(f"  ✓ {emp.name}: birthday in {days_until} days (within range)")
+                    print(f"   {emp.name}: birthday in {days_until} days (within range)")
                 
                 # Check if a meeting already exists - SIMPLIFIED: just check by employee ID in metadata
                 birthday_start = birthday_this_year.replace(hour=14, minute=0, second=0, microsecond=0)
@@ -697,7 +697,7 @@ class BirthdayManager:
                 
                 # Verify we have the right count
                 if len(attendee_ids) != 15 and len(all_employees) >= 14:
-                    print(f"⚠️ Warning: {emp.name}'s party has {len(attendee_ids)} attendees, expected 15")
+                    print(f" Warning: {emp.name}'s party has {len(attendee_ids)} attendees, expected 15")
                     # Fix it
                     if len(attendee_ids) < 15:
                         # Add more if we can
@@ -708,7 +708,7 @@ class BirthdayManager:
                 
                 # Final verification
                 if len(attendee_ids) != 15:
-                    print(f"❌ ERROR: {emp.name}'s party still has {len(attendee_ids)} attendees after fix!")
+                    print(f" ERROR: {emp.name}'s party still has {len(attendee_ids)} attendees after fix!")
                 
                 # Choose a breakroom for the party
                 breakrooms = [
@@ -722,29 +722,29 @@ class BirthdayManager:
                 is_milestone = age % 10 == 0 or age in [18, 21, 25, 30, 40, 50, 60]
                 special_notes = []
                 if is_milestone:
-                    special_notes.append(f"🎉 Milestone birthday - {age} years old!")
+                    special_notes.append(f" Milestone birthday - {age} years old!")
                 if age >= 50:
-                    special_notes.append("🎂 Special cake ordered")
+                    special_notes.append(" Special cake ordered")
                 if emp.has_performance_award:
-                    special_notes.append("⭐ Performance award winner - extra celebration!")
+                    special_notes.append(" Performance award winner - extra celebration!")
                 
                 # Create meeting description with all details
                 attendee_names = [e.name for e in attendees]
-                description = f"🎂 Birthday Party for {emp.name}!\n\n"
-                description += f"🎂 Turning {age} years old!\n"
-                description += f"📍 Location: {room_name} on Floor {party_floor}\n"
-                description += f"👥 Attendees: {emp.name}, {', '.join(attendee_names[:5])}"
+                description = f" Birthday Party for {emp.name}!\n\n"
+                description += f" Turning {age} years old!\n"
+                description += f" Location: {room_name} on Floor {party_floor}\n"
+                description += f" Attendees: {emp.name}, {', '.join(attendee_names[:5])}"
                 if len(attendee_names) > 5:
                     description += f", and {len(attendee_names) - 5} more"
                 description += f"\n\n"
                 if special_notes:
-                    description += "✨ Special Notes:\n"
+                    description += " Special Notes:\n"
                     for note in special_notes:
-                        description += f"  • {note}\n"
+                        description += f"   {note}\n"
                 
                 # Create the meeting
                 meeting = Meeting(
-                    title=f"🎂 {emp.name}'s Birthday Party",
+                    title=f" {emp.name}'s Birthday Party",
                     description=description,
                     organizer_id=emp.id,  # Birthday person is the organizer
                     attendee_ids=attendee_ids,
@@ -767,18 +767,18 @@ class BirthdayManager:
                 self.db.add(meeting)
                 meetings_created += 1
                 if meetings_created <= 20:
-                    print(f"  ✅ Created birthday party for {emp.name} on {birthday_start.strftime('%Y-%m-%d')} at {birthday_start.strftime('%H:%M')}")
+                    print(f"   Created birthday party for {emp.name} on {birthday_start.strftime('%Y-%m-%d')} at {birthday_start.strftime('%H:%M')}")
                 
             except ValueError as ve:
                 # Invalid date (e.g., Feb 30)
                 errors += 1
                 if errors <= 5:  # Only print first 5 errors
-                    print(f"⚠️ Invalid birthday date for {emp.name}: {emp.birthday_month}/{emp.birthday_day} - {ve}")
+                    print(f" Invalid birthday date for {emp.name}: {emp.birthday_month}/{emp.birthday_day} - {ve}")
                 continue
             except Exception as e:
                 errors += 1
                 if errors <= 5:  # Only print first 5 errors
-                    print(f"❌ Error generating birthday party for {emp.name}: {e}")
+                    print(f" Error generating birthday party for {emp.name}: {e}")
                     import traceback
                     traceback.print_exc()
                 continue
@@ -787,27 +787,27 @@ class BirthdayManager:
         try:
             if meetings_created > 0:
                 await self.db.commit()
-                print(f"✅ Committed {meetings_created} new birthday party meetings to database")
+                print(f" Committed {meetings_created} new birthday party meetings to database")
             else:
                 # Still commit to ensure transaction completes
                 await self.db.commit()
-                print(f"ℹ️ No new meetings to commit (all may already exist or be out of range)")
+                print(f" No new meetings to commit (all may already exist or be out of range)")
         except Exception as commit_error:
-            print(f"❌ Error committing meetings: {commit_error}")
+            print(f" Error committing meetings: {commit_error}")
             await self.db.rollback()
             import traceback
             traceback.print_exc()
             return 0
         
         if skipped_existing > 0:
-            print(f"ℹ️ Skipped {skipped_existing} birthdays (meetings already exist)")
+            print(f" Skipped {skipped_existing} birthdays (meetings already exist)")
         if skipped_out_of_range > 0:
-            print(f"ℹ️ Skipped {skipped_out_of_range} birthdays (outside {days_ahead} day range)")
+            print(f" Skipped {skipped_out_of_range} birthdays (outside {days_ahead} day range)")
         
-        print(f"📊 Summary: Processed {processed} employees")
-        print(f"   ✅ Created: {meetings_created}")
-        print(f"   ⏭️ Skipped (existing): {skipped_existing}")
-        print(f"   📅 Skipped (out of range): {skipped_out_of_range}")
-        print(f"   ❌ Errors: {errors}")
+        print(f" Summary: Processed {processed} employees")
+        print(f"    Created: {meetings_created}")
+        print(f"    Skipped (existing): {skipped_existing}")
+        print(f"    Skipped (out of range): {skipped_out_of_range}")
+        print(f"    Errors: {errors}")
         return meetings_created
 

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Title */
+        .title {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+        }
+
+        /* Headers */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        /* Data rows */
+        td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            background: white;
+        }
+
+        /* Alternating row */
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        /* Totals row */
+        tr.total-row {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+
+        /* Number formatting */
+        td.number {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        /* Font size and padding */
+        table {
+            font-size: 11pt;
+            padding: 8px;
+            border-collapse: collapse;
+        }
+
+        /* Color coding */
+        tr.green-row {
+            background-color: #c6efce;
+        }
+    </style>
+</head>
+<body>
+
+<table style="width:100%; border-collapse: collapse;">
+    <tr class="title">
+        <td colspan="X" style="text-align: center;">Digital Transformation Project Financial Dashboard</td>
+    </tr>
+    <tr class="header-row">
+        <th>Project Name</th>
+        <th>Budget</th>
+        <th>Revenue</th>
+        <th>Profit/Loss</th>
+        <th> ROI %</th>
+        <th>Total Employees</th>
+    </tr>
+    <tr class="total-row header-row">
+        <td Total</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr class="data-row">
+        <td style="background: #f2f2f2;">Digital Transformation Project</td>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+        <td></td>
+        <td></td>
+        <td>1417</td>
+    </tr>
+
+    <tr class="data-row">
+        <td style="background: #f2f2f2;">API Infrastructure Upgrade</td>
+        <td>$100,000.00</td>
+        <td>$28,996.55</td>
+        <td></td>
+        <td></td>
+        <td>49</td>
+    </tr>
+
+    <tr class="data-row">
+        <td style="background: #f2f2f2;">Mobile App Development</td>
+        <td>$150,000.00</td>
+        <td>$32,045.32</td>
+        <td></td>
+        <td></td>
+        <td>50</td>
+    </tr>
+
+    <tr class="data-row">
+        <td style="background: #f2f2f2;">Strategic Partnership Development</td>
+        <td>$156,356.16</td>
+        <td>$17,080.48</td>
+        <td></td>
+        <td></td>
+        <td>63</td>
+    </tr>
+
+    <tr class="data-row">
+        <td style="background: #f2f2f2;">Customer Experience Enhancement</td>
+        <td>$88,137.90</td>
+        <td>$10,036.51</td>
+        <td></td>
+        <td></td>
+        <td>44</td>
+    </tr>
+
+    <tr class="total-row">
+        <td Total</td>
+        <td>$592,313.99</td>
+        <td>$180,154.36</td>
+        <td>-$124,383.20</td>
+        <td>42.17%</td>
+        <td>1417</td>
+    </tr>
+
+    <table style="width:100%; border-collapse: collapse;">
+        <tr class="header-row">
+            <th>Department</th>
+            <th>Employee Count</th>
+            <th>Headcount %</th>
+            <th>Salary Breakdown</th>
+        </tr>
+        <tr class="total-row header-row">
+            <td Total</td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Design</td>
+            <td>50</td>
+            <td>3.52%</td>
+            <td>$1,500,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Engineering</td>
+            <td>49</td>
+            <td>3.47%</td>
+            <td>$1,425,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">IT</td>
+            <td>45</td>
+            <td>3.20%</td>
+            <td>$1,350,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Sales</td>
+            <td>43</td>
+            <td>3.04%</td>
+            <td>$1,250,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Operations</td>
+            <td>52</td>
+            <td>3.66%</td>
+            <td>$1,300,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Marketing</td>
+            <td>63</td>
+            <td>4.48%</td>
+            <td>$1,600,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Product</td>
+            <td>44</td>
+            <td>3.12%</td>
+            <td>$1,200,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Administration</td>
+            <td>57</td>
+            <td>4.04%</td>
+            <td>$1,400,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Finance</td>
+            <td>1</td>
+            <td>0.07%</td>
+            <td>$50,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">HR</td>
+            <td>47</td>
+            <td>3.34%</td>
+            <td>$1,100,000.00</td>
+        </tr>
+
+        <tr class="data-row">
+            <td style="background: #f2f2f2;">Executive</td>
+            <td>1</td>
+            <td>0.07%</td>
+            <td>$50,000.00</td>
+        </tr>
+
+    </table>
+
+</table>
+
+<tfoot>
+    <tr>
+        <th>Data Source: </th>
+        <th>Last Updated:</th>
+        <th>Notes:</th>
+    </tr>
+</tfoot>
+
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Context Report</title>
+    <style>
+        /* FANCY TITLE */
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            text-decoration: underline;
+            margin-bottom: 10px;
+        }
+
+        /* HEADER */
+        .header {
+            position: relative;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            background-color: #f2f2f2;
+            padding: 10px;
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        /* EXECUTIVE SUMMARY */
+        .summary {
+            margin-bottom: 20px;
+        }
+
+        /* MAIN SECTIONS */
+        section {
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* DATA SECTIONS */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14pt;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: left;
+        }
+
+        /* LISTS */
+        ul {
+            list-style-type: decimal;
+            margin-bottom: 10px;
+        }
+
+        ol {
+            list-style-type: decimal;
+            margin-bottom: 10px;
+        }
+
+        /* FOOTER */
+        .footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 5px;
+            background-color: #f2f2f2;
+            font-size: 12pt;
+        }
+    </style>
+</head>
+<body>
+    <div style="font-family: 'Times New Roman', serif; font-size: 12pt; margin: 1in; line-height: 1.5; color: #000000; background: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h1>Business Context Report</h1>
+        <div class="header">
+            <span style="font-size: 14pt;">Date:</span> <span id="date"></span><br>
+            <span style="font-size: 14pt;">Employee Name:</span> <span id="employee-name"></span><br>
+            <span style="font-size: 14pt;">Department:</span> <span id="department"></span><br>
+            <span style="font-size: 14pt;">Document Classification:</span> <span style="color: #0099ff; font-weight: bold;">Confidential</span>
+        </div>
+        <p class="summary">
+            This report provides an overview of the current business context, including key performance indicators, project status, and departmental distribution.
+        </p>
+        <section>
+            <h2>Employee Information</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <th>Name</th>
+                    <td id="employee-name-value"></td>
+                </tr>
+                <tr>
+                    <th>Title</th>
+                    <td id="employee-title-value"></td>
+                </tr>
+                <tr>
+                    <th>Role</th>
+                    <td id="employee-role-value"></td>
+                </tr>
+                <tr>
+                    <th>Department</th>
+                    <td id="employee-department-value"></td>
+                </tr>
+            </table>
+        </section>
+        <section>
+            <h2>CURRENT PROJECTS</h2>
+            <ul style="list-style-type: decimal;">
+                <li>
+                    API Infrastructure Upgrade ($100,000.00 budget, active status)
+                </li>
+                <li>
+                    Mobile App Development ($150,000.00 budget, active status)
+                </li>
+                <li>
+                    Digital Transformation Project ($196,119.03 budget, active status)
+                </li>
+            </ul>
+        </section>
+        <section>
+            <h2>BUSINESS METRICS</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <th>Total Revenue</th>
+                    <td id="total-revenue-value"></td>
+                </tr>
+                <tr>
+                    <th>Total Profit</th>
+                    <td id="total-profit-value"></td>
+                </tr>
+                <tr>
+                    <th>Profit Margin</th>
+                    <td id="profit-margin-value">42.67%</td>
+                </tr>
+                <tr>
+                    <th>Total Expenses</th>
+                    <td id="total-expenses-value"></td>
+                </tr>
+            </table>
+        </section>
+        <section>
+            <h2>ACTIVE PROJECTS</h2>
+            <p style="font-size: 14pt;">The following projects are currently active:</p>
+            <ul style="list-style-type: decimal;">
+                <li>API Infrastructure Upgrade ($100,000.00 budget, active status)</li>
+                <li>Mobil App Development ($150,000.00 budget, active status)</li>
+                <li>Digital Transformation Project ($196,119.03 budget, active status)</li>
+            </ul>
+        </section>
+        <section>
+            <h2>DEPARTMENT DISTRIBUTION</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <th>Department</th>
+                    <td id="department-distribution-value"></td>
+                </tr>
+                <tr>
+                    <th>Number of Employees</th>
+                    <td id="number-of-employees-value"></td>
+                </tr>
+            </table>
+        </section>
+        <section>
+            <h2>CRITICAL REQUIREMENTS</h2>
+            <p style="font-size: 14pt;">The following critical requirements must be met:</p>
+            <ul style="list-style-type: decimal;">
+                <li>
+                    Document Type: Create a realistic business document based on the employee's role
+                </li>
+                <li>
+                    Premium Styling: Make it look expensive and professional with white background, subtle shadows, and proper typography
+                </li>
+                <li>
+                    Document Structure: Include a fancy title, header, executive summary, main sections, data sections, conclusion, and footer
+                </li>
+            </ul>
+        </section>
+        <section>
+            <h2>CONCLUSION</h2>
+            <p style="font-size: 14pt;">In conclusion, the current business context is characterized by a strong revenue growth and increasing profit margins. However, there are opportunities for improvement in terms of project management and departmental distribution.</p>
+        </section>
+        <div class="footer">
+            Page <span id="page-number"></span> of <span id="total-pages"></span>. Version 1.0. Confidentiality Notice: This document contains confidential information and is not intended for disclosure to unauthorized parties.
+        </div>
+    </div>
+
+    <script>
+        // DATE
+        var date = '2023-02-20';
+        document.getElementById('date').innerHTML = date;
+
+        // EMPLOYEE INFORMATION
+        var employeeName = 'Yara Evans';
+        var employeeTitle = 'Marketing Manager';
+        var employeeRole = 'Manager';
+        var employeeDepartment = 'HR';
+        document.getElementById('employee-name-value').innerHTML = employeeName;
+        document.getElementById('employee-title-value').innerHTML = employeeTitle;
+        document.getElementById('employee-role-value').innerHTML = employeeRole;
+        document.getElementById('employee-department-value').innerHTML = employeeDepartment;
+
+        // TOTAL REVENUE
+        var totalRevenue = 848324.28;
+        document.getElementById('total-revenue-value').innerHTML = totalRevenue.toFixed(2);
+
+        // TOTAL PROFIT
+        var totalProfit = 361970.04;
+        document.getElementById('total-profit-value').innerHTML = totalProfit.toFixed(2);
+
+        // PROFIT MARGIN
+        var profitMargin = 42.67 / 100 * 100;
+        document.getElementById('profit-margin-value').innerHTML = profitMargin + '%';
+
+        // TOTAL EXPENSES
+        var totalExpenses = 486354.24;
+        document.getElementById('total-expenses-value').innerHTML = totalExpenses.toFixed(2);
+
+        // NUMBER OF EMPLOYEES
+        var numberOfEmployees = 1417;
+        document.getElementById('number-of-employees-value').innerHTML = numberOfEmployees;
+
+        // DEPARTMENT DISTRIBUTION
+        var departmentDistribution = '50 employees in Design, 49 employees in Engineering, 45 employees in IT, 43 employees in Sales, and 52 employees in Operations';
+        document.getElementById('department-distribution-value').innerHTML = departmentDistribution;
+
+        // PAGE NUMBER AND TOTAL PAGES
+        var pageNumber = 1;
+        var totalPages = 10;
+        document.getElementById('page-number').innerHTML = pageNumber;
+        document.getElementById('total-pages').innerHTML = totalPages;
+    </script>
+</body>
+</html>

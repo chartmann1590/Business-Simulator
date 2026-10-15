@@ -122,7 +122,7 @@ async def force_overdue_reviews(skip_confirmation=False, verbose=False):
             print()
             
             if not overdue_employees:
-                print("[✓] No overdue employees found. All employees are up to date!")
+                print("[] No overdue employees found. All employees are up to date!")
                 return
             
             # Show overdue employees

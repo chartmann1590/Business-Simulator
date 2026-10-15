@@ -332,7 +332,7 @@ class EmployeeAgent:
         recent_chats = result.scalars().all()
         
         if unread_emails or recent_chats:
-            print(f"📬 {self.employee.name} checking messages: {len(unread_emails)} unread emails, {len(recent_chats)} recent chats")
+            print(f" {self.employee.name} checking messages: {len(unread_emails)} unread emails, {len(recent_chats)} recent chats")
         
         emails_responded = 0
         chats_responded = 0
@@ -373,21 +373,21 @@ class EmployeeAgent:
                     sender = sender_result.scalar_one_or_none()
                     sender_name = sender.name if sender else f"Employee {email.sender_id}"
                     
-                    print(f"📧 {self.employee.name} responding to email from {sender_name} (ID: {email.sender_id}, subject: {email.subject[:50]}...)")
+                    print(f" {self.employee.name} responding to email from {sender_name} (ID: {email.sender_id}, subject: {email.subject[:50]}...)")
                     await self._respond_to_email(email, business_context)
                     await self.db.flush()  # Ensure response is saved immediately
                     email.read = True
                     emails_responded += 1
-                    print(f"✅ {self.employee.name} successfully responded to email from {sender_name}")
+                    print(f" {self.employee.name} successfully responded to email from {sender_name}")
                 except Exception as e:
-                    print(f"❌ Error responding to email from {email.sender_id} to {self.employee.name}: {e}")
+                    print(f" Error responding to email from {email.sender_id} to {self.employee.name}: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
             else:
                 # Mark as read even if we already responded
                 email.read = True
-                print(f"ℹ️  {self.employee.name} already responded to email from {email.sender_id}")
+                print(f"  {self.employee.name} already responded to email from {email.sender_id}")
         
         # Respond to ALL chat messages (not just those that need response)
         # Process in reverse order (oldest first) to maintain conversation flow
@@ -399,7 +399,7 @@ class EmployeeAgent:
             # CRITICAL: Skip if sender is the same as recipient (employee replying to themselves)
             # This should never happen, but prevent it just in case
             if chat.sender_id == self.employee.id:
-                print(f"⚠️  Skipping chat where {self.employee.name} would reply to themselves (chat ID: {chat.id})")
+                print(f"  Skipping chat where {self.employee.name} would reply to themselves (chat ID: {chat.id})")
                 continue
 
             # Get the thread_id for this conversation
@@ -435,22 +435,22 @@ class EmployeeAgent:
                     sender = sender_result.scalar_one_or_none()
                     sender_name = sender.name if sender else f"Employee {chat.sender_id}"
                     
-                    print(f"💬 {self.employee.name} responding to chat from {sender_name} (ID: {chat.sender_id}, message: {chat.message[:50]}...)")
+                    print(f" {self.employee.name} responding to chat from {sender_name} (ID: {chat.sender_id}, message: {chat.message[:50]}...)")
                     await self._respond_to_chat(chat, business_context)
                     await self.db.flush()  # Ensure response is saved immediately
                     chats_responded += 1
-                    print(f"✅ {self.employee.name} successfully responded to chat from {sender_name}")
+                    print(f" {self.employee.name} successfully responded to chat from {sender_name}")
                 except Exception as e:
-                    print(f"❌ Error responding to chat from {chat.sender_id} to {self.employee.name}: {e}")
+                    print(f" Error responding to chat from {chat.sender_id} to {self.employee.name}: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
             else:
-                print(f"ℹ️  {self.employee.name} already responded to chat from {chat.sender_id}")
+                print(f"  {self.employee.name} already responded to chat from {chat.sender_id}")
         
         # Summary
         if emails_responded > 0 or chats_responded > 0:
-            print(f"📊 {self.employee.name} responded to {emails_responded} email(s) and {chats_responded} chat(s)")
+            print(f" {self.employee.name} responded to {emails_responded} email(s) and {chats_responded} chat(s)")
     
     async def _message_needs_response(self, message_text: str) -> bool:
         """Check if a message contains a question or request that needs a response."""
@@ -550,7 +550,7 @@ class EmployeeAgent:
         
         # CRITICAL: Prevent employees from replying to themselves
         if chat.sender_id == self.employee.id:
-            print(f"⚠️  BLOCKED: {self.employee.name} attempted to reply to their own message (chat ID: {chat.id})")
+            print(f"  BLOCKED: {self.employee.name} attempted to reply to their own message (chat ID: {chat.id})")
             return
         
         # Get sender information
@@ -559,7 +559,7 @@ class EmployeeAgent:
         )
         sender = result.scalar_one_or_none()
         if not sender:
-            print(f"⚠️  Cannot respond: sender with ID {chat.sender_id} not found")
+            print(f"  Cannot respond: sender with ID {chat.sender_id} not found")
             return
         
         # Get project context if available

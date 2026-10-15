@@ -617,3 +617,15 @@ class ClockInOut(Base):
 
     employee = relationship("Employee", back_populates="clock_events")
 
+class Changelog(Base):
+    __tablename__ = "changelog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    version = Column(String, nullable=False)  # e.g., "1.0.0", "1.1.0"
+    title = Column(String, nullable=False)  # Short title of the change
+    description = Column(Text, nullable=False)  # Detailed description
+    category = Column(String, nullable=False)  # "feature", "bugfix", "improvement", "breaking"
+    impact = Column(String, default="minor")  # "minor", "major", "critical"
+    author = Column(String, default="System")  # Who made the change
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

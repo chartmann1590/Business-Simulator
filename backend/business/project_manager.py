@@ -185,7 +185,7 @@ class ProjectManager:
                         read=False
                     )
                     self.db.add(notification)
-                    print(f"✅ Project '{project.name}' (ID: {project_id}) marked as completed - Progress: {progress:.1f}%, All tasks completed: {all_tasks_completed}")
+                    print(f" Project '{project.name}' (ID: {project_id}) marked as completed - Progress: {progress:.1f}%, All tasks completed: {all_tasks_completed}")
         except Exception as e:
             print(f"Error ensuring project completion for {project_id}: {e}")
             import traceback

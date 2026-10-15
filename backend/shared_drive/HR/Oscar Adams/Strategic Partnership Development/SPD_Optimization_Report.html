@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* TITLE ROW */
+        tr:nth-child(1) {
+            background-color: #366092;
+            color: white;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            text-align: center;
+        }
+
+        /* HEADER ROW */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            width: 200px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* DATA ROWS */
+        tr:nth-child(2) {
+            background-color: white;
+        }
+        
+        tr:nth-child(3) {
+            background-color: #f2f2f2;
+        }
+
+        /* CALCULATED COLUMNS */
+        td:nth-child(8) {
+            width: 100px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* SUMMARY SECTION */
+        .summary-row {
+            background-color: #e7f3ff;
+            color: black;
+            border-top: 2px solid #d0d0d0;
+            padding: 8px;
+        }
+
+        /* FOOTER */
+        footer {
+            clear: both;
+            padding: 8px;
+            text-align: center;
+            font-size: 10pt;
+            color: gray;
+        }
+    </style>
+</head>
+<body>
+
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+    <tr>
+        <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+    </tr>
+
+    <tr>
+        <th>Department</th>
+        <th>Employee Count</th>
+        <th>Total Employees</th>
+        <th>Project ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <tr class="summary-row">
+        <td colspan="4">Total:</td>
+        <td style="font-weight: bold; text-align: right;">42.67%</td>
+    </tr>
+
+    <!-- HR Department Data -->
+    <tr>
+        <th>HR</th>
+        <th>47</th>
+        <th>47</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Engineering Department Data -->
+    <tr>
+        <th>Engineering</th>
+        <th>47</th>
+        <th>47</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Marketing Department Data -->
+    <tr>
+        <th>Marketing</th>
+        <th>61</th>
+        <th>61</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Product Department Data -->
+    <tr>
+        <th>Product</th>
+        <th>42</th>
+        <th>42</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- IT Department Data -->
+    <tr>
+        <th>IT</th>
+        <th>44</th>
+        <th>44</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Design Department Data -->
+    <tr>
+        <th>Design</th>
+        <th>50</th>
+        <th>50</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Administration Department Data -->
+    <tr>
+        <th>Administration</th>
+        <th>57</th>
+        <th>57</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Operations Department Data -->
+    <tr>
+        <th>Operations</th>
+        <th>52</th>
+        <th>52</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Sales Department Data -->
+    <tr>
+        <th>Sales</th>
+        <th>43</th>
+        <th>43</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <!-- Executive Department Data -->
+    <tr>
+        <th>Executive</th>
+        <th>1</th>
+        <th>1</th>
+        <th>CALCULATED ROI</th>
+        <th>Totals</th>
+    </tr>
+
+    <tr class="summary-row">
+        <td colspan="4">Total:</td>
+        <td style="font-weight: bold; text-align: right;">42.67%</td>
+    </tr>
+
+    <!-- FOOTER -->
+    <footer style="clear: both; padding: 8px; text-align: center; font-size: 10pt; color: gray;">
+        Data Source: Actual Business Metrics<br>
+        Last Updated: March 2023<br>
+        Notes: Assumed ROI Calculations based on historical data.
+    </footer>
+
+</table>
+
+</body>
+</html>

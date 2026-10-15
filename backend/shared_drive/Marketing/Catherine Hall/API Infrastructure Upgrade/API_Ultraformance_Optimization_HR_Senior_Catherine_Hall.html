@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Financial Dashboard</title>
+  <style>
+    /* Styles */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+
+    .header-row {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+    }
+
+    .data-row {
+      background-color: white;
+    }
+
+    .total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid black;
+    }
+    
+    .green {
+      color: green;
+    }
+    
+    .red {
+      color: red;
+    }
+    
+    .blue {
+      color: blue;
+    }
+    
+    /* Formatting */
+    td {
+      text-align: left;
+    }
+
+    th, td {
+      font-family: Arial, 11pt;
+    }
+
+    .currency {
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+
+    .percentage {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    
+    /* Color Coding */
+    td {
+      color: #000;
+    }
+
+    td.green {
+      color: green;
+    }
+
+    td.red {
+      color: red;
+    }
+
+    td.blue {
+      color: blue;
+    }
+  </style>
+</head>
+
+<body>
+  <table>
+    <tr class="header-row">
+      <th colspan="8">Financial Dashboard</th>
+    </tr>
+    
+    <tr class="data-row">
+      <td>Project Name</td>
+      <td>Budget ($)</td>
+      <td>Revenue ($)</td>
+      <td>Margin (%)</td>
+      <td>Active Projects</td>
+      <td>Total Employees</td>
+      <td>Department</td>
+    </tr>
+
+    <!-- API Infrastructure Upgrade -->
+    <tr class="data-row">
+      <td>API Infrastructure Upgrade</td>
+      <td>$100,000.00</td>
+      <td>$28,996.55</td>
+      <td>42.67%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>HR</td>
+    </tr>
+
+    <!-- Digital Transformation Project -->
+    <tr class="data-row">
+      <td>Digital Transformation Project</td>
+      <td>$196,119.03</td>
+      <td>$70,675.89</td>
+      <td>35.56%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>Marketing</td>
+    </tr>
+
+    <!-- Strategic Partnership Development -->
+    <tr class="data-row">
+      <td>Strategic Partnership Development</td>
+      <td>$156,356.16</td>
+      <td>$17,080.48</td>
+      <td>-90%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>Marketing</td>
+    </tr>
+
+    <!-- Customer Experience Enhancement -->
+    <tr class="data-row">
+      <td>Customer Experience Enhancement</td>
+      <td>$88,137.90</td>
+      <td>$10,036.51</td>
+      <td>11.28%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>Marketing</td>
+    </tr>
+
+    <!-- Customer Experience Enhancement -->
+    <tr class="data-row">
+      <td>Customer Experience Enhancement</td>
+      <td>$115,778.81</td>
+      <td>$43,994.25</td>
+      <td>37.67%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>Marketing</td>
+    </tr>
+
+    <!-- Market Expansion Initiative -->
+    <tr class="data-row">
+      <td>Market Expansion Initiative</td>
+      <td>$55,020.72</td>
+      <td>$0.00</td>
+      <td>-100%</td>
+      <td>1</td>
+      <td>0 employees</td>
+      <td>Sales</td>
+    </tr>
+
+    <!-- Operations -->
+    <tr class="total-row">
+      <td colspan="8">Operations</td>
+    </tr>
+
+    <tr class="data-row">
+      <td>Employee Count</td>
+      <td style="background-color: #f2f2f2;">52</td>
+      <td style="background-color: #f2f2f2;">47</td>
+      <td style="background-color: #f2f2f2;">47</td>
+      <td style="background-color: #f2f2f2;">50</td>
+      <td style="background-color: #f2f2f2;">57</td>
+      <td style="background-color: #f2f2f2;">43</td>
+      <td style="background-color: #f2f2f2;">44</td>
+    </tr>
+
+    <!-- HR -->
+    <tr class="total-row">
+      <td colspan="8">HR</td>
+    </tr>
+
+    <tr class="data-row">
+      <td>Employee Count</td>
+      <td style="background-color: #f2f2f2;">47</td>
+      <td style="background-color: #f2f2f2;">0</td>
+      <td style="background-color: #f2f2f2;">0</td>
+    </tr>
+
+    <!-- Sales/Marketing -->
+    <tr class="total-row">
+      <td colspan="8">Sales/Marketing</td>
+    </tr>
+
+    <tr class="data-row">
+      <td>Revenue ($)</td>
+      <td style="background-color: #f2f2f2;">$848,324.28</td>
+      <td style="background-color: #f2f2f2;">$361,970.04</td>
+      <td style="background-color: #f2f2f2;">42.67%</td>
+    </tr>
+
+    <!-- Financial Analysis -->
+    <tr class="total-row">
+      <td colspan="8">Financial Analysis</td>
+    </tr>
+
+    <tr class="data-row">
+      <td>Total Revenue ($)</td>
+      <td style="background-color: #f2f2f2;">$848,324.28</td>
+      <td style="background-color: #f2f2f2;">$486,354.24</td>
+      <td style="background-color: #f2f2f2;">42.67%</td>
+    </tr>
+
+  </table>
+
+</body>
+</html>

@@ -16,6 +16,7 @@ import CustomerReviews from './pages/CustomerReviews'
 import NotificationsHistory from './pages/NotificationsHistory'
 import PetCareGame from './pages/PetCareGame'
 import PetCareLog from './pages/PetCareLog'
+import Changelog from './pages/Changelog'
 import Notifications from './components/Notifications'
 
 function NavLink({ to, children, icon }) {
@@ -66,6 +67,7 @@ function App() {
             <NavLink to="/financials" icon="💰">Financials</NavLink>
             <NavLink to="/customer-reviews" icon="⭐">Customer Reviews</NavLink>
             <NavLink to="/notifications" icon="🔔">Notifications</NavLink>
+            <NavLink to="/changelog" icon="📝">Changelog</NavLink>
           </nav>
         </aside>
 
@@ -89,6 +91,7 @@ function App() {
             <Route path="/financials" element={<Financials />} />
             <Route path="/customer-reviews" element={<CustomerReviews />} />
             <Route path="/notifications" element={<NotificationsHistory />} />
+            <Route path="/changelog" element={<Changelog />} />
           </Routes>
         </main>
       </div>

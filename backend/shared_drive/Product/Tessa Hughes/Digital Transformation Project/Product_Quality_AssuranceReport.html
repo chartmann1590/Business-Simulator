@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Styles for the table */
+    table {
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+
+    th {
+      background: #366092;
+      color: white;
+      font-weight: bold;
+      padding: 12px;
+    }
+
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
+
+    tr.total {
+      background: #e7f3ff;
+      border-top: 2px solid #366092;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <table style="width:100%">
+    <!-- Title Row -->
+    <tr style="background-color: #366092; padding: 12px;">
+      <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold;">Financial Dashboard</td>
+    </tr>
+
+    <!-- Header Row -->
+    <tr>
+      <th>Department/Project</th>
+      <th>Revenue</th>
+      <th>Expenses</th>
+      <th>Profit</th>
+      <th>Margin</th>
+      <th>Employees</th>
+      <th>Projects</th>
+    </tr>
+
+    <!-- Data Rows -->
+    <tr class="total">
+      <td Total Revenue</td>
+      <td>$848,324.28</td>
+      <td>$486,354.24</td>
+      <td>$361,970.04</td>
+      <td>42.67%</td>
+      <td>Total Employees</td>
+      <td>Active Projects</td>
+    </tr>
+    <tr>
+      <td>Product</td>
+      <td>$70,675.89</td>
+      <td>$0.00</td>
+      <td>$70,675.89</td>
+      <td>100%</td>
+      <td>44</td>
+      <td>Digital Transformation Project</td>
+    </tr>
+    <tr>
+      <td>Operations</td>
+      <td>$20,000.00</td>
+      <td>$15,000.00</td>
+      <td>$5,000.00</td>
+      <td>-25%</td>
+      <td>52</td>
+      <td>Market Expansion Initiative</td>
+    </tr>
+    <tr>
+      <td>Sales</td>
+      <td>$40,000.00</td>
+      <td>$20,000.00</td>
+      <td>$20,000.00</td>
+      <td>50%</td>
+      <td>43</td>
+      <td>-</td>
+    </tr>
+
+    <!-- Summary Section -->
+    <tr class="summary">
+      <th>Sales Performance</th>
+      <th>Average Revenue per Employee</th>
+      <th>Revenue Growth Rate</th>
+    </tr>
+    <tr>
+      <td>$240,000.00</td>
+      <td>$55,409.52</td>
+      <td>-10%</td>
+    </tr>
+
+    <!-- Calculated Columns -->
+    <tr class="total">
+      <td>Profit Margin by Department</td>
+      <td>Product: 100%, Sales: 50%, Operations: -25%, Finance: 0%</td>
+      <td>Percentage Change in Revenue</td>
+      <td>-5%</td>
+    </tr>
+
+    <!-- Footer -->
+    <tr style="background-color: #f2f2f2; padding: 12px;">
+      <td>Data Source: Financial Analysis Report</td>
+      <td>Last Updated: March 2023</td>
+      <td>Notes: Assumptions and Variance Analysis included in separate report.</td>
+    </tr>
+
+  </table>
+
+</body>
+</html>

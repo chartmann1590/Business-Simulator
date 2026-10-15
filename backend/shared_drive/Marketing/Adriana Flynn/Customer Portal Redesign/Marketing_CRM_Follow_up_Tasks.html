@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* TITLE ROW */
+    tr.title-row {
+      background-color: #366092;
+      color: white;
+      font-size: 16pt;
+      font-weight: bold;
+      padding: 12px;
+      text-align: center;
+    }
+    
+    /* HEADER ROW */
+    th.header-column {
+      background: #d0d0d0;
+      border: 1px solid #d0d0d0;
+      padding: 8px;
+      font-size: 11pt;
+      font-weight: bold;
+      text-align: left;
+    }
+    
+    /* DATA ROW */
+    tr.data-row {
+      background-color: white;
+      border: 1px solid #d0d0d0;
+    }
+    
+    /* ALTERNATING ZEBRA STRIPING */
+    tr.data-row:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    
+    /* TOTALS ROW */
+    th.totals-column {
+      background-color: #e7f3ff;
+      border-top: 2px solid #d0d0d0;
+      font-size: 11pt;
+      font-weight: bold;
+      text-align: right;
+    }
+    
+    /* CELL PADDING */
+    table td {
+      padding: 8px;
+    }
+    
+    /* TEXT ALIGNMENT */
+    th {
+      text-align: left;
+    }
+    td {
+      text-align: right;
+    }
+    th.date-column {
+      text-align: center;
+    }
+    
+    /* NUMBER FORMAT */
+    td.currency {
+      background-color: #f2f2f2;
+      padding: 8px;
+      border-bottom: 1px solid #d0d0d0;
+      white-space: pre;
+      overflow: hidden;
+    }
+    
+    /* PERCENTAGE FORMAT */
+    th.percent-column, td.percent {
+      padding: 8px;
+      border-bottom: 1px solid #d0d0d0;
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+
+<table border-collapse="collapse">
+  <tr class="title-row">
+    <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</td>
+  </tr>
+  
+  <!-- TITLE ROW SUBTITLE -->
+  <tr>
+    <th colspan="10">Employee Performance and Financial Analysis</th>
+  </tr>
+  
+  <!-- HEADER ROW */
+  <tr class="header-row">
+    <th>Department</th>
+    <th>Name</th>
+    <th>Title</th>
+    <th>Project</th>
+    <th>Budget</th>
+    <th>Revenue</th>
+    <th>Purchase</th>
+    <th>Sales</th>
+    <th>Profit</th>
+  </tr>
+  
+  <!-- DATA ROWS */
+  <tr class="data-row">
+    <td>Marketing</td>
+    <td>Adriana Flynn</td>
+    <td>Operations Senior</td>
+    <td>Customer Portal Redesign</td>
+    <td>$75,000.00</td>
+    <td>$25,831.02</td>
+    <td>0.00</td>
+    <td>$25,831.02</td>
+    <td>$50,169.98</td>
+  </tr>
+  
+  <tr class="data-row">
+    <td>Marketing</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  
+  <!-- CALCULATED COLUMNS -->
+  <tr class="data-row">
+    <th>Percentage of Total Revenue</th>
+    <td style="background-color: #f2f2f2;">$(848,324.28 * 0.03) / $848,324.28 = 3.00%</td>
+  </tr>
+  
+  <tr class="data-row">
+    <th>Project ROI</th>
+    <td style="background-color: #f2f2f2;">$(25,831.02 - 0.00) / $75,000.00 = 34.57%</td>
+  </tr>
+  
+  <!-- SUMMARY SECTION -->
+  <tr class="data-row">
+    <th>Revenue Growth Rate</th>
+    <td style="background-color: #f2f2f2;">$(25,831.02 - $21,000.00) / $21,000.00 = 22.71%</td>
+  </tr>
+  
+  <!-- FOOTER */
+  <tr class="data-row">
+    <th>Data Source:</th>
+    <td>Actual Financial Data</td>
+    <th>Last Updated:</th>
+    <td></td>
+    <th>Notes:</th>
+    <td></td>
+  </tr>
+
+  <tr class="totals-row" style="background-color: #e7f3ff; border-top: 2px solid #d0d0d0;">
+    <th style="text-align: right;">Total Revenue</th>
+    <td style="border-right: 2px solid #d0d0d0;">$848,324.28</td>
+    <th style="text-align: right;">Total Profit</th>
+    <td style="border-right: 2px solid #d0d0d0;">$361,970.04</td>
+    <th style="text-align: right;">Total Expenses</th>
+    <td style="border-right: 2px solid #d0d0d0;">$486,354.24</td>
+  </tr>
+
+</table>
+
+</body>
+</html>

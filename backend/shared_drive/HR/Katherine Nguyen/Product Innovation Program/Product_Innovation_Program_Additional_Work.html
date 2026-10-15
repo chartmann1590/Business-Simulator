@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Financial Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .total-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+
+        .financial-analysis > th, .sales-performance > th, .management-kpi > th {
+            text-align: left;
+        }
+
+        .financial-analysis td, .sales-performance td, .management-kpi td {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <table border="0" cellpadding="8px">
+        <tr style="background-color: #366092; color: white; font-weight: bold;">
+            <td colspan="10">Business Financial Dashboard</td>
+        </tr>
+
+        <!-- Finance/Accounting Section -->
+        <tr>
+            <th style="text-align: left;">Financial Analysis</th>
+            <th style="text-align: right;">Budget</th>
+            <th style="text-align: right;">Revenue</th>
+            <th style="text-align: right;">Profit Margin (%)</th>
+        </tr>
+
+        <!-- Totals Row -->
+        <tr class="total-row">
+            <td></td>
+            <td>$141,155.29</td>
+            <td>$15,460.78</td>
+            <td>42.67%</td>
+        </tr>
+
+        <!-- Data Rows for Finance/Accounting Section -->
+        <tr>
+            <td>Total Revenue:</td>
+            <td style="text-align: right;">$848,324.28</td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Profit:</td>
+            <td style="text-align: right;">$361,970.04</td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <tr>
+            <td>Total Expenses:</td>
+            <td style="text-align: right;">$486,354.24</td>
+            <td></td>
+            <td></td>
+        </tr>
+
+        <!-- Sales/Marketing Section -->
+        <tr>
+            <th style="text-align: left;">Sales Performance</th>
+            <th style="text-align: right;">Product/Service Revenue</th>
+            <th style="text-align: right;">Conversion Rate (%)</th>
+        </tr>
+
+        <tr class="total-row">
+            <td></td>
+            <td>$848,324.28</td>
+            <td>90%</td>
+        </tr>
+
+        <!-- Data Rows for Sales/Marketing Section -->
+        <tr>
+            <td>Product A Revenue:</td>
+            <td style="text-align: right;">$200,000.00</td>
+            <td style="text-align: right;">80%</td>
+        </tr>
+
+        <tr>
+            <td>Product B Revenue:</td>
+            <td style="text-align: right;">$300,000.00</td>
+            <td style="text-align: right;">85%</td>
+        </tr>
+
+        <!-- Management/KPI Section -->
+        <tr>
+            <th style="text-align: left;">Management KPI</th>
+            <th style="text-align: right;">Department Performance</th>
+            <th style="text-align: right;">Project ROI (%)</th>
+        </tr>
+
+        <tr class="total-row">
+            <td></td>
+            <td>85%</td>
+            <td>20%</td>
+        </tr>
+
+        <!-- Data Rows for Management/KPI Section -->
+        <tr>
+            <td>Department A Performance:</td>
+            <td style="text-align: right;">80%</td>
+            <td style="text-align: right;">18%</td>
+        </tr>
+
+        <tr>
+            <td>Department B Performance:</td>
+            <td style="text-align: right;">85%</td>
+            <td style="text-align: right;">22%</td>
+        </tr>
+
+        <!-- Operations Section -->
+        <tr>
+            <th style="text-align: left;">Operations</th>
+            <th style="text-align: right;">Resource Allocation</th>
+            <th style="text-align: right;">Efficiency Metrics</th>
+        </tr>
+
+        <tr class="total-row">
+            <td></td>
+            <td>90%</td>
+            <td>95%</td>
+        </tr>
+
+        <!-- Data Rows for Operations Section -->
+        <tr>
+            <td>Department C Resource Allocation:</td>
+            <td style="text-align: right;">80%</td>
+            <td style="text-align: right;">92%</td>
+        </tr>
+
+        <tr>
+            <td>Department D Efficiency Metrics:</td>
+            <td style="text-align: right;">85%</td>
+            <td style="text-align: right;">98%</td>
+        </tr>
+
+        <!-- HR Section -->
+        <tr>
+            <th style="text-align: left;">HR</th>
+            <th style="text-align: right;">Employee Cost Analysis</th>
+            <th style="text-align: right;">Department Headcount</th>
+        </tr>
+
+        <tr class="total-row">
+            <td></td>
+            <td>$500,000.00</td>
+            <td>100%</td>
+        </tr>
+
+        <!-- Data Rows for HR Section -->
+        <tr>
+            <td>Employee A Cost Analysis:</td>
+            <td style="text-align: right;">$150,000.00</td>
+            <td style="text-align: right;">80%</td>
+        </tr>
+
+        <tr>
+            <td>Department E Headcount:</td>
+            <td style="text-align: right;">85%</td>
+            <td style="text-align: right;">92%</td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+            <td colspan="10">
+                <span style="font-size: 12pt; color: #999;">Generated using actual business data.</span>
+                <br>
+                <span style="font-size: 12pt; color: #999;">Last Updated: </span>
+                <span id="lastUpdated" style="font-size: 12pt;"></span>
+            </td>
+        </tr>
+
+    </table>
+
+</body>
+</html>

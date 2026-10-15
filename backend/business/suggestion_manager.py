@@ -94,7 +94,7 @@ class SuggestionManager:
         activity = Activity(
             employee_id=employee.id,
             activity_type="suggestion_submitted",
-            description=f"💡 Submitted suggestion: {title}",
+            description=f" Submitted suggestion: {title}",
             activity_metadata={
                 "suggestion_id": suggestion.id,
                 "category": category
@@ -113,7 +113,7 @@ class SuggestionManager:
         for manager in managers:
             notification = Notification(
                 notification_type="suggestion",
-                title=f"💡 New Suggestion from {employee.name}",
+                title=f" New Suggestion from {employee.name}",
                 message=f"{title}: {content[:50]}...",
                 employee_id=manager.id
             )
@@ -222,7 +222,7 @@ class SuggestionManager:
         
         if votes_added > 0:
             await self.db.commit()
-            print(f"✅ Added {votes_added} votes to suggestions")
+            print(f" Added {votes_added} votes to suggestions")
     
     async def _should_employee_vote(
         self, employee: Employee, suggestion: Suggestion, 
@@ -338,10 +338,10 @@ Respond with ONLY "yes" or "no", nothing else."""
                     # Create notification for the employee who submitted the suggestion
                     if author:
                         status_emoji = {
-                            "reviewed": "👀",
-                            "implemented": "✅",
-                            "rejected": "❌"
-                        }.get(new_status, "📋")
+                            "reviewed": "",
+                            "implemented": "",
+                            "rejected": ""
+                        }.get(new_status, "")
                         
                         notification = Notification(
                             notification_type="suggestion_status_update",
@@ -356,9 +356,9 @@ Respond with ONLY "yes" or "no", nothing else."""
         
         if comments_added > 0:
             await self.db.commit()
-            print(f"✅ Added {comments_added} manager comments to suggestions")
+            print(f" Added {comments_added} manager comments to suggestions")
             if status_updates > 0:
-                print(f"✅ Updated status for {status_updates} suggestions")
+                print(f" Updated status for {status_updates} suggestions")
     
     async def _generate_manager_comment(
         self, manager: Employee, suggestion: Suggestion,

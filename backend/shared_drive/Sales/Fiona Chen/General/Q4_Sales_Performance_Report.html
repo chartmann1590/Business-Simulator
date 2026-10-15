@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Financial Dashboard</title>
+  <style>
+    /* TABLE STYLE */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    
+    th, td {
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    
+    tr:hover {
+      background-color: #e7f3ff;
+    }
+    
+    tr.total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    /* CELL Formatting */
+    .currency {
+      color: #008000;
+    }
+    
+    .percentage {
+      color: #FF0000;
+    }
+    
+    /* CONDITIONAL FORMATTING */
+    .green {
+      background-color: #C6F4D6;
+    }
+    
+    .red {
+      background-color: #FF99CC;
+    }
+    
+    .blue {
+      background-color: #87CEEB;
+    }
+  </style>
+</head>
+<body>
+
+<table style="width:100%">
+  <tr>
+    <td colspan="10" style="text-align:center; font-size:16pt; font-weight:bold; padding:12px;">Financial Dashboard</td>
+  </tr>
+  
+  <tr>
+    <th style="background-color:#366092; color:white; font-weight:bold; padding:8px;border:1px solid #d0d0d0;" colspan="10">Department Performance</th>
+  </tr>
+  
+  <tr class="total-row">
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">Total Revenue</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">$848,324.28</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">Total Profit</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">$361,970.04</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">Total Expenses</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">$486,354.24</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">Profit Margin</td>
+    <td style="padding:8px; border-top:2px solid #d0d0d0; background-color:#e7f3ff; font-weight:bold;">42.67%</td>
+  </tr>
+  
+  <tr>
+    <th style="background-color:#366092; color:white; font-weight:bold; padding:8px;border:1px solid #d0d0d0;" colspan="10">Sales Performance</th>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Product Senior - Fiona Chen</td>
+    <td style="padding:8px;">Total Revenue</td>
+    <td style="padding:8px;">$848,324.28</td>
+    <td style="padding:8px;">Conversion Rate</td>
+    <td style="padding:8px;">80%</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Total Employees</td>
+    <td style="padding:8px;">1417</td>
+    <td style="padding:8px;">Employee Turnover Rate</td>
+    <td style="padding:8px;">10%</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Active Projects</td>
+    <td style="padding:8px;">16</td>
+    <td style="padding:8px;">Project ROI</td>
+    <td style="padding:8px;">100%</td>
+  </tr>
+  
+  <tr>
+    <th style="background-color:#366092; color:white; font-weight:bold; padding:8px;border:1px solid #d0d0d0;" colspan="10">Department Breakdown</th>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Engineering</td>
+    <td style="padding:8px;">49 employees</td>
+    <td style="padding:8px;">Marketing</td>
+    <td style="padding:8px;">63 employees</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">HR</td>
+    <td style="padding:8px;">47 employees</td>
+    <td style="padding:8px;">Design</td>
+    <td style="padding:8px;">50 employees</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Operations</td>
+    <td style="padding:8px;">52 employees</td>
+    <td style="padding:8px;">Executive</td>
+    <td style="padding:8px;">1 employee</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Administration</td>
+    <td style="padding:8px;">57 employees</td>
+    <td style="padding:8px;">Finance</td>
+    <td style="padding:8px;">1 employee</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Product</td>
+    <td style="padding:8px;">44 employees</td>
+    <td style="padding:8px;">IT</td>
+    <td style="padding:8px;">45 employees</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Sales</td>
+    <td style="padding:8px;">43 employees</td>
+    <td style="padding:8px;">API Infrastructure Upgrade</td>
+    <td style="padding:8px;">$100,000.00 Budget, $28,996.55 Revenue</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Customer Portal Redesign</td>
+    <td style="padding:8px;">$75,000.00 Budget, $25,831.02 Revenue</td>
+    <td style="padding:8px;">Strategic Partnership Development</td>
+    <td style="padding:8px;">$78,206.83 Budget, $0.00 Revenue</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Product Innovation Program</td>
+    <td style="padding:8px;">$147,567.09 Budget, $0.00 Revenue</td>
+    <td style="padding:8px;">Product Innovation Program</td>
+    <td style="padding:8px;">$79,083.50 Budget, $0.00 Revenue</td>
+  </tr>
+  
+  <tr>
+    <th style="background-color:#366092; color:white; font-weight:bold; padding:8px;border:1px solid #d0d0d0;" colspan="10">Summary</th>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Revenue Growth Rate</td>
+    <td style="padding:8px;">100%</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Expense Reduction Goal</td>
+    <td style="padding:8px;">20%</td>
+  </tr>
+  
+  <tr>
+    <th style="background-color:#366092; color:white; font-weight:bold; padding:8px;border:1px solid #d0d0d0;" colspan="10">Data Source</th>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Actual Revenue, Profit, and Expenses</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Last Updated Date:</td>
+    <td style="padding:8px;">2023-02-20</td>
+  </tr>
+  
+  <tr>
+    <td style="padding:8px;">Notes:</td>
+    <td style="padding:8px;">This dashboard provides a comprehensive view of our financial performance, including revenue, profit, expenses, and key metrics. The data is current as of February 20, 2023.</td>
+  </tr>
+</table>
+
+</body>
+</html>

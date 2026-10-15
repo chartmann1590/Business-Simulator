@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        /* Title Section */
+        tr:first-child {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 12px;
+            text-align: center;
+            font-size: 16pt;
+        }
+        
+        /* Header Row */
+        th, td {
+            border: 1px solid #d0d0d0;
+            padding: 8px;
+            vertical-align: top;
+        }
+        
+        /* Data Rows */
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        /* Totals Row */
+        tr:last-child td:nth-child(1),
+        tr:last-child th:nth-child(1) {
+            background-color: #e7f3ff;
+            border-top: 2px solid black;
+            font-weight: bold;
+        }
+        
+        /* Number Formatting */
+        number {
+            font-size: 11pt;
+            margin-right: 8px;
+        }
+        
+        /* Currency Formatting */
+        .currency {
+            font-size: 11pt;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <table border="0" cellpadding="8" cellspacing="0">
+        <tr>
+            <td colspan="7"><b>Financial Dashboard</b></td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td><b>Name:</b> Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td>Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td><b>Name:</b> Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td><b>Name:</b> Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td><b>Name:</b> Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+        <tr>
+            <th style="background: #366092; color: white; font-weight: bold; padding: 8px;">Employee Information</th>
+            <th style="padding: 8px;">Current Project</th>
+            <th style="padding: 8px;">Business Metrics</th>
+            <th style="padding: 8px;">Active Projects</th>
+            <th style="padding: 8px;">Department Data</th>
+        </tr>
+        <tr>
+            <td><b>Name:</b> Adriana Santos<br><b>Title:</b> Product Senior<br><b>Department:</b> HR</td>
+            <td><b>Project Name:</b> Mobile App Development<br><b>Budget:</b>$150,000.00<br><b>Revenue:</b>$32,045.32</td>
+            <td><b>Total Revenue:</b>$848,324.28<br><b>Total Profit:</b>$361,970.04<br><b>Total Expenses:</b>$486,354.24<br><b>Profit Margin:</b> 42.67%</td>
+            <td><b>Active Projects:</b> 15<br><b>Total Employees:</b> 1417</td>
+            <td><b>Design:</b> 50 employees<br><b>Engineering:</b> 49 employees<br><b>IT:</b> 45 employees<br><b>Sales:</b> 43 employees<br><b>Operations:</b> 52 employees<br><b>Marketing:</b> 63 employees<br><b>Product:</b> 44 employees<br><b>Finance:</b> 1 employee<br><b>HR:</b> 47 employees<br><b Administration:</b> 57 employees<br><b>Executive:</b> 1 employee</td>
+        </tr>
+    </table>
+</body>
+</html>
+
+Please let me know if you would like me to add more data or styling.

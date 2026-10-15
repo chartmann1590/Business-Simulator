@@ -40,12 +40,12 @@ async def generate_meetings_now():
         past_meetings = await meeting_manager.generate_meetings_for_date_range(
             last_week_start, today_start
         )
-        print(f"✅ Generated {past_meetings} meetings for the past week")
+        print(f" Generated {past_meetings} meetings for the past week")
         
         # Generate meetings for today
         print("\nGenerating meetings for today...")
         today_meetings = await meeting_manager.generate_meetings()
-        print(f"✅ Generated {today_meetings} meetings for today")
+        print(f" Generated {today_meetings} meetings for today")
         
         # Always generate an in-progress meeting if one doesn't exist
         result = await db.execute(
@@ -57,15 +57,15 @@ async def generate_meetings_now():
             print("\nGenerating an in-progress meeting...")
             in_progress_meeting = await meeting_manager.generate_in_progress_meeting()
             if in_progress_meeting:
-                print(f"✅ Generated in-progress meeting: {in_progress_meeting.title}")
+                print(f" Generated in-progress meeting: {in_progress_meeting.title}")
             else:
-                print("❌ Could not generate in-progress meeting (may need more employees)")
+                print(" Could not generate in-progress meeting (may need more employees)")
         else:
-            print(f"\nℹ️  {len(in_progress_meetings)} in-progress meeting(s) already exist")
+            print(f"\n  {len(in_progress_meetings)} in-progress meeting(s) already exist")
             for meeting in in_progress_meetings:
                 print(f"   - {meeting.title} (ID: {meeting.id})")
         
-        print("\n✅ Meeting generation complete!")
+        print("\n Meeting generation complete!")
         print(f"   Total meetings: {len(existing_meetings) + past_meetings + today_meetings}")
 
 

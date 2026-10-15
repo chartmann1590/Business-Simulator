@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+    font-family: Arial;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+.title-row {
+    background-color: #366092;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    font-size: 16pt;
+    font-weight: bold;
+}
+
+.header-row {
+    background-color: #f2f2f2;
+    border-top: 1px solid #d0d0d0;
+    padding: 8px;
+    width: 100%;
+}
+
+.header-cell {
+    border: 1px solid #d0d0d0;
+    white-space: nowrap;
+    text-align: left;
+    padding: 8px;
+}
+
+.data-row {
+    background-color: #f2f2f2;
+    border-bottom: 1px solid #d0d0d0;
+    padding: 8px;
+}
+
+.totals-row {
+    background-color: #e7f3ff;
+    border-top: 2px solid #d0d0d0;
+    padding: 8px;
+    font-weight: bold;
+}
+
+.data-cell {
+    border: 1px solid #d0d0d0;
+    text-align: left;
+    padding: 8px;
+}
+
+.data-validation {
+    background-color: green;
+}
+
+.data-decrease {
+    background-color: red;
+}
+
+.column-group {
+    display: inline-block;
+    vertical-align: top;
+    margin: 10px;
+}
+
+.column-subtotal {
+    border-top: 1px solid #d0d0d0;
+    padding: 8px;
+}
+</style>
+</head>
+
+<body>
+<table>
+    <tr class="title-row">
+        <td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Dashboard</td>
+    </tr>
+    <tr class="header-row">
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Date</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Revenue</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Profit</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Expenses</th>
+        <th style="background: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Margin</th>
+    </tr>
+
+    <!-- Active Projects -->
+    <tr class="data-row">
+        <td style="border: 1px solid #d0d0d0; text-align: left; padding: 8px;">Customer Portal Redesign (Budget $75,000.00, Revenue $25,831.02)</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$25,831.02</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$4,191.23</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$50,168.77</td>
+        <td style="border: 1px solid #d0d0d0; text-align: center; padding: 8px;">42.17%</td>
+    </tr>
+
+    <tr class="data-row">
+        <td style="border: 1px solid #d0d0d0; text-align: left; padding: 8px;">API Infrastructure Upgrade (Budget $100,000.00, Revenue $28,996.55)</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$28,996.55</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$4,799.96</td>
+        <td style="border: 1px solid #d0d0d0; text-align: right; padding: 8px;">$95,200.04</td>
+        <td style="border: 1px solid #d0d0d0; text-align: center; padding: 8px;">42.17%</td>
+    </tr>
+
+    <!-- ... -->
+
+</table>
+</body>
+</html>

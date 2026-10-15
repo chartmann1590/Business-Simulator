@@ -25,6 +25,11 @@ function Dashboard() {
   const [clockEvents, setClockEvents] = useState([])
   const [clockStats, setClockStats] = useState(null)
   const [clockLoading, setClockLoading] = useState(false)
+  const [clockTimePeriod, setClockTimePeriod] = useState('today') // today, week, month
+  const [sickDaysData, setSickDaysData] = useState([])
+  const [sickDaysStats, setSickDaysStats] = useState(null)
+  const [sickDaysLoading, setSickDaysLoading] = useState(false)
+  const [sickDaysTimePeriod, setSickDaysTimePeriod] = useState('week') // week, month, all
 
   const handleEmployeeClick = (employee) => {
     // Navigate to office view with employee ID and floor as URL parameters
@@ -269,12 +274,16 @@ function Dashboard() {
     const fetchClockData = async () => {
       setClockLoading(true)
       try {
+        const days = clockTimePeriod === 'today' ? 1 : clockTimePeriod === 'week' ? 7 : 30
         const [eventsResult, statsResult] = await Promise.all([
-          apiGet('/api/clock-events/today'),
+          apiGet(`/api/clock-events/history?days=${days}`),
           apiGet('/api/clock-events/stats')
         ])
-        setClockEvents(eventsResult.data || [])
-        setClockStats(statsResult.data || null)
+        // Ensure data is always an array, even on error
+        const eventsData = Array.isArray(eventsResult.data) ? eventsResult.data : []
+        const statsData = statsResult.data && typeof statsResult.data === 'object' ? statsResult.data : null
+        setClockEvents(eventsData)
+        setClockStats(statsData)
       } catch (error) {
         console.error('Error fetching clock data:', error)
         setClockEvents([])
@@ -289,7 +298,35 @@ function Dashboard() {
       const interval = setInterval(fetchClockData, 30000) // Refresh every 30 seconds
       return () => clearInterval(interval)
     }
-  }, [activeTab])
+  }, [activeTab, clockTimePeriod])
+
+  // Fetch sick days when sick days tab is active
+  useEffect(() => {
+    const fetchSickDaysData = async () => {
+      setSickDaysLoading(true)
+      try {
+        const days = sickDaysTimePeriod === 'week' ? 7 : sickDaysTimePeriod === 'month' ? 30 : 365
+        const [historyResult, statsResult] = await Promise.all([
+          apiGet(`/api/sick-days/history?days=${days}`),
+          apiGet('/api/sick-days/statistics')
+        ])
+        setSickDaysData(historyResult.data || [])
+        setSickDaysStats(statsResult.data || null)
+      } catch (error) {
+        console.error('Error fetching sick days data:', error)
+        setSickDaysData([])
+        setSickDaysStats(null)
+      } finally {
+        setSickDaysLoading(false)
+      }
+    }
+
+    if (activeTab === 'sick-days') {
+      fetchSickDaysData()
+      const interval = setInterval(fetchSickDaysData, 30000) // Refresh every 30 seconds
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, sickDaysTimePeriod])
 
   // Update business name in sidebar
   useEffect(() => {
@@ -417,6 +454,15 @@ function Dashboard() {
               }`}
           >
             Clock In/Out
+          </button>
+          <button
+            onClick={() => setActiveTab('sick-days')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'sick-days'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+          >
+            Sick Days
           </button>
         </nav>
       </div>
@@ -1487,15 +1533,51 @@ function Dashboard() {
           {/* Clock Events List */}
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Today's Clock Events</h3>
-              <p className="text-sm text-gray-500 mt-1">All employee clock in/out activity for today</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Clock Events</h3>
+                  <p className="text-sm text-gray-500 mt-1">All employee clock in/out activity</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setClockTimePeriod('today')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      clockTimePeriod === 'today'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => setClockTimePeriod('week')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      clockTimePeriod === 'week'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Week
+                  </button>
+                  <button
+                    onClick={() => setClockTimePeriod('month')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      clockTimePeriod === 'month'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Month
+                  </button>
+                </div>
+              </div>
             </div>
 
             {clockLoading ? (
               <div className="p-8 text-center text-gray-500">
                 Loading clock events...
               </div>
-            ) : clockEvents.length === 0 ? (
+            ) : !Array.isArray(clockEvents) || clockEvents.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 No clock events recorded today yet.
               </div>
@@ -1578,6 +1660,147 @@ function Dashboard() {
                       {/* Timestamp */}
                       <div className="ml-4 flex-shrink-0 text-sm text-gray-500">
                         {formatTimestamp(event.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Sick Days Tab Content */}
+      {activeTab === 'sick-days' && (
+        <div className="space-y-6">
+          {/* Stats Cards */}
+          {sickDaysStats && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-red-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-red-600">Currently Sick</div>
+                <div className="mt-2 text-3xl font-semibold text-red-700">{sickDaysStats.currently_sick}</div>
+              </div>
+              <div className="bg-orange-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-orange-600">Sick Days This Month</div>
+                <div className="mt-2 text-3xl font-semibold text-orange-700">{sickDaysStats.total_sick_days_month}</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-yellow-600">Sick Days This Year</div>
+                <div className="mt-2 text-3xl font-semibold text-yellow-700">{sickDaysStats.total_sick_days_year}</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg shadow p-6">
+                <div className="text-sm font-medium text-blue-600">Avg Per Employee</div>
+                <div className="mt-2 text-3xl font-semibold text-blue-700">{sickDaysStats.avg_sick_days_per_employee}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Sick Days History List */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Sick Day Call-Outs</h3>
+                  <p className="text-sm text-gray-500 mt-1">History of employee sick day call-ins</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setSickDaysTimePeriod('week')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      sickDaysTimePeriod === 'week'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Week
+                  </button>
+                  <button
+                    onClick={() => setSickDaysTimePeriod('month')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      sickDaysTimePeriod === 'month'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Month
+                  </button>
+                  <button
+                    onClick={() => setSickDaysTimePeriod('all')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md ${
+                      sickDaysTimePeriod === 'all'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {sickDaysLoading ? (
+              <div className="p-8 text-center text-gray-500">
+                Loading sick days history...
+              </div>
+            ) : sickDaysData.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No sick day call-outs recorded yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {sickDaysData.map((sickDay) => (
+                  <div
+                    key={sickDay.id}
+                    className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-4 flex-1">
+                        {/* Employee Avatar */}
+                        {sickDay.employee.avatar_path ? (
+                          <img
+                            src={sickDay.employee.avatar_path}
+                            alt={sickDay.employee.name}
+                            className="h-12 w-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-500 font-semibold text-sm">
+                              {sickDay.employee.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Sick Day Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={() => navigate(`/employees/${sickDay.employee.id}`)}
+                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                            >
+                              {sickDay.employee.name}
+                            </button>
+                            <span className="text-sm text-gray-500">
+                              {sickDay.employee.title}
+                            </span>
+                            {sickDay.employee.department && (
+                              <span className="text-sm text-gray-400">
+                                · {sickDay.employee.department}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Sick Reason Badge */}
+                          <div className="mt-2 flex items-center space-x-3">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                              🤒 {sickDay.reason}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timestamp */}
+                      <div className="ml-4 flex-shrink-0 text-sm text-gray-500">
+                        {formatTimestamp(sickDay.timestamp)}
                       </div>
                     </div>
                   </div>

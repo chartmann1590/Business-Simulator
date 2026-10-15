@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Dashboard</title>
+    <style>
+        /* Grid */
+        table {
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        /* Header row */
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            padding: 12px;
+        }
+        
+        /* Data rows */
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        
+        /* Totals row */
+        tr:nth-child(6) {
+            background: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+        
+        /* Numbers and currency */
+        td {
+            text-align: right;
+            white-space: nowrap;
+        }
+        
+        /* Font and colors */
+        th, td {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+        }
+        
+        .green {
+            color: green;
+        }
+        
+        .red {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+
+<table border="1" cellpadding="8" cellspacing="0">
+    <tr>
+        <th colspan="7">Financial Dashboard - HR Senior, Maya Santos</th>
+    </tr>
+    
+    <tr>
+        <td style="background: #366092; color: white; padding: 12px;">Title</td>
+        <td style="padding: 12px; border: 1px solid #d0d0d0;">Business Metrics</td>
+        <td style="padding: 12px; border: 1px solid #d0d0d0;">Employee Data</td>
+        <td style="padding: 12px; border: 1px solid #d0d0d0;">Project Data</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px; border-bottom: 1px solid #d0d0d0;">Total Revenue, Profit, Expenses</th>
+    </tr>
+    
+    <tr>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Active Projects</th>
+    </tr>
+    
+    <tr>
+        <td/API Infrastructure Upgrade:</td>
+        <td>$100,000.00</td>
+        <td>28,996.55</td>
+        <td>$150,000.00</td>
+        <td>32,045.32</td>
+    </tr>
+    
+    <tr>
+        <td>Moble App Development:</td>
+        <td>$156,356.16</td>
+        <td>17,080.48</td>
+        <td>$88,137.90</td>
+        <td>10,036.51</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Department Data</th>
+    </tr>
+    
+    <tr>
+        <td>Design</td>
+        <td>50</td>
+        <td>Engineering</td>
+        <td>49</td>
+    </tr>
+    
+    <tr>
+        <td>IT</td>
+        <td>45</td>
+        <td>Sales</td>
+        <td>43</td>
+    </tr>
+    
+    <tr>
+        <td>Operations</td>
+        <td>52</td>
+        <td>Marketing</td>
+        <td>63</td>
+    </tr>
+    
+    <tr>
+        <td>Product</td>
+        <td>44</td>
+        <tdAdministration</td>
+        <td>57</td>
+    </tr>
+    
+    <tr>
+        <td>Finance</td>
+        <td>1</td>
+        <td HR</td>
+        <td>47</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Employee Data Summary</th>
+    </tr>
+    
+    <tr>
+        <td>Total Employees:</td>
+        <td>1417</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Project ROI Analysis</th>
+    </tr>
+    
+    <tr>
+        <td>API Infrastructure Upgrade:</td>
+        <td>$100,000.00</td>
+        <td>28,996.55</td>
+        <td>(-29.70%)</td>
+    </tr>
+    
+    <tr>
+        <td>Moble App Development:</td>
+        <td>$156,356.16</td>
+        <td>17,080.48</td>
+        <td>(11.06%)</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Employee Cost Analysis</th>
+    </tr>
+    
+    <tr>
+        <td HR:</td>
+        <td>$[HR Salary]</td>
+    </tr>
+    
+    <tr>
+        <th colspan="7" style="background: #f2f2f2; padding: 8px;">Variance Analysis</th>
+    </tr>
+    
+    <tr>
+        <td>Actual vs. Budget:</td>
+        <td>$[Actual - Budget]</td>
+    </tr>
+</table>
+
+</body>
+</html>

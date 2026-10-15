@@ -85,7 +85,7 @@ class GossipManager:
         activity = Activity(
             employee_id=originator.id,
             activity_type="gossip",
-            description=f"💬 {originator.name} shared some gossip with {recipient.name}",
+            description=f" {originator.name} shared some gossip with {recipient.name}",
             activity_metadata={
                 "gossip_id": gossip.id,
                 "topic": topic,

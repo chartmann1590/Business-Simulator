@@ -171,13 +171,13 @@ class SharedDriveManager:
         # Check same-type files first (most likely duplicates)
         for existing_file in same_type_files:
             if self._check_content_similarity(new_content, existing_file.content_html, threshold=0.80):
-                print(f"  ⚠️  Skipping duplicate: similar {file_type} content already exists in '{existing_file.file_name}'")
+                print(f"    Skipping duplicate: similar {file_type} content already exists in '{existing_file.file_name}'")
                 return True
         
         # Also check other types (to prevent creating same content as different types)
         for existing_file in other_type_files[:5]:  # Check last 5 files of other types
             if self._check_content_similarity(new_content, existing_file.content_html, threshold=0.85):
-                print(f"  ⚠️  Skipping duplicate: similar content exists in different type '{existing_file.file_name}' ({existing_file.file_type})")
+                print(f"    Skipping duplicate: similar content exists in different type '{existing_file.file_name}' ({existing_file.file_type})")
                 return True
         
         return False
@@ -458,10 +458,10 @@ Generate the complete HTML document now. Return ONLY the HTML with inline styles
                 
                 return html_content
         except httpx.ReadTimeout as e:
-            print(f"⚠️  Timeout generating Word document (AI took too long). Using fallback content.")
+            print(f"  Timeout generating Word document (AI took too long). Using fallback content.")
             # Don't print full traceback for timeouts - it's expected for long operations
         except httpx.TimeoutException as e:
-            print(f"⚠️  Connection timeout generating Word document. Using fallback content.")
+            print(f"  Connection timeout generating Word document. Using fallback content.")
         except Exception as e:
             print(f"Error generating Word document: {e}")
             import traceback
@@ -623,9 +623,9 @@ Generate the complete HTML spreadsheet now. Return ONLY the HTML table with inli
                 
                 return html_content
         except httpx.ReadTimeout as e:
-            print(f"⚠️  Timeout generating spreadsheet (AI took too long). Using fallback content.")
+            print(f"  Timeout generating spreadsheet (AI took too long). Using fallback content.")
         except httpx.TimeoutException as e:
-            print(f"⚠️  Connection timeout generating spreadsheet. Using fallback content.")
+            print(f"  Connection timeout generating spreadsheet. Using fallback content.")
         except Exception as e:
             print(f"Error generating spreadsheet: {e}")
             import traceback
@@ -826,9 +826,9 @@ Generate the complete HTML presentation now. Return ONLY the HTML with inline st
                 
                 return html_content
         except httpx.ReadTimeout as e:
-            print(f"⚠️  Timeout generating PowerPoint (AI took too long). Using fallback content.")
+            print(f"  Timeout generating PowerPoint (AI took too long). Using fallback content.")
         except httpx.TimeoutException as e:
-            print(f"⚠️  Connection timeout generating PowerPoint. Using fallback content.")
+            print(f"  Connection timeout generating PowerPoint. Using fallback content.")
         except Exception as e:
             print(f"Error generating PowerPoint: {e}")
             import traceback
@@ -1184,7 +1184,7 @@ Generate 1 document suggestion. Choose the type that will help BALANCE the distr
                                 pass
                         
                 except Exception as parse_error:
-                    print(f"  ⚠️  Could not parse AI response as JSON: {parse_error}")
+                    print(f"    Could not parse AI response as JSON: {parse_error}")
                     # Try to extract document type from text if JSON parsing fails
                     response_lower = response_text.lower()
                     if "spreadsheet" in response_lower or "excel" in response_lower:
@@ -1309,18 +1309,18 @@ Generate 1 document suggestion. Choose the type that will help BALANCE the distr
                         content = await self.generate_word_document(employee, current_project, current_task, business_context)
                     
                     if not content or not content.strip():
-                        print(f"  ⚠️  Warning: Empty content generated for {employee.name}, skipping...")
+                        print(f"    Warning: Empty content generated for {employee.name}, skipping...")
                         continue
                     
                     # Validate content quality before creating
                     is_valid, reason = self._validate_content_quality(content, file_type)
                     if not is_valid:
-                        print(f"  ⚠️  Skipping low-quality document for {employee.name}: {reason}")
+                        print(f"    Skipping low-quality document for {employee.name}: {reason}")
                         continue
                     
                     # Check for duplicate content before creating
                     if await self._check_duplicate_content(content, employee.id, file_type):
-                        print(f"  ⚠️  Skipping duplicate document for {employee.name}")
+                        print(f"    Skipping duplicate document for {employee.name}")
                         continue
                     
                     # Determine file path
@@ -1358,9 +1358,9 @@ Generate 1 document suggestion. Choose the type that will help BALANCE the distr
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(content)
                     
-                    print(f"  ✓ Created {file_type} document: {file_name}")
+                    print(f"   Created {file_type} document: {file_name}")
                 except Exception as e:
-                    print(f"  ✗ Error creating document for {employee.name}: {e}")
+                    print(f"   Error creating document for {employee.name}: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
@@ -1369,10 +1369,10 @@ Generate 1 document suggestion. Choose the type that will help BALANCE the distr
             return created_files
         
         except httpx.ReadTimeout:
-            print(f"⚠️  LLM timeout generating documents for employee {employee.id} (AI took too long). Skipping this cycle.")
+            print(f"  LLM timeout generating documents for employee {employee.id} (AI took too long). Skipping this cycle.")
             return []
         except httpx.TimeoutException:
-            print(f"⚠️  Connection timeout generating documents for employee {employee.id}. Skipping this cycle.")
+            print(f"  Connection timeout generating documents for employee {employee.id}. Skipping this cycle.")
             return []
         except Exception as e:
             print(f"Error generating documents for employee {employee.id}: {e}")
@@ -1457,17 +1457,17 @@ Generate 1 document suggestion. Choose the type that will help BALANCE the distr
                     
                     # Validate updated content quality
                     if not new_content or not new_content.strip():
-                        print(f"  ⚠️  Skipping update: empty content for {file.file_name}")
+                        print(f"    Skipping update: empty content for {file.file_name}")
                         continue
                     
                     is_valid, reason = self._validate_content_quality(new_content, file.file_type)
                     if not is_valid:
-                        print(f"  ⚠️  Skipping update: low-quality content for {file.file_name}: {reason}")
+                        print(f"    Skipping update: low-quality content for {file.file_name}: {reason}")
                         continue
                     
                     # Check if update would create a duplicate
                     if await self._check_duplicate_content(new_content, employee.id, file.file_type):
-                        print(f"  ⚠️  Skipping update: would create duplicate content for {file.file_name}")
+                        print(f"    Skipping update: would create duplicate content for {file.file_name}")
                         continue
                     
                     # Create version history

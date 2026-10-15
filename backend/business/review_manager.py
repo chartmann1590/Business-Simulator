@@ -290,10 +290,10 @@ class ReviewManager:
         
         # Verify the review was added and has an ID
         if not review.id:
-            print(f"  ⚠️  Warning: Review for {employee_name} has no ID after flush")
+            print(f"    Warning: Review for {employee_name} has no ID after flush")
             await safe_flush(self.db)  # Try again
         else:
-            print(f"  ✓ Review ID {review.id} created for {employee_name}")
+            print(f"   Review ID {review.id} created for {employee_name}")
         
         # Create activity log
         from database.models import Activity
@@ -701,17 +701,17 @@ Be professional, fair, and constructive. Match your personality traits when writ
             strengths = strengths.strip() if strengths else "Ongoing development"
             areas_for_improvement = areas_for_improvement.strip() if areas_for_improvement else "Continue professional growth"
             
-            print(f"  📝 Generated review content - Comments: {len(comments)} chars, Strengths: {len(strengths)} chars, Areas: {len(areas_for_improvement)} chars")
+            print(f"   Generated review content - Comments: {len(comments)} chars, Strengths: {len(strengths)} chars, Areas: {len(areas_for_improvement)} chars")
             
             return comments, strengths, areas_for_improvement
             
         except Exception as e:
-            print(f"  ⚠️  Error generating review with Ollama: {e}")
+            print(f"    Error generating review with Ollama: {e}")
             # Fallback to simple review - ensure non-empty values
             comments = f"{employee_name} has shown {'strong' if overall_rating >= 4.0 else 'satisfactory' if overall_rating >= 3.0 else 'areas needing improvement'} performance this period."
             strengths = "Good performance" if overall_rating >= 3.0 else "Room for growth"
             areas_for_improvement = "Continue developing skills" if overall_rating < 4.0 else "Maintain excellence"
-            print(f"  📝 Using fallback review content")
+            print(f"   Using fallback review content")
             return comments, strengths, areas_for_improvement
     
     async def get_average_rating(self, employee_id: int) -> Optional[float]:
@@ -779,7 +779,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
                     })
             
             if not employee_reviews:
-                print("  ℹ️  No reviews found - cannot assign performance award")
+                print("    No reviews found - cannot assign performance award")
                 return
         
             # Find the highest rating
@@ -908,7 +908,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
             from database.models import Notification
             winner_notification = Notification(
                 notification_type="performance_award",
-                title="🏆 Performance Award Earned!",
+                title=" Performance Award Earned!",
                 message=f"Congratulations! You have earned the Performance Award for having the highest review rating ({max_rating:.1f}/5.0) among all employees. Keep up the excellent work!",
                 employee_id=winner.id,
                 read=False
@@ -938,7 +938,7 @@ Be professional, fair, and constructive. Match your personality traits when writ
                 if emp.id != winner.id:  # Don't duplicate the winner's notification
                     acknowledgment = Notification(
                         notification_type="award_announcement",
-                        title="🏆 Performance Award Announcement",
+                        title=" Performance Award Announcement",
                         message=f"{winner.name} has earned the Performance Award for having the highest review rating ({max_rating:.1f}/5.0). Congratulations!",
                         employee_id=emp.id,
                         read=False

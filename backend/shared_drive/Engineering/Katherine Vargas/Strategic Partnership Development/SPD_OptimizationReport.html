@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+        }
+
+        th {
+            background-color: #366092;
+            color: white;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        tr:last-child td:nth-child(1),
+        tr:last-child td:nth-child(5), 
+        tr:last-child th:nth-child(1),
+        tr:last-child th:nth-child(3) {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top-width: 2px;
+            border-bottom: none;
+        }
+
+        td.num {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .green {
+            color: green;
+        }
+
+        .red {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+
+<table>
+
+    <tr>
+        <th colspan="6" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard</th>
+    </tr>
+
+    <tr>
+        <td style="width: 200px;">Employee Information:</td>
+        <td>Department: Engineering, Title: Senior Engineer</td>
+    </tr>
+
+    <tr>
+        <td style="width: 200px;">Current Project:</td>
+        <td>Project Name: Strategic Partnership Development, Budget: $156,356.16, Revenue: $17,080.48</td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">Business Metrics:</th>
+        <th style="text-align: center;">Total Revenue:</th>
+        <th style="text-align: center;">Total Profit:</th>
+        <th style="text-align: center;">Total Expenses:</th>
+        <th style="text-align: right;">Profit Margin (%):</th>
+    </tr>
+
+    <tr>
+        <td>**Total Revenue:** $848,324.28</td>
+        <td>$848,324.28</td>
+        <td>$486,354.24</td>
+        <td>(-42.67%)</td>
+        <td style="text-align: center;">($361,970.04)</td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">Active Projects:</th>
+        <th style="text-align: center;">Project Name</th>
+        <th style="text-align: right;">Budget (USD)</th>
+        <th style="text-align: right;">Revenue (USD)</th>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">1. Customer Portal Redesign</td>
+        <td>$75,000.00</td>
+        <td>$25,831.02</td>
+        <td class="green">$25,831.02</td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">2. API Infrastructure Upgrade</td>
+        <td>$100,000.00</td>
+        <td>$28,996.55</td>
+        <td class="green">$28,996.55</td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">3. Mobile App Development</td>
+        <td>$150,000.00</td>
+        <td>$32,045.32</td>
+        <td class="green">$32,045.32</td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">4. Digital Transformation Project</td>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+        <td class="red">$126,443.14</td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">5. Strategic Partnership Development</td>
+        <td>$156,356.16</td>
+        <td>$17,080.48</td>
+        <td class="red">$139,275.68</td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">Department Performance:</th>
+        <th style="text-align: center;">Headcount</th>
+        <th style="text-align: right;">Employee Count (USD)</th>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">1. Design</td>
+        <td>50</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">2. Engineering</td>
+        <td>49</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">3. IT</td>
+        <td>45</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">4. Sales</td>
+        <td>43</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">5. Operations</td>
+        <td>52</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">6. Marketing</td>
+        <td>63</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">7. Product</td>
+        <td>44</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">8. Administration</td>
+        <td>57</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">9. Finance</td>
+        <td>1</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">10. HR</td>
+        <td>47</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">KPI Dashboard:</th>
+        <th style="text-align: center;">Headcount</th>
+        <th style="text-align: right;">Total Employees (USD)</th>
+        <th style="text-align: right;">Growth Rate (%):</th>
+    </tr>
+
+    <tr>
+        <td style="background: #366092; color: white; font-weight: bold;">1. Project ROI:</td>
+        <td>$361,970.04 / $848,324.28</td>
+        <td></td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">2. Department Performance:</th>
+        <td>1417</td>
+        <td class="green">($15,433.12)</td>
+        <td>(-1.06%)</td>
+    </tr>
+
+    <tr>
+        <th style="background: #366092; color: white; font-weight: bold;">3. Employee Cost Analysis:</th>
+        <td>1417 / 10</td>
+        <td class="green">$14,173.70 / 10000 USD per employee</td>
+        <td>(-0.13%)</td>
+    </tr>
+
+    <tr style="background-color: #f2f2f2;">
+        <th>**Totals**: Total Revenue: $848,324.28; Total Profit: $361,970.04; Total Expenses: $486,354.24; Growth Rate: -42.67%</th>
+        <td style="text-align: center;"></td>
+    </tr>
+
+</table>
+
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* TABLE STYLING */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    
+    th, td {
+      border: 1px solid #d0d0d0;
+      padding: 8px;
+      text-align: left; /* Change this to right for numbers, center for dates */
+    }
+    
+    .total-row {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    .positive {
+      color: green;
+    }
+    
+    .negative {
+      color: red;
+    }
+    
+    /* HEADER ROW */
+    th:nth-child(1) {
+      background-color: #366092;
+      color: white;
+      font-weight: bold;
+    }
+    
+    /* DATA ROWS */
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    
+    /* CELL FORMATTING */
+    .currency {
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr>
+      <td colspan="10" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Digital Transformation Project Financial Dashboard</td>
+    </tr>
+    <tr>
+      <th style="background-color: #366092; color: white; font-weight: bold; padding: 8px; border: 1px solid #d0d0d0;">Date</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Total Revenue</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Total Profit</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Total Expenses</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Profit Margin (%)</th>
+    </tr>
+    <tr class="total-row">
+      <td colspan="5" style="text-align: center;"></td>
+      <td style="background-color: #e7f3ff; font-weight: bold;">$848,324.28</td>
+      <td style="background-color: #e7f3ff; font-weight: bold;">$361,970.04</td>
+      <td style="background-color: #e7f3ff; font-weight: bold;">$486,354.24</td>
+      <td style="background-color: #e7f3ff; font-weight: bold;">42.67%</td>
+    </tr>
+    <tr>
+      <th>Department</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Revenue</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Profit</th>
+      <th style="padding: 8px; border: 1px solid #d0d0d0;">Expense</th>
+    </tr>
+    <tr>
+      <td>Design</td>
+      <td>$70,675.89</td>
+      <td>$26,944.91</td>
+      <td>$43,730.33</td>
+    </tr>
+    <!-- Add more rows here -->
+    <tr>
+      <th>Operations</th>
+      <td>$70,675.89</td>
+      <td>$26,944.91</td>
+      <td>$43,730.33</td>
+    </tr>
+    <!-- Add more rows here -->
+  </table>
+</body>
+</html>
+
+This is a basic HTML table structure with inline styles that matches your requirements. You can add more rows to the table by following the same pattern.

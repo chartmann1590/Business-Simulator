@@ -11,7 +11,7 @@ async def check_database():
     # Check database connection
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
-        print("✗ Error: DATABASE_URL environment variable is required")
+        print(" Error: DATABASE_URL environment variable is required")
         print("Please set it in your .env file or environment variables.")
         return
     print(f"Database URL: {database_url.split('@')[0]}@***")
@@ -19,7 +19,7 @@ async def check_database():
     # Try to initialize
     try:
         await init_db()
-        print("✓ Database initialization successful")
+        print(" Database initialization successful")
         
         # Check tables using PostgreSQL information_schema
         async with engine.connect() as conn:
@@ -45,13 +45,13 @@ async def check_database():
             print(f"\nRequired tables: {len(required_tables)}")
             missing = [t for t in required_tables if t not in tables]
             if missing:
-                print(f"⚠ Missing tables: {missing}")
+                print(f" Missing tables: {missing}")
                 print("\nRecommendation: Run 'python setup_postgresql.py' to setup the database")
             else:
-                print("✓ All required tables exist")
+                print(" All required tables exist")
                 
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f" Error: {e}")
         print("\nMake sure PostgreSQL is running and the database exists.")
         print("Run 'python setup_postgresql.py' to setup the database.")
         import traceback

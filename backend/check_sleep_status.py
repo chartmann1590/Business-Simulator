@@ -72,7 +72,7 @@ async def check_sleep_status():
             print(f"SLEEPING EMPLOYEES ({len(sleeping_employees)}):")
             print(f"{'-'*70}")
             for emp in sleeping_employees:
-                print(f"  • {emp.name} ({emp.title})")
+                print(f"   {emp.name} ({emp.title})")
                 print(f"    Department: {emp.department}")
                 print(f"    Activity State: {emp.activity_state}")
                 
@@ -101,7 +101,7 @@ async def check_sleep_status():
             print(f"{'-'*70}")
             for fm in orphaned_family:
                 emp_name = employee_map.get(fm.employee_id, f"Employee ID {fm.employee_id}")
-                print(f"  • {fm.name} ({fm.relationship_type}, age {fm.age}) - Family of {emp_name}")
+                print(f"   {fm.name} ({fm.relationship_type}, age {fm.age}) - Family of {emp_name}")
             print()
         
         # Show pets sleeping without their employee
@@ -111,7 +111,7 @@ async def check_sleep_status():
             print(f"{'-'*70}")
             for pet in orphaned_pets:
                 emp_name = employee_map.get(pet.employee_id, f"Employee ID {pet.employee_id}")
-                print(f"  • {pet.name} ({pet.pet_type}) - Pet of {emp_name}")
+                print(f"   {pet.name} ({pet.pet_type}) - Pet of {emp_name}")
             print()
 
 if __name__ == "__main__":

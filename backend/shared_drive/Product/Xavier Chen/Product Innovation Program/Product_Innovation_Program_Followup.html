@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Title Section */
+    .title-row {
+      background-color: #366092;
+      color: white;
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* Header Row */
+    th.header {
+      border: 1px solid #d0d0d0;
+      padding: 8px;
+    }
+
+    /* Data Rows */
+    td.data {
+      background-color: white;
+      padding: 8px;
+      border: 1px solid #d0d0d0;
+    }
+    
+    /* Alternating Row Color */
+    .alt-row {
+      background-color: #f2f2f2;
+    }
+
+    /* Totals Row */
+    th.totals {
+      background-color: #e7f3ff;
+      font-weight: bold;
+      border-top: 2px solid #d0d0d0;
+    }
+    
+    /* Cell Styles */
+    .finance-cell {
+      text-align: right;
+    }
+
+    /* Data Validation Notes */
+    .data-validation {
+      font-size: 10pt;
+      color: red;
+    }
+  </style>
+</head>
+<body>
+
+<table border-collapse="collapse">
+  <tr class="title-row">
+    <td colspan="8" style="text-align: center; padding: 12px;">Financial Dashboard - Product Innovation Program</td>
+  </tr>
+  
+  <!-- Header Row -->
+  <tr>
+    <th>Employee Name</th>
+    <th>Title</th>
+    <th>Department</th>
+    <th>Project</th>
+    <th>Budget</th>
+    <th>Revenue</th>
+    <th>Profit Margin%</th>
+  </tr>
+
+  <!-- Employee Data Section -->
+  <tr class="alt-row">
+    <td>Xavier Chen</td>
+    <td>Sales Senior</td>
+    <td>Product</td>
+    <td>Product Innovation Program</td>
+    <td>$141,155.29</td>
+    <td>$15,460.78</td>
+    <td>42.67%</td>
+  </tr>
+
+  <!-- Other Employee Data... -->
+  
+  <!-- Summary Section -->
+  <tr class="alt-row totals">
+    <th colspan="7">Summary:</th>
+    <td>Total Revenue: $848,324.28</td>
+    <td>Total Profit: $361,970.04</td>
+    <td>Profit Margin: 42.67%</td>
+  </tr>
+
+  <!-- Detailed Breakdown Table -->
+  <table border="0" cellpadding="5">
+    <tr class="alt-row">
+      <th>Department</th>
+      <th>Active Projects</th>
+      <th>Total Employees</th>
+    </tr>
+    
+    <tr>
+      <td>Marketing</td>
+      <td>61</td>
+      <td>61</td>
+    </tr>
+    <!-- Add more rows for departments and their employee counts -->
+  </table>
+
+</table>
+
+</body>
+</html>

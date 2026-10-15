@@ -126,7 +126,7 @@ async def retry_on_lock(func, max_retries=3, initial_delay=0.5):
             )
             
             if is_lock_error and attempt < max_retries - 1:
-                print(f"⚠️  Database lock/deadlock detected, retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                print(f"  Database lock/deadlock detected, retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
                 await asyncio.sleep(delay)
                 delay *= 2  # Exponential backoff
             else:
@@ -209,7 +209,7 @@ async def safe_db_operation(session, operation, max_retries=5, initial_delay=0.1
                         await session.rollback()
                     except Exception as rollback_error:
                         # If rollback fails, we're in a bad state - try to continue anyway
-                        print(f"⚠️  Warning: Rollback failed: {rollback_error}")
+                        print(f"  Warning: Rollback failed: {rollback_error}")
             
             # Execute the operation
             return await operation()
@@ -235,7 +235,7 @@ async def safe_db_operation(session, operation, max_retries=5, initial_delay=0.1
                     # Rollback might fail if session is already rolled back
                     pass
                 
-                print(f"⚠️  Database lock/deadlock detected, retrying in {delay:.2f}s (attempt {attempt + 1}/{max_retries})...")
+                print(f"  Database lock/deadlock detected, retrying in {delay:.2f}s (attempt {attempt + 1}/{max_retries})...")
                 await asyncio.sleep(delay)
                 delay = min(delay * 1.5, 2.0)  # Exponential backoff, capped at 2 seconds
             else:
@@ -252,10 +252,10 @@ async def safe_db_operation(session, operation, max_retries=5, initial_delay=0.1
             try:
                 await session.rollback()
             except Exception as rollback_error:
-                print(f"⚠️  Warning: Rollback failed during retry: {rollback_error}")
+                print(f"  Warning: Rollback failed during retry: {rollback_error}")
             
             if attempt < max_retries - 1:
-                print(f"⚠️  Session rollback required, retrying in {delay:.2f}s (attempt {attempt + 1}/{max_retries})...")
+                print(f"  Session rollback required, retrying in {delay:.2f}s (attempt {attempt + 1}/{max_retries})...")
                 await asyncio.sleep(delay)
                 delay = min(delay * 1.5, 2.0)
             else:

@@ -61,7 +61,7 @@ def create_backup() -> str:
         if os.path.exists(shm_path):
             shutil.copy2(shm_path, backup_path + "-shm")
         
-        print(f"✓ Backup created: {backup_path}")
+        print(f" Backup created: {backup_path}")
         return backup_path
     except Exception as e:
         print(f"Error creating backup: {e}")
@@ -122,7 +122,7 @@ async def wipe_database():
             await db.execute(text("DELETE FROM business_settings"))
             
             await db.commit()
-            print("✓ Database wiped successfully!")
+            print(" Database wiped successfully!")
     except Exception as e:
         print(f"Error wiping database: {e}")
         import traceback
@@ -221,9 +221,9 @@ Return ONLY valid JSON, nothing else."""
             if not company_data.get("industry"):
                 company_data["industry"] = "SaaS"
         
-        print(f"  ✓ Company: {company_data.get('company_name', 'Unknown')}")
-        print(f"  ✓ Product: {company_data.get('product_name', 'Unknown')}")
-        print(f"  ✓ Industry: {company_data.get('industry', 'Unknown')}")
+        print(f"   Company: {company_data.get('company_name', 'Unknown')}")
+        print(f"   Product: {company_data.get('product_name', 'Unknown')}")
+        print(f"   Industry: {company_data.get('industry', 'Unknown')}")
         
         return company_data
     except Exception as e:
@@ -459,7 +459,7 @@ Make it realistic. Return ONLY valid JSON."""
                 "backstory": f"Passionate {title.lower()} who joined {company_name} to help build innovative solutions."
             })
         
-        print(f"✓ Generated {len(employees_data)} team members")
+        print(f" Generated {len(employees_data)} team members")
         return employees_data
         
     except Exception as e:
@@ -663,7 +663,7 @@ async def seed_new_company(company_data: dict, employees_data: list):
         db.add(industry_setting)
         
         await db.commit()
-        print("✓ Database seeded successfully!")
+        print(" Database seeded successfully!")
 
 async def main():
     """Main function to run the new game script."""

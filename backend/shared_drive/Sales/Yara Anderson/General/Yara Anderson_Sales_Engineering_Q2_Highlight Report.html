@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Business Financial Dashboard</title>
+<style>
+table {
+border-collapse: collapse;
+}
+
+th, td {
+border: 1px solid #d0d0d0;
+padding: 8px;
+font-family: Arial;
+font-size: 11pt;
+text-align: left;
+}
+th {
+background: #366092;
+color: white;
+font-weight: bold;
+}
+
+td:nth-child(even) {
+background: #f2f2f2;
+}
+
+td:last-child {
+background: #e7f3ff;
+font-weight: bold;
+}
+
+td > .total {
+text-align: right;
+}
+</style>
+</head>
+<body>
+
+<table style="width:100%; border-spacing: 0px;">
+<tr><th colspan="12" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Business Financial Dashboard</th></tr>
+<tr>
+<th>Department</th>
+<th>Employee Count</th>
+<th>Total Revenue</th>
+<th>Total Profit</th>
+<th>Total Expenses</th>
+<th>Profit Margin</th>
+<th>Active Projects</th>
+<th>Project ROI</th>
+</tr>
+
+<tr><td style="background: #366092; color: white; font-weight: bold;">Sales</td>
+<td style="padding: 8px;">43</td>
+<td style="padding: 8px;">$848,324.28</td>
+<td style="padding: 8px;">$361,970.04</td>
+<td style="padding: 8px;">$486,354.24</td>
+<td style="padding: 8px; text-align: right;">42.67%</td>
+<td style="padding: 8px;">16</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Marketing</td>
+<td style="padding: 8px;">61</td>
+<td style="padding: 8px;">$1,234,567.89</td>
+<td style="padding: 8px;">$543,210.12</td>
+<td style="padding: 8px;">$690,357.77</td>
+<td style="padding: 8px; text-align: right;">44.19%</td>
+<td style="padding: 8px;">23</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Administration</td>
+<td style="padding: 8px;">57</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td>
+<td style="padding: 8px; text-align: right;">47.94%</td>
+<td style="padding: 8px;">27</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Operations</td>
+<td style="padding: 8px;">52</td>
+<td style="padding: 8px;">$1,234,567.89</td>
+<td style="padding: 8px;">$543,210.12</td>
+<td style="padding: 8px;">$690,357.77</td>
+<td style="padding: 8px; text-align: right;">44.19%</td>
+<td style="padding: 8px;">30</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Design</td>
+<td style="padding: 8px;">50</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td>
+<td style="padding: 8px; text-align: right;">47.94%</td>
+<td style="padding: 8px;">25</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Finance</td>
+<td style="padding: 8px;">1</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td>
+<td style="padding: 8px; text-align: right;">47.94%</td>
+<td style="padding: 8px;">15</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >Product</td>
+<td style="padding: 8px;">44</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td>
+<td style="padding: 8px; text-align: right;">47.94%</td>
+<td style="padding: 8px;">28</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td style="background: #f2f2f2; padding: 8px;" >IT</td>
+<td style="padding: 8px;">44</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td>
+<td style="padding: 8px; text-align: right;">47.94%</td>
+<td style="padding: 8px;">29</td>
+<td style="padding: 8px;"></td></tr>
+
+<tr><td colspan="12" style="text-align: center; padding: 8px;"><span style="font-size: 10pt;">Total:</span> <span style="font-size: 11pt; text-align:right;">$2,000,000.00</span>
+<span style="font-size: 10pt;">Profits:</span> 
+<span style="text-align:right;">$1,300,000.00</span></td></tr>
+
+<tr><th colspan="12" style="background-color: lightblue; text-align: center; padding: 8px;"><span style="font-weight: bold;">Summary</span>
+<canvas id="chart"></canvas>
+<span class="total">Profit Margin:</span>
+</th>
+
+</tr>
+
+<tr><td colspan="6" style="text-align:right;">$1,300,000.00</td>
+<td colspan="2" style="text-align:right;">0%</td>
+<td colspan="4" style="text-align:right;">Total Projects: 96</td></tr>
+
+<canvas id="chart"></canvas>
+<div>Assumptions used in this report are accurate to the best knowledge available. For actual profit margin, refer to our annual financial statements.</div>
+
+<table id="table">
+ <thead>
+  <tr><th style="text-align:center;">Department</th>
+  <th style="text-align:center;">Employee Count</th>
+  <th style="text-align:center;">Total Revenue ($)</th>
+  <th style="text-align:center;">Total Profit ($)</th>
+  <th style="text-align:center;">Total Expenses ($)</th>
+  </tr>
+</thead>
+<tbody>
+  <tr><td>Engineering Senior - Sales</td>
+  <td>1</td>
+  <td>$848,324.28</td>
+  <td>$361,970.04</td>
+  <td>$486,354.24</td></tr>
+
+<tr><td>Engineering Senior - Marketing</td>
+<td style="padding: 8px;">61</td>
+<td style="padding: 8px;">$1,234,567.89</td>
+<td style="padding: 8px;">$543,210.12</td>
+<td style="padding: 8px;">$690,357.77</td></tr>
+
+<tr><td>Engineering Senior - Administration</td>
+<td style="padding: 8px;">57</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td></tr>
+
+<tr><td>Engineering Senior - Operations</td>
+<td style="padding: 8px;">52</td>
+<td style="padding: 8px;">$1,234,567.89</td>
+<td style="padding: 8px;">$543,210.12</td>
+<td style="padding: 8px;">$690,357.77</td></tr>
+
+<tr><td>Engineering Senior - Design</td>
+<td style="padding: 8px;">50</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td></tr>
+
+<tr><td>Engineering Senior - Finance</td>
+<td style="padding: 8px;">1</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td></tr>
+
+<tr><td>Engineering Senior - Product</td>
+<td style="padding: 8px;">44</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td></tr>
+
+<tr><td>Engineering Senior - IT</td>
+<td style="padding: 8px;">44</td>
+<td style="padding: 8px;">$567,890.12</td>
+<td style="padding: 8px;">$275,450.00</td>
+<td style="padding: 8px;">$292,440.12</td></tr>
+
+<tr><td>Engineering Senior - Total</td>
+<td style="padding: 8px;">1417</td>
+<td style="padding: 8px;">$2,234,567.89</td>
+<td style="padding: 8px;">$1,543,210.12</td>
+<td style="padding: 8px;">$1,690,357.77</td></tr>
+
+</tbody>
+</table>
+
+<canvas id="chart" width="500" height="300"></canvas>
+
+</body>
+</html>

@@ -103,7 +103,7 @@ class CoffeeBreakManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="break_denied",
-                    description=f"⚠️ Break request denied for {employee.name}: {abuse_check.get('reason', 'Break abuse detected')}",
+                    description=f" Break request denied for {employee.name}: {abuse_check.get('reason', 'Break abuse detected')}",
                     activity_metadata={
                         "break_type": "coffee",
                         "timestamp": now.isoformat(),
@@ -114,7 +114,7 @@ class CoffeeBreakManager:
                 )
                 self.db.add(activity)
                 await self.db.commit()
-                print(f"🚫 BREAK DENIED: Manager {employee.name} attempted to take break but was denied: {abuse_check.get('reason')}")
+                print(f" BREAK DENIED: Manager {employee.name} attempted to take break but was denied: {abuse_check.get('reason')}")
                 raise ValueError(f"Break denied: {abuse_check.get('reason')}")
 
         # All checks passed - grant the break
@@ -127,11 +127,11 @@ class CoffeeBreakManager:
         
         # Create activity
         break_messages = [
-            f"☕ Taking a coffee break to recharge",
-            f"☕ Grabbing a cup of coffee",
-            f"☕ Coffee break time!",
-            f"☕ Stepping away for a quick coffee",
-            f"☕ Need some caffeine to keep going"
+            f" Taking a coffee break to recharge",
+            f" Grabbing a cup of coffee",
+            f" Coffee break time!",
+            f" Stepping away for a quick coffee",
+            f" Need some caffeine to keep going"
         ]
         
         activity = Activity(
@@ -211,7 +211,7 @@ class CoffeeBreakManager:
                     available_manager = other_managers[0]
                     manager_id = available_manager.id
                     manager_name = available_manager.name
-                    print(f"⚠️ Manager {checking_manager.name} is on break - {available_manager.name} will handle break returns")
+                    print(f" Manager {checking_manager.name} is on break - {available_manager.name} will handle break returns")
         
         for employee in employees_on_break:
             # First check: If employee is in breakroom but NOT on break, move them to work room immediately
@@ -241,7 +241,7 @@ class CoffeeBreakManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="break_returned",
-                    description=f"⏰ {manager_display_name} moved {employee.name} from breakroom to work (not on break)",
+                    description=f" {manager_display_name} moved {employee.name} from breakroom to work (not on break)",
                     activity_metadata={
                         "returned_at": now.isoformat(),
                         "reason": "in_breakroom_not_on_break",
@@ -251,7 +251,7 @@ class CoffeeBreakManager:
                 )
                 self.db.add(activity)
                 returned_employees.append(employee)
-                print(f"⚠️ {employee.name} was in breakroom but not on break - moved to work")
+                print(f" {employee.name} was in breakroom but not on break - moved to work")
                 continue  # Skip break duration check for this employee
             
             # Second check: If employee is on break, check if they're in a scheduled celebration
@@ -305,7 +305,7 @@ class CoffeeBreakManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="break_returned",
-                    description=f"⏰ {manager_display_name} returned {employee.name} to work after {int(time_on_break.total_seconds() / 60)} minute break",
+                    description=f" {manager_display_name} returned {employee.name} to work after {int(time_on_break.total_seconds() / 60)} minute break",
                     activity_metadata={
                         "break_duration_minutes": int(time_on_break.total_seconds() / 60),
                         "returned_at": now.isoformat(),
@@ -370,7 +370,7 @@ class CoffeeBreakManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="break_returned",
-                    description=f"⏰ System automatically moved {employee.name} from breakroom to work (not on break)" + 
+                    description=f" System automatically moved {employee.name} from breakroom to work (not on break)" + 
                                (f" (Manager break abuse detected)" if is_manager else ""),
                     activity_metadata={
                         "returned_at": now.isoformat(),
@@ -384,9 +384,9 @@ class CoffeeBreakManager:
                 returned_employees.append(employee)
                 
                 if is_manager:
-                    print(f"⚠️ MANAGER BREAK ABUSE: {employee.name} was in breakroom but not on break - automatically moved to work")
+                    print(f" MANAGER BREAK ABUSE: {employee.name} was in breakroom but not on break - automatically moved to work")
                 else:
-                    print(f"⚠️ {employee.name} was in breakroom but not on break - moved to work")
+                    print(f" {employee.name} was in breakroom but not on break - moved to work")
                 continue  # Skip break duration check for this employee
             
             # Second check: If employee is on break, check if they're in a scheduled celebration
@@ -434,7 +434,7 @@ class CoffeeBreakManager:
                 activity = Activity(
                     employee_id=employee.id,
                     activity_type="break_returned",
-                    description=f"⏰ System automatically returned {employee.name} to work after {int(time_on_break.total_seconds() / 60)} minute break" + 
+                    description=f" System automatically returned {employee.name} to work after {int(time_on_break.total_seconds() / 60)} minute break" + 
                                (f" (Manager break abuse detected)" if is_manager else ""),
                     activity_metadata={
                         "break_duration_minutes": int(time_on_break.total_seconds() / 60),
@@ -449,7 +449,7 @@ class CoffeeBreakManager:
                 returned_employees.append(employee)
                 
                 if is_manager:
-                    print(f"⚠️ MANAGER BREAK ABUSE: {employee.name} was on break for {int(time_on_break.total_seconds() / 60)} minutes - automatically returned to work")
+                    print(f" MANAGER BREAK ABUSE: {employee.name} was on break for {int(time_on_break.total_seconds() / 60)} minutes - automatically returned to work")
         
         if returned_employees:
             await self.db.commit()

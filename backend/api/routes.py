@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, or_, case
+from sqlalchemy import select, func, desc, or_, case, and_
 from sqlalchemy.orm import selectinload
 from database.database import get_db, async_session_maker
-from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion, TrainingSession, TrainingMaterial, HomeSettings, FamilyMember, HomePet
+from database.models import Employee, Project, Task, Activity, Financial, BusinessMetric, Email, ChatMessage, BusinessSettings, Decision, EmployeeReview, Notification, CustomerReview, Meeting, Product, ProductTeamMember, SharedDriveFile, SharedDriveFileVersion, TrainingSession, TrainingMaterial, HomeSettings, FamilyMember, HomePet, ClockInOut
 from business.financial_manager import FinancialManager
 from business.project_manager import ProjectManager
 from business.goal_system import GoalSystem
@@ -476,7 +476,7 @@ async def get_employee_reviews(employee_id: int, db: AsyncSession = Depends(get_
     )
     reviews = result.scalars().all()
     
-    print(f"📋 API: Found {len(reviews)} review(s) for employee {employee_id}")
+    print(f" API: Found {len(reviews)} review(s) for employee {employee_id}")
     for review in reviews:
         print(f"   - Review ID {review.id}, Date: {review.review_date}, Rating: {review.overall_rating}, Comments: {bool(review.comments)}")
     
@@ -1167,7 +1167,7 @@ async def update_performance_award_now(db: AsyncSession = Depends(get_db)):
     """FORCE update the performance award RIGHT NOW. Use this to immediately assign the award."""
     from business.review_manager import ReviewManager
     
-    print("🏆 [AWARD] FORCING immediate performance award update via API...")
+    print(" [AWARD] FORCING immediate performance award update via API...")
     review_manager = ReviewManager(db)
     await review_manager._update_performance_award()
     await db.commit()
@@ -1697,7 +1697,7 @@ async def sync_products_from_reviews(db: AsyncSession):
         
         if products_created > 0 or products_updated > 0:
             await db.commit()
-            print(f"✅ Synced products from reviews: {products_created} created, {products_updated} updated")
+            print(f" Synced products from reviews: {products_created} created, {products_updated} updated")
         
         return products_created + products_updated
     except Exception as e:
@@ -3605,7 +3605,7 @@ async def trigger_message_response_check(db: AsyncSession = Depends(get_db)):
             except Exception as e:
                 error_msg = f"Error checking messages for {employee.name} (ID: {employee.id}): {str(e)}"
                 errors.append(error_msg)
-                print(f"❌ {error_msg}")
+                print(f" {error_msg}")
                 import traceback
                 traceback.print_exc()
                 continue
@@ -3621,7 +3621,7 @@ async def trigger_message_response_check(db: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         await db.rollback()
-        print(f"❌ Error in message response check endpoint: {e}")
+        print(f" Error in message response check endpoint: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error checking messages: {str(e)}")
@@ -3911,7 +3911,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": ROOM_CUBICLES,
                 "name": "Cubicles",
                 "image_path": "/office_layout/layout02_cubicles.png",
-                "capacity": 15,
+                "capacity": 20,
                 "floor": 1
             },
             {
@@ -3939,7 +3939,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": ROOM_IT_ROOM,
                 "name": "IT Room",
                 "image_path": "/office_layout/layout06_it_room.png",
-                "capacity": 5,
+                "capacity": 20,
                 "floor": 1
             },
             {
@@ -3953,7 +3953,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": ROOM_TRAINING_ROOM,
                 "name": "Training Room",
                 "image_path": "/office_layout/layout08_training_room.png",
-                "capacity": 12,
+                "capacity": 20,
                 "floor": 1
             },
             {
@@ -4006,14 +4006,14 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": f"{ROOM_TRAINING_ROOM}_floor2",
                 "name": "Training Room",
                 "image_path": "/office_layout/floor2_room05_training.png",
-                "capacity": 15,
+                "capacity": 20,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_IT_ROOM}_floor2",
                 "name": "IT Room",
                 "image_path": "/office_layout/floor2_room06_itroom.png",
-                "capacity": 6,
+                "capacity": 20,
                 "floor": 2
             },
             {
@@ -4034,14 +4034,14 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": f"{ROOM_HR_ROOM}_floor2",
                 "name": "HR Room",
                 "image_path": "/office_layout/floor2_room09_hr.png",
-                "capacity": 6,
+                "capacity": 20,
                 "floor": 2
             },
             {
                 "id": f"{ROOM_SALES_ROOM}_floor2",
                 "name": "Sales Room",
                 "image_path": "/office_layout/floor2_room10_sales.png",
-                "capacity": 10,
+                "capacity": 20,
                 "floor": 2
             }
         ]
@@ -4052,14 +4052,14 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": f"{ROOM_INNOVATION_LAB}_floor3",
                 "name": "Innovation Lab",
                 "image_path": "/office_layout/floor3_room01_innovation_lab.png",
-                "capacity": 12,
+                "capacity": 20,
                 "floor": 3
             },
             {
                 "id": f"{ROOM_HOTDESK}_floor3",
                 "name": "Hotdesk",
                 "image_path": "/office_layout/floor3_room02_hotdesk.png",
-                "capacity": 18,
+                "capacity": 20,
                 "floor": 3
             },
             {
@@ -4087,7 +4087,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
                 "id": f"{ROOM_DESIGN_STUDIO}_floor3",
                 "name": "Design Studio",
                 "image_path": "/office_layout/floor3_room06_design_studio.png",
-                "capacity": 8,
+                "capacity": 20,
                 "floor": 3
             },
             {
@@ -4133,7 +4133,7 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             "id": f"{ROOM_CUBICLES}_floor4",
             "name": "Cubicles 1",
             "image_path": "/office_layout/layout02_cubicles.png",
-            "capacity": 25,
+            "capacity": 20,
             "floor": 4
         },
         {
@@ -4147,21 +4147,21 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             "id": f"{ROOM_CUBICLES}_floor4_2",
             "name": "Cubicles 2",
             "image_path": "/office_layout/layout02_cubicles.png",
-            "capacity": 25,
+            "capacity": 20,
             "floor": 4
         },
         {
             "id": f"{ROOM_TRAINING_ROOM}_floor4_3",
             "name": "Training Room 3",
             "image_path": "/office_layout/layout08_training_room.png",
-            "capacity": 18,
+            "capacity": 20,
             "floor": 4
         },
         {
             "id": f"{ROOM_CUBICLES}_floor4_3",
             "name": "Cubicles 3",
             "image_path": "/office_layout/layout02_cubicles.png",
-            "capacity": 22,
+            "capacity": 20,
             "floor": 4
         },
         {
@@ -4175,27 +4175,114 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             "id": f"{ROOM_CUBICLES}_floor4_4",
             "name": "Cubicles 4",
             "image_path": "/office_layout/layout02_cubicles.png",
-            "capacity": 25,
+            "capacity": 20,
             "floor": 4
         },
         {
             "id": f"{ROOM_TRAINING_ROOM}_floor4_5",
             "name": "Training Room 5",
             "image_path": "/office_layout/layout08_training_room.png",
-            "capacity": 18,
+            "capacity": 20,
             "floor": 4
         },
         {
             "id": f"{ROOM_CUBICLES}_floor4_5",
             "name": "Cubicles 5",
             "image_path": "/office_layout/layout02_cubicles.png",
-            "capacity": 22,
+            "capacity": 20,
             "floor": 4
         }
     ]
-    
+
+    # Floor 5 layout - Expansion floor for overcrowded departments
+    floor5_rooms = [
+        # Sales expansion rooms
+        {
+            "id": "sales_room_3_floor5",
+            "name": "Sales Room 3",
+            "image_path": "/office_layout/floor2_room08_sales.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        {
+            "id": "sales_room_4_floor5",
+            "name": "Sales Room 4",
+            "image_path": "/office_layout/floor2_room08_sales.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        {
+            "id": "sales_room_5_floor5",
+            "name": "Sales Room 5",
+            "image_path": "/office_layout/floor2_room08_sales.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        # HR expansion rooms
+        {
+            "id": "hr_room_3_floor5",
+            "name": "HR Room 3",
+            "image_path": "/office_layout/floor2_room09_hr.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        {
+            "id": "hr_room_4_floor5",
+            "name": "HR Room 4",
+            "image_path": "/office_layout/floor2_room09_hr.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        {
+            "id": "hr_room_5_floor5",
+            "name": "HR Room 5",
+            "image_path": "/office_layout/floor2_room09_hr.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        # IT expansion rooms
+        {
+            "id": "it_room_3_floor5",
+            "name": "IT Room 3",
+            "image_path": "/office_layout/floor2_room06_itroom.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        {
+            "id": "it_room_4_floor5",
+            "name": "IT Room 4",
+            "image_path": "/office_layout/floor2_room06_itroom.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        # Design expansion room
+        {
+            "id": "design_studio_floor5",
+            "name": "Design Studio",
+            "image_path": "/office_layout/floor3_room03_design.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        # Innovation expansion room
+        {
+            "id": "innovation_lab_floor5",
+            "name": "Innovation Lab",
+            "image_path": "/office_layout/floor3_room01_innovation.png",
+            "capacity": 20,
+            "floor": 5
+        },
+        # Open office expansion room
+        {
+            "id": "open_office_floor5",
+            "name": "Open Office",
+            "image_path": "/office_layout/layout01_open_office.png",
+            "capacity": 20,
+            "floor": 5
+        }
+    ]
+
     # Combine all rooms
-    rooms = floor1_rooms + floor2_rooms + floor3_rooms + floor4_rooms
+    rooms = floor1_rooms + floor2_rooms + floor3_rooms + floor4_rooms + floor5_rooms
     
     try:
         # Get ALL employees
@@ -4574,13 +4661,14 @@ async def get_office_layout(db: AsyncSession = Depends(get_db)):
             1: [r for r in rooms if r["floor"] == 1],
             2: [r for r in rooms if r["floor"] == 2],
             3: [r for r in rooms if r["floor"] == 3],
-            4: [r for r in rooms if r["floor"] == 4]
+            4: [r for r in rooms if r["floor"] == 4],
+            5: [r for r in rooms if r["floor"] == 5]
         }
-        
+
         return {
             "rooms": rooms,
             "rooms_by_floor": rooms_by_floor,
-            "floors": [1, 2, 3, 4],
+            "floors": [1, 2, 3, 4, 5],
             "terminated_employees": terminated_list,
             "total_employees": len(active_with_rooms),
             "total_terminated": len(terminated_employees),
@@ -5288,7 +5376,7 @@ async def get_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
         # Ensure we have all attendees - if any are missing, log it
         if len(attendee_details) < len(attendee_ids_list):
             missing_ids = set(attendee_ids_list) - set([a["id"] for a in attendee_details])
-            print(f"⚠️ Warning: Missing {len(missing_ids)} attendees for meeting {meeting.id}: {missing_ids}")
+            print(f" Warning: Missing {len(missing_ids)} attendees for meeting {meeting.id}: {missing_ids}")
         
         return {
             "id": meeting.id,
@@ -5808,7 +5896,7 @@ async def force_meeting_update(db: AsyncSession = Depends(get_db)):
         for meeting in meetings_before:
             try:
                 await db.refresh(meeting)
-                print(f"🔄 Force updating meeting {meeting.id}: {meeting.title}")
+                print(f" Force updating meeting {meeting.id}: {meeting.title}")
                 print(f"  Attendees: {len(meeting.attendee_ids or [])}")
                 
                 # Check current metadata
@@ -5827,10 +5915,10 @@ async def force_meeting_update(db: AsyncSession = Depends(get_db)):
                 metadata = meeting.meeting_metadata or {}
                 live_messages = metadata.get("live_messages", [])
                 last_update = metadata.get("last_content_update", "NOT SET")
-                print(f"  ✅ After generation: {len(live_messages) if isinstance(live_messages, list) else 0} messages")
-                print(f"  ✅ Last update: {last_update}")
+                print(f"   After generation: {len(live_messages) if isinstance(live_messages, list) else 0} messages")
+                print(f"   Last update: {last_update}")
             except Exception as e:
-                print(f"❌ ERROR generating content for meeting {meeting.id}: {e}")
+                print(f" ERROR generating content for meeting {meeting.id}: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -5941,7 +6029,7 @@ async def generate_birthday_meetings(days_ahead: int = 90, db: AsyncSession = De
     employees_without_birthdays = result.scalars().all()
     
     if employees_without_birthdays:
-        print(f"🎂 Assigning birthdays to {len(employees_without_birthdays)} employees...")
+        print(f" Assigning birthdays to {len(employees_without_birthdays)} employees...")
         for emp in employees_without_birthdays:
             if not emp.birthday_month or not emp.birthday_day:
                 birthday_month = random.randint(1, 12)
@@ -5955,7 +6043,7 @@ async def generate_birthday_meetings(days_ahead: int = 90, db: AsyncSession = De
                 emp.birthday_month = birthday_month
                 emp.birthday_day = birthday_day
         await db.commit()
-        print(f"✅ Assigned birthdays to {len(employees_without_birthdays)} employees")
+        print(f" Assigned birthdays to {len(employees_without_birthdays)} employees")
     
     # Delete existing birthday meetings with wrong attendee counts (less than 15)
     from database.models import Meeting
@@ -5971,7 +6059,7 @@ async def generate_birthday_meetings(days_ahead: int = 90, db: AsyncSession = De
                 deleted += 1
     if deleted > 0:
         await db.commit()
-        print(f"🗑️ Deleted {deleted} birthday meetings with incorrect attendee counts")
+        print(f" Deleted {deleted} birthday meetings with incorrect attendee counts")
     
     # Now generate the meetings properly
     from database.models import Meeting
@@ -6047,7 +6135,7 @@ async def generate_birthday_meetings(days_ahead: int = 90, db: AsyncSession = De
             room_name = room.replace("_floor2", "").replace("_", " ").title()
             
             meeting = Meeting(
-                title=f"🎂 {emp.name}'s Birthday Party",
+                title=f" {emp.name}'s Birthday Party",
                 description=f"Birthday party for {emp.name}",
                 organizer_id=emp.id,
                 attendee_ids=attendee_ids,
@@ -6161,7 +6249,7 @@ async def force_create_birthday_test(db: AsyncSession = Depends(get_db)):
     
     # Create meeting
     meeting = Meeting(
-        title=f"🎂 {emp.name}'s Birthday Party",
+        title=f" {emp.name}'s Birthday Party",
         description=f"Birthday party for {emp.name}",
         organizer_id=emp.id,
         attendee_ids=attendee_ids,
@@ -6421,9 +6509,9 @@ async def get_pet_care_log(limit: int = 50, db: AsyncSession = Depends(get_db)):
                 if not existing_result.scalar_one_or_none():
                     # Determine action from description or metadata
                     desc_lower = activity.description.lower() if activity.description else ""
-                    if "fed" in desc_lower or "🍖" in desc_lower:
+                    if "fed" in desc_lower or "" in desc_lower:
                         action = "feed"
-                    elif "played" in desc_lower or "🎾" in desc_lower:
+                    elif "played" in desc_lower or "" in desc_lower:
                         action = "play"
                     else:
                         action = "pet"
@@ -6594,15 +6682,15 @@ async def log_pet_care(
     # Create activity
     from database.models import Activity
     action_descriptions = {
-        "feed": f"🍖 {employee.name} fed {pet.name}",
-        "play": f"🎾 {employee.name} played with {pet.name}",
-        "pet": f"❤️ {employee.name} petted and comforted {pet.name}"
+        "feed": f" {employee.name} fed {pet.name}",
+        "play": f" {employee.name} played with {pet.name}",
+        "pet": f" {employee.name} petted and comforted {pet.name}"
     }
     
     activity = Activity(
         employee_id=employee.id,
         activity_type="pet_care",
-        description=action_descriptions.get(action, f"🐾 {employee.name} cared for {pet.name}"),
+        description=action_descriptions.get(action, f" {employee.name} cared for {pet.name}"),
         activity_metadata={
             "pet_id": pet.id,
             "pet_name": pet.name,
@@ -6711,15 +6799,15 @@ async def generate_test_care_logs(db: AsyncSession = Depends(get_db)):
         
         # Create activity
         action_descriptions = {
-            "feed": f"🍖 {employee.name} fed {pet.name}",
-            "play": f"🎾 {employee.name} played with {pet.name}",
-            "pet": f"❤️ {employee.name} petted and comforted {pet.name}"
+            "feed": f" {employee.name} fed {pet.name}",
+            "play": f" {employee.name} played with {pet.name}",
+            "pet": f" {employee.name} petted and comforted {pet.name}"
         }
         
         activity = Activity(
             employee_id=employee.id,
             activity_type="pet_care",
-            description=action_descriptions.get(action, f"🐾 {employee.name} cared for {pet.name}"),
+            description=action_descriptions.get(action, f" {employee.name} cared for {pet.name}"),
             activity_metadata={
                 "pet_id": pet.id,
                 "pet_name": pet.name,
@@ -7939,12 +8027,96 @@ async def generate_home_conversations(
 
 @router.get("/clock-events/today")
 async def get_clock_events_today():
-    """Get all clock in/out events for today."""
+    """Get all clock in/out events for today (ensures all employees at work are properly clocked in)."""
     async with async_session_maker() as db:
         from business.clock_manager import ClockManager
         clock_manager = ClockManager(db)
 
+        # Ensure all employees at work today are properly clocked in
+        backfill_result = await clock_manager.backfill_missing_clock_ins()
+        if backfill_result.get("backfilled", 0) > 0:
+            logger.info(f"Backfilled {backfill_result['backfilled']} missing clock-in events when fetching today's events")
+
         events = await clock_manager.get_all_clock_events_today()
+
+        # Get employee details for each event
+        result_data = []
+        for event in events:
+            emp_result = await db.execute(
+                select(Employee).where(Employee.id == event.employee_id)
+            )
+            employee = emp_result.scalar_one_or_none()
+
+            if employee:
+                result_data.append({
+                    "id": event.id,
+                    "employee": {
+                        "id": employee.id,
+                        "name": employee.name,
+                        "title": employee.title,
+                        "department": employee.department,
+                        "avatar_path": employee.avatar_path,
+                    },
+                    "event_type": event.event_type,
+                    "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                    "location": event.location,
+                    "notes": event.notes,
+                })
+
+        return result_data
+
+@router.get("/clock-events/history")
+async def get_clock_events_history(days: int = 7):
+    """Get all clock in/out events for the past N days (default 7, using New York timezone from config)."""
+    async with async_session_maker() as db:
+        from config import now, local_to_utc, get_midnight_today
+        from datetime import timedelta
+        from business.clock_manager import ClockManager
+
+        # Only backfill if fetching today's events (days=1) to avoid unnecessary work
+        if days <= 1:
+            clock_manager = ClockManager(db)
+            # Quick check before backfilling
+            today_start_ny = get_midnight_today()
+            today_start_utc = local_to_utc(today_start_ny)
+            employees_at_work = await db.execute(
+                select(func.count(Employee.id)).where(
+                    and_(
+                        Employee.status == "active",
+                        Employee.activity_state.notin_(["at_home", "sleeping", "leaving_work", "commuting_home"]),
+                        Employee.is_sick == False
+                    )
+                )
+            )
+            at_work_count = employees_at_work.scalar() or 0
+            if at_work_count > 0:
+                employees_with_clock_in = await db.execute(
+                    select(func.count(func.distinct(ClockInOut.employee_id))).where(
+                        and_(
+                            ClockInOut.event_type == "clock_in",
+                            ClockInOut.timestamp >= today_start_utc
+                        )
+                    )
+                )
+                clocked_in_count = employees_with_clock_in.scalar() or 0
+                # Only backfill if more than 10% are missing
+                if clocked_in_count < at_work_count * 0.9:
+                    backfill_result = await clock_manager.backfill_missing_clock_ins()
+                    if backfill_result.get("backfilled", 0) > 0:
+                        logger.info(f"Backfilled {backfill_result['backfilled']} missing clock-in events when fetching history")
+
+        # Calculate start date in New York timezone, then convert to UTC for database comparison
+        current_time_ny = now()  # Returns time in New York timezone
+        start_date_ny = current_time_ny - timedelta(days=days)
+        start_date_utc = local_to_utc(start_date_ny)
+
+        # Get all clock events since start_date (using UTC for database comparison)
+        result = await db.execute(
+            select(ClockInOut).where(
+                ClockInOut.timestamp >= start_date_utc
+            ).order_by(ClockInOut.timestamp.desc())
+        )
+        events = result.scalars().all()
 
         # Get employee details for each event
         result_data = []
@@ -8002,40 +8174,17 @@ async def get_employee_clock_history(employee_id: int, days: int = 7):
 
 @router.get("/clock-events/stats")
 async def get_clock_stats():
-    """Get clock in/out statistics for today."""
+    """Get clock in/out statistics for today (using New York timezone from config)."""
     async with async_session_maker() as db:
-        from config import now
-        today_start = now().replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # Get all active employees
-        emp_result = await db.execute(
-            select(Employee).where(Employee.status == "active")
-        )
-        total_employees = len(emp_result.scalars().all())
-
-        # Count clock ins today
-        clock_in_result = await db.execute(
-            select(ClockInOut).where(
-                and_(
-                    ClockInOut.event_type == "clock_in",
-                    ClockInOut.timestamp >= today_start
-                )
-            )
-        )
-        clocked_in_count = len(clock_in_result.scalars().all())
-
-        # Count clock outs today
-        clock_out_result = await db.execute(
-            select(ClockInOut).where(
-                and_(
-                    ClockInOut.event_type == "clock_out",
-                    ClockInOut.timestamp >= today_start
-                )
-            )
-        )
-        clocked_out_count = len(clock_out_result.scalars().all())
-
-        # Get employees currently at work (clocked in but not clocked out)
+        from config import get_midnight_today, local_to_utc
+        from business.clock_manager import ClockManager
+        
+        # Get today's start in New York timezone (midnight New York time)
+        today_start_ny = get_midnight_today()
+        # Convert to UTC for database comparison (database stores timestamps in UTC)
+        today_start_utc = local_to_utc(today_start_ny)
+        
+        # Get employees currently at work first (needed for backfill check)
         currently_at_work_result = await db.execute(
             select(Employee).where(
                 and_(
@@ -8044,7 +8193,59 @@ async def get_clock_stats():
                 )
             )
         )
-        currently_at_work = len(currently_at_work_result.scalars().all())
+        employees_at_work_list = currently_at_work_result.scalars().all()
+        currently_at_work = len(employees_at_work_list)
+        
+        # Backfill missing clock-ins for employees at work (only if needed)
+        # Check first if there are employees at work without clock-ins to avoid unnecessary work
+        clock_manager = ClockManager(db)
+        # Only backfill if we're missing clock-ins (check quickly first)
+        if currently_at_work > 0:
+            # Quick check: count employees with clock-ins today
+            employees_with_clock_in = await db.execute(
+                select(func.count(func.distinct(ClockInOut.employee_id))).where(
+                    and_(
+                        ClockInOut.event_type == "clock_in",
+                        ClockInOut.timestamp >= today_start_utc
+                    )
+                )
+            )
+            clocked_in_employee_count = employees_with_clock_in.scalar() or 0
+            # Only backfill if there's a significant gap (more than 10% missing)
+            if clocked_in_employee_count < currently_at_work * 0.9:
+                backfill_result = await clock_manager.backfill_missing_clock_ins()
+                if backfill_result.get("backfilled", 0) > 0:
+                    logger.info(f"Backfilled {backfill_result['backfilled']} missing clock-in events")
+
+        # Get all active employees
+        emp_result = await db.execute(
+            select(Employee).where(Employee.status == "active")
+        )
+        total_employees = len(emp_result.scalars().all())
+
+        # Count UNIQUE employees who clocked in today (not total events - employees can have multiple clock-ins)
+        clock_in_result = await db.execute(
+            select(func.count(func.distinct(ClockInOut.employee_id))).where(
+                and_(
+                    ClockInOut.event_type == "clock_in",
+                    ClockInOut.timestamp >= today_start_utc
+                )
+            )
+        )
+        clocked_in_count = clock_in_result.scalar() or 0
+
+        # Count UNIQUE employees who clocked out today (not total events)
+        clock_out_result = await db.execute(
+            select(func.count(func.distinct(ClockInOut.employee_id))).where(
+                and_(
+                    ClockInOut.event_type == "clock_out",
+                    ClockInOut.timestamp >= today_start_utc
+                )
+            )
+        )
+        clocked_out_count = clock_out_result.scalar() or 0
+
+        # currently_at_work was already calculated above (line 8083)
 
         return {
             "total_employees": total_employees,
@@ -8055,7 +8256,7 @@ async def get_clock_stats():
         }
 
 
-@router.post("/clock-events/backfill")
+@router.post("/clock-events/backfill-clock-outs")
 async def backfill_missing_clock_outs():
     """Backfill missing clock-out events for employees who already left but don't have clock-out records."""
     async with async_session_maker() as db:
@@ -8063,6 +8264,16 @@ async def backfill_missing_clock_outs():
         clock_manager = ClockManager(db)
         
         result = await clock_manager.backfill_missing_clock_outs()
+        return result
+
+@router.post("/clock-events/backfill-clock-ins")
+async def backfill_missing_clock_ins():
+    """Backfill missing clock-in events for employees who are currently at work but don't have clock-in records for today."""
+    async with async_session_maker() as db:
+        from business.clock_manager import ClockManager
+        clock_manager = ClockManager(db)
+        
+        result = await clock_manager.backfill_missing_clock_ins()
         return result
 
 @router.post("/sleep/enforce")
@@ -8274,6 +8485,52 @@ async def get_sick_employees(db: AsyncSession = Depends(get_db)):
     return await sick_manager.get_sick_employees()
 
 
+@router.get("/sick-days/history")
+async def get_sick_days_history(days: int = 30, db: AsyncSession = Depends(get_db)):
+    """Get sick day history for the past N days (default 30)."""
+    from config import now
+    from datetime import timedelta
+
+    # Calculate start date
+    start_date = now() - timedelta(days=days)
+
+    # Get all sick_call activities since start_date
+    result = await db.execute(
+        select(Activity).where(
+            and_(
+                Activity.activity_type == "sick_call",
+                Activity.timestamp >= start_date
+            )
+        ).order_by(Activity.timestamp.desc())
+    )
+    activities = result.scalars().all()
+
+    # Get employee details for each sick call
+    result_data = []
+    for activity in activities:
+        emp_result = await db.execute(
+            select(Employee).where(Employee.id == activity.employee_id)
+        )
+        employee = emp_result.scalar_one_or_none()
+
+        if employee:
+            result_data.append({
+                "id": activity.id,
+                "employee": {
+                    "id": employee.id,
+                    "name": employee.name,
+                    "title": employee.title,
+                    "department": employee.department,
+                    "avatar_path": employee.avatar_path,
+                },
+                "timestamp": activity.timestamp.isoformat() if activity.timestamp else None,
+                "description": activity.description,
+                "reason": activity.description.split(" - ")[1] if " - " in activity.description else "Not specified"
+            })
+
+    return result_data
+
+
 @router.post("/employees/{employee_id}/call-in-sick")
 async def call_in_sick(
     employee_id: int,
@@ -8323,3 +8580,24 @@ async def return_from_sick(employee_id: int, db: AsyncSession = Depends(get_db))
 
     return return_result
 
+
+@router.get("/changelog")
+async def get_changelog(db: AsyncSession = Depends(get_db)):
+    """Get all changelog entries, ordered by most recent first."""
+    from database.models import Changelog
+
+    result = await db.execute(
+        select(Changelog).order_by(Changelog.created_at.desc())
+    )
+    changelogs = result.scalars().all()
+
+    return [{
+        "id": log.id,
+        "version": log.version,
+        "title": log.title,
+        "description": log.description,
+        "category": log.category,
+        "impact": log.impact,
+        "author": log.author,
+        "created_at": log.created_at.isoformat() if log.created_at else None
+    } for log in changelogs]

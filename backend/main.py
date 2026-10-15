@@ -256,18 +256,18 @@ async def lifespan(app: FastAPI):
                     birthday_manager = BirthdayManager(db)
                     meetings_created = await birthday_manager.generate_birthday_party_meetings(days_ahead=90)
                     if meetings_created > 0:
-                        print(f"✅ Generated {meetings_created} birthday party meetings for the calendar.")
+                        print(f"Generated {meetings_created} birthday party meetings for the calendar.")
                     else:
-                        print("✅ Birthday party meetings check complete (all parties already scheduled).")
+                        print("Birthday party meetings check complete (all parties already scheduled).")
                 except Exception as birthday_error:
-                    print(f"❌ Warning: Could not generate birthday meetings: {birthday_error}")
+                    print(f" Warning: Could not generate birthday meetings: {birthday_error}")
                     import traceback
                     traceback.print_exc()
                 
                 # Generate holiday party meetings for upcoming US holidays (next 3 years = ~1095 days)
                 # This ensures we never miss a holiday and covers multiple years ahead
                 print("=" * 60)
-                print("🎉 Generating holiday party meetings for calendar...")
+                print("Generating holiday party meetings for calendar...")
                 print("   Checking and scheduling US holidays for the next 3 years...")
                 try:
                     from business.holiday_manager import HolidayManager
@@ -277,13 +277,13 @@ async def lifespan(app: FastAPI):
                     days_ahead = 1095  # 3 years
                     meetings_created = await holiday_manager.generate_holiday_meetings(days_ahead=days_ahead)
                     if meetings_created > 0:
-                        print(f"✅ Successfully generated {meetings_created} holiday party meetings for the next 3 years.")
+                        print(f" Successfully generated {meetings_created} holiday party meetings for the next 3 years.")
                         print(f"   All US holidays are now scheduled in the calendar with proper NY timezone.")
                     else:
-                        print("✅ Holiday party meetings check complete - all holidays already scheduled.")
+                        print(" Holiday party meetings check complete - all holidays already scheduled.")
                         print("   All US holidays for the next 3 years are properly scheduled.")
                 except Exception as holiday_error:
-                    print(f"❌ ERROR: Could not generate holiday meetings: {holiday_error}")
+                    print(f" ERROR: Could not generate holiday meetings: {holiday_error}")
                     print("   This is a critical error - holidays may not appear in the calendar!")
                     import traceback
                     traceback.print_exc()
@@ -308,11 +308,11 @@ async def lifespan(app: FastAPI):
                             hours_since_completion=0.0  # 0 means generate for all completed projects
                         )
                         if reviews_created:
-                            print(f"⭐ Generated {len(reviews_created)} initial customer review(s) for {len(completed_projects)} completed project(s)")
+                            print(f" Generated {len(reviews_created)} initial customer review(s) for {len(completed_projects)} completed project(s)")
                         else:
-                            print(f"ℹ️  No new reviews needed (projects may already have reviews)")
+                            print(f"  No new reviews needed (projects may already have reviews)")
                     else:
-                        print("ℹ️  No completed projects found for initial review generation")
+                        print("  No completed projects found for initial review generation")
                 except Exception as review_error:
                     print(f"Warning: Could not generate initial customer reviews: {review_error}")
                     import traceback
@@ -349,14 +349,14 @@ async def lifespan(app: FastAPI):
                         past_meetings = await meeting_manager.generate_meetings_for_date_range(
                             last_week_start, today_start
                         )
-                        print(f"📅 Generated {past_meetings} meetings for the past week")
+                        print(f" Generated {past_meetings} meetings for the past week")
                         
                         # Generate meetings for today
                         print("Generating meetings for today...")
                         today_meetings = await meeting_manager.generate_meetings()
-                        print(f"📅 Generated {today_meetings} meetings for today")
+                        print(f" Generated {today_meetings} meetings for today")
                     else:
-                        print(f"ℹ️  {len(existing_meetings)} meetings already exist in the date range")
+                        print(f"  {len(existing_meetings)} meetings already exist in the date range")
                     
                     # Always generate an in-progress meeting if one doesn't exist
                     result = await db.execute(
@@ -368,11 +368,11 @@ async def lifespan(app: FastAPI):
                         print("Generating an in-progress meeting...")
                         in_progress_meeting = await meeting_manager.generate_in_progress_meeting()
                         if in_progress_meeting:
-                            print(f"📅 Generated in-progress meeting: {in_progress_meeting.title}")
+                            print(f" Generated in-progress meeting: {in_progress_meeting.title}")
                         else:
-                            print("ℹ️  Could not generate in-progress meeting (may need more employees)")
+                            print("  Could not generate in-progress meeting (may need more employees)")
                     else:
-                        print(f"ℹ️  {len(in_progress_meetings)} in-progress meeting(s) already exist")
+                        print(f"  {len(in_progress_meetings)} in-progress meeting(s) already exist")
                         
                 except Exception as meeting_error:
                     print(f"Warning: Could not generate initial meetings: {meeting_error}")
@@ -395,9 +395,9 @@ async def lifespan(app: FastAPI):
         traceback.print_exc()
     
     yield
-    
+
     # Shutdown
-    simulator.stop()
+    await simulator.stop_simulation()
     print("Office simulation stopped.")
 
 app = FastAPI(title="Autonomous Office Simulation", lifespan=lifespan)
@@ -418,19 +418,19 @@ app.include_router(router, prefix="/api")
 avatars_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "avatars")
 if os.path.exists(avatars_path):
     app.mount("/avatars", StaticFiles(directory=avatars_path), name="avatars")
-    print(f"✅ Avatars directory mounted: {avatars_path}")
+    print(f"Avatars directory mounted: {avatars_path}")
 
 # Serve static files for office layouts
 office_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "office_layout")
 if os.path.exists(office_layout_path):
     app.mount("/office_layout", StaticFiles(directory=office_layout_path), name="office_layout")
-    print(f"✅ Office layout directory mounted: {office_layout_path}")
+    print(f"Office layout directory mounted: {office_layout_path}")
 
 # Serve static files for home layouts
 home_layout_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "home_layout")
 if os.path.exists(home_layout_path):
     app.mount("/home_layout", StaticFiles(directory=home_layout_path), name="home_layout")
-    print(f"✅ Home layout directory mounted: {home_layout_path}")
+    print(f"Home layout directory mounted: {home_layout_path}")
 
 @app.websocket("/ws")
 async def websocket_route(websocket: WebSocket):

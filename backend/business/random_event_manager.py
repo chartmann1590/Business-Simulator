@@ -69,7 +69,7 @@ class RandomEventManager:
             activity = Activity(
                 employee_id=emp.id,
                 activity_type="random_event",
-                description=f"⚠️ {title}: {description}",
+                description=f" {title}: {description}",
                 activity_metadata={
                     "event_id": event.id,
                     "event_type": event_type,

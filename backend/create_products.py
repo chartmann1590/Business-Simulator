@@ -96,7 +96,7 @@ async def create_products():
         
         await db.commit()
         print(f"Linked {linked_count} existing projects to product")
-        print("✓ Product created from existing business data!")
+        print(" Product created from existing business data!")
 
 if __name__ == "__main__":
     asyncio.run(create_products())

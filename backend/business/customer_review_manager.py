@@ -29,10 +29,10 @@ class CustomerReviewManager:
         completed_projects = result.scalars().all()
         
         if not completed_projects:
-            print("ℹ️  No completed projects found - reviews can only be generated for completed projects")
+            print("  No completed projects found - reviews can only be generated for completed projects")
             return []
         
-        print(f"📊 Found {len(completed_projects)} completed project(s) to check for review generation")
+        print(f" Found {len(completed_projects)} completed project(s) to check for review generation")
         
         reviews_created = []
         
@@ -49,7 +49,7 @@ class CustomerReviewManager:
                         project.completed_at = project.created_at
                     else:
                         project.completed_at = now - timedelta(hours=25)
-                    print(f"⚠️  Project '{project.name}' (ID: {project.id}) is completed but missing completed_at. Setting to ensure reviews are generated.")
+                    print(f"  Project '{project.name}' (ID: {project.id}) is completed but missing completed_at. Setting to ensure reviews are generated.")
                     await self.db.flush()  # Flush to make it available for the time check below
                 
                 # Now check if enough time has passed
@@ -79,30 +79,30 @@ class CustomerReviewManager:
                 # Project already has enough reviews (10+)
                 continue
             
-            print(f"📝 Generating {num_reviews_to_generate} customer review(s) for project: {project.name}")
+            print(f" Generating {num_reviews_to_generate} customer review(s) for project: {project.name}")
             
             for _ in range(num_reviews_to_generate):
                 try:
                     review = await self._generate_customer_review(project)
                     if review:
                         reviews_created.append(review)
-                        print(f"  ✅ Created review from {review.customer_name}")
+                        print(f"   Created review from {review.customer_name}")
                 except Exception as e:
                     import traceback
-                    print(f"  ❌ Error generating review: {e}")
+                    print(f"   Error generating review: {e}")
                     print(f"  Traceback: {traceback.format_exc()}")
         
         if reviews_created:
             try:
                 await self.db.flush()
                 await self.db.commit()
-                print(f"✅ Committed {len(reviews_created)} customer review(s) to database")
+                print(f" Committed {len(reviews_created)} customer review(s) to database")
                 
                 # Sync products from reviews after creating reviews
                 await self._sync_products_from_reviews()
             except Exception as e:
                 import traceback
-                print(f"❌ Error committing reviews: {e}")
+                print(f" Error committing reviews: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 await self.db.rollback()
         else:
@@ -130,9 +130,9 @@ class CustomerReviewManager:
                     projects_with_reviews.append(project.name)
             
             if projects_without_reviews:
-                print(f"ℹ️  {len(projects_without_reviews)} completed project(s) without reviews: {', '.join(projects_without_reviews[:3])}{'...' if len(projects_without_reviews) > 3 else ''}")
+                print(f"  {len(projects_without_reviews)} completed project(s) without reviews: {', '.join(projects_without_reviews[:3])}{'...' if len(projects_without_reviews) > 3 else ''}")
             if projects_too_recent:
-                print(f"ℹ️  {len(projects_too_recent)} project(s) completed too recently (need {hours_since_completion} hours): {', '.join(projects_too_recent[:3])}{'...' if len(projects_too_recent) > 3 else ''}")
+                print(f"  {len(projects_too_recent)} project(s) completed too recently (need {hours_since_completion} hours): {', '.join(projects_too_recent[:3])}{'...' if len(projects_too_recent) > 3 else ''}")
         
         return reviews_created
     
@@ -218,9 +218,9 @@ class CustomerReviewManager:
             
             if products_created > 0 or products_updated > 0:
                 await self.db.commit()
-                print(f"✅ Auto-synced products from reviews: {products_created} created, {products_updated} updated")
+                print(f" Auto-synced products from reviews: {products_created} created, {products_updated} updated")
         except Exception as e:
-            print(f"⚠️  Error auto-syncing products from reviews: {e}")
+            print(f"  Error auto-syncing products from reviews: {e}")
             # Don't raise - this is a background sync, shouldn't fail the review generation
     
     async def _generate_customer_review(self, project: Project) -> Optional[CustomerReview]:
@@ -378,7 +378,7 @@ Write only the review text, nothing else. Make it feel like a real customer revi
             return review_text
             
         except Exception as e:
-            print(f"  ⚠️  Error generating review text with Ollama: {e}")
+            print(f"    Error generating review text with Ollama: {e}")
             # Fallback review based on rating
             if rating >= 4.0:
                 return f"Excellent product! {project.name} has been a great addition to our workflow. Highly recommend it to other businesses looking for a reliable solution."

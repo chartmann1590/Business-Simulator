@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        /* 
+            Title row: Spreadsheet name in large bold (16pt), centered, with subtitle
+        */
+        #title-row {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 12px;
+            background-color: #366092;
+            color: white;
+        }
+
+        /* 
+            Header row: 5-8 meaningful columns with descriptive names
+        */
+        th.header {
+            background: #d0d0d0;
+            border: 1px solid #d0d0d0;
+            padding: 8px;
+            font-size: 11pt;
+            text-align: left;
+        }
+
+        /* 
+            Data rows: 15-25 rows of REALISTIC data using actual business metrics
+        */
+        tr.data-row {
+            background-color: white;
+            border-bottom: 1px solid #d0d0d0;
+            padding: 8px;
+            display: block;
+        }
+
+        /* 
+            Alternating zebra striping for data rows
+        */
+        .odd.data-row,
+        .even.data-row {
+            background-color: #f2f2f2;
+        }
+
+        /* 
+            Totals row: Light blue background (#e7f3ff), bold text, double border on top
+        */
+        tr.totals-row {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+
+        /* 
+            Calculated columns with formulas (totals, averages, percentages, growth rates)
+        */
+        th.calculated {
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        /* 
+            Conditional formatting for positive, negative, and totals
+        */
+        .positive {
+            background-color: #c6efce;
+        }
+
+        .negative {
+            background-color: #ffc6c6;
+        }
+
+        .totals {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<table border-collapse="collapse">
+    <tr id="title-row">
+        <td colspan="8" style="text-align: center; padding: 12px;">Financial Dashboard - Q2 2023</td>
+    </tr>
+    <tr class="header">
+        <th>Name</th>
+        <th>Title</th>
+        <th>Department</th>
+        <th>Project Name</th>
+        <th>Budget (USD)</th>
+        <th>Revenue (USD)</th>
+        <th>Profit (USD)</th>
+        <th>% Profit</th>
+    </tr>
+
+    <!-- Employee Information -->
+    <tr class="data-row">
+        <td>Elena Anderson</td>
+        <td>Sales Senior</td>
+        <td>Sales</td>
+        <td>N/A</td>
+        <td>N/A</td>
+        <td>N/A</td>
+        <td>N/A</td>
+        <td>N/A</td>
+    </tr>
+
+    <!-- Current Project -->
+    <tr class="data-row">
+        <td colspan="4">Digital Transformation Project</td>
+        <td>$196,119.03</td>
+        <td>$70,675.89</td>
+        <td>$126,443.14</td>
+        <td>42.67%</td>
+    </tr>
+
+    <!-- Business Metrics -->
+    <tr class="data-row">
+        <td colspan="4">Business Summary</td>
+        <td>$848,324.28</td>
+        <td>$361,970.04</td>
+        <td>$486,354.24</td>
+        <td>42.67%</td>
+    </tr>
+
+    <!-- Active Projects -->
+    <tr class="data-row">
+        <td colspan="4">Active Projects</td>
+        <td>$100,000.00</td>
+        <td>$28,996.55</td>
+        <td>$71,003.45</td>
+        <td>42.67%</td>
+    </tr>
+
+    <!-- Department Data -->
+    <tr class="data-row">
+        <td colspan="4">Department Headcount</td>
+        <td>1417</td>
+        <td>N/A</td>
+        <td>N/A</td>
+        <td>N/A</td>
+    </tr>
+
+    <!-- Critical Requirements -->
+    <tr class="totals-row">
+        <th colspan="5">Total Revenue</th>
+        <th>$848,324.28</th>
+        <th>42.67%</th>
+    </tr>
+
+    <tr class="data-row">
+        <td colspan="5">Total Expenses</td>
+        <td>$486,354.24</td>
+        <td>-43.33%</td>
+    </tr>
+
+    <!-- Summary Section -->
+    <tr class="totals-row">
+        <th>Profit Margins</th>
+        <th>% Profit</th>
+        <th>Active Projects</th>
+    </tr>
+
+    <tr class="data-row">
+        <td>$361,970.04</td>
+        <td>42.67%</td>
+        <td>16</td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+        <td colspan="8">Data Source: Financial Dashboard - Q2 2023</td>
+    </tr>
+</table>
+
+</body>
+</html>

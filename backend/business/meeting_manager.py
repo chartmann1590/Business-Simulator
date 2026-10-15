@@ -514,10 +514,10 @@ Respond in JSON format:
         )
         in_progress_meetings = result.scalars().all()
         
-        print(f"🔍 Checking for meetings to start: found {len(in_progress_meetings)} meeting(s) that should be in progress")
+        print(f" Checking for meetings to start: found {len(in_progress_meetings)} meeting(s) that should be in progress")
         
         for meeting in in_progress_meetings:
-            print(f"🔄 Starting meeting {meeting.id}: {meeting.title} (scheduled for {meeting.start_time}, current time: {now})")
+            print(f" Starting meeting {meeting.id}: {meeting.title} (scheduled for {meeting.start_time}, current time: {now})")
             # CRITICAL: Explicitly set status and ensure it's tracked
             meeting.status = "in_progress"
             # Force SQLAlchemy to track this change
@@ -556,7 +556,7 @@ Respond in JSON format:
                         )
                         birthday_person = birthday_result.scalar_one_or_none()
                     
-                    birthday_name = birthday_person.name if birthday_person else meeting.title.replace("🎂 ", "").replace("'s Birthday Party", "")
+                    birthday_name = birthday_person.name if birthday_person else meeting.title.replace(" ", "").replace("'s Birthday Party", "")
                     
                     # Send notifications to all employees (with duplicate prevention)
                     from business.notification_helper import create_notification_if_not_duplicate
@@ -564,7 +564,7 @@ Respond in JSON format:
                         notification = await create_notification_if_not_duplicate(
                             self.db,
                             notification_type="birthday_party",
-                            title=f"🎉 Birthday Party: {birthday_name}!",
+                            title=f" Birthday Party: {birthday_name}!",
                             message=f"{birthday_name}'s birthday party is happening now in the {room_name} on Floor {party_floor}!",
                             employee_id=emp.id,
                             duplicate_window_minutes=10  # 10 minute window for birthday parties
@@ -574,7 +574,7 @@ Respond in JSON format:
                             # Already added to session by helper function
                             pass
                     
-                    print(f"🎉 Sent birthday party notifications for {birthday_name}'s party in {room_name} on Floor {party_floor}")
+                    print(f" Sent birthday party notifications for {birthday_name}'s party in {room_name} on Floor {party_floor}")
                     
                     # Enforce attendance - move all attendees to the breakroom
                     try:
@@ -613,14 +613,14 @@ Respond in JSON format:
                         if celebration and not celebration.party_time:
                             celebration.party_time = meeting.start_time
                         
-                        print(f"🎉 Moved {len(attendees)} employees to {room_name} on Floor {party_floor} for birthday party")
+                        print(f" Moved {len(attendees)} employees to {room_name} on Floor {party_floor} for birthday party")
                     except Exception as e:
-                        print(f"❌ Error enforcing birthday party attendance: {e}")
+                        print(f" Error enforcing birthday party attendance: {e}")
                         import traceback
                         traceback.print_exc()
                     
                 except Exception as e:
-                    print(f"❌ Error sending birthday party notifications: {e}")
+                    print(f" Error sending birthday party notifications: {e}")
                     import traceback
                     traceback.print_exc()
             
@@ -628,9 +628,9 @@ Respond in JSON format:
             try:
                 await self._generate_live_meeting_content(meeting)
                 meeting.meeting_metadata["last_content_update"] = now.isoformat()
-                print(f"✅ Initialized and generated content for new in-progress meeting {meeting.id}: {meeting.title}")
+                print(f" Initialized and generated content for new in-progress meeting {meeting.id}: {meeting.title}")
             except Exception as e:
-                print(f"❌ Error generating initial content for meeting {meeting.id}: {e}")
+                print(f" Error generating initial content for meeting {meeting.id}: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -643,9 +643,9 @@ Respond in JSON format:
             # Refresh again after commit to verify
             for meeting in in_progress_meetings:
                 await self.db.refresh(meeting)
-            print(f"✅ Committed status changes for {len(in_progress_meetings)} meeting(s) starting")
+            print(f" Committed status changes for {len(in_progress_meetings)} meeting(s) starting")
             for meeting in in_progress_meetings:
-                print(f"   ✅ Meeting {meeting.id} status is now: {meeting.status}")
+                print(f"    Meeting {meeting.id} status is now: {meeting.status}")
         
         # Update live content for in-progress meetings (generate new messages periodically)
         result = await self.db.execute(
@@ -675,7 +675,7 @@ Respond in JSON format:
             if not last_update or last_update == "Never":
                 # No previous update - generate immediately
                 should_update = True
-                print(f"🔄 Meeting {meeting.id} ({meeting.title}) has no previous update - generating content immediately")
+                print(f" Meeting {meeting.id} ({meeting.title}) has no previous update - generating content immediately")
             else:
                 try:
                     if isinstance(last_update, str):
@@ -695,12 +695,12 @@ Respond in JSON format:
                     # Generate new content every 10-15 seconds for active meetings (slower pace, one at a time)
                     if time_since_update >= 10:
                         should_update = True
-                        print(f"🔄 Meeting {meeting.id} ({meeting.title}): {time_since_update:.1f}s since last update - generating new content")
+                        print(f" Meeting {meeting.id} ({meeting.title}): {time_since_update:.1f}s since last update - generating new content")
                     else:
-                        print(f"⏸️ Meeting {meeting.id} ({meeting.title}): {time_since_update:.1f}s since last update - waiting (need 10s)")
+                        print(f" Meeting {meeting.id} ({meeting.title}): {time_since_update:.1f}s since last update - waiting (need 10s)")
                 except Exception as e:
                     # If parsing fails, update anyway
-                    print(f"⚠️ Error parsing last_update for meeting {meeting.id}: {e}")
+                    print(f" Error parsing last_update for meeting {meeting.id}: {e}")
                     should_update = True
             
             if should_update:
@@ -737,23 +737,23 @@ Respond in JSON format:
                         meeting.meeting_metadata = final_metadata
                         await safe_commit(self.db)
                     
-                    logger.info(f"✅ Generated live content for meeting {meeting_id}: {meeting_title}")
+                    logger.info(f" Generated live content for meeting {meeting_id}: {meeting_title}")
                 except Exception as e:
                     import traceback
                     from sqlalchemy.exc import OperationalError, PendingRollbackError
                     
                     error_msg = str(e).lower()
                     if "database is locked" in error_msg or "locked" in error_msg:
-                        print(f"⚠️  Database locked while generating live content for meeting {meeting_id}, will retry later")
+                        print(f"  Database locked while generating live content for meeting {meeting_id}, will retry later")
                     else:
-                        print(f"❌ Error generating live content for meeting {meeting_id}: {e}")
+                        print(f" Error generating live content for meeting {meeting_id}: {e}")
                         traceback.print_exc()
                     
                     # Rollback the session to recover from the error
                     try:
                         await self.db.rollback()
                     except Exception as rollback_error:
-                        print(f"⚠️  Error during rollback: {rollback_error}")
+                        print(f"  Error during rollback: {rollback_error}")
         
         # Update meetings that should be completed (both in_progress and scheduled that have passed)
         result = await self.db.execute(
@@ -853,7 +853,7 @@ Respond in JSON format:
     
     async def _generate_meeting_closing(self, meeting: Meeting):
         """Generate closing sequence: organizer summary, thank you, and attendee goodbyes."""
-        print(f"🎬 Generating closing sequence for meeting {meeting.id}: {meeting.title}")
+        print(f" Generating closing sequence for meeting {meeting.id}: {meeting.title}")
         
         # Get attendees
         result = await self.db.execute(
@@ -931,7 +931,7 @@ Write only the summary, nothing else."""
                     organizer_summary = re.sub(r'\n```', '', organizer_summary)
                     organizer_summary = organizer_summary.strip()
         except Exception as e:
-            print(f"❌ Error generating organizer summary: {e}")
+            print(f" Error generating organizer summary: {e}")
         
         if not organizer_summary or len(organizer_summary) < 20:
             organizer_summary = f"Thank you all for a productive discussion. We've covered the key agenda items and have clear action items moving forward."
@@ -968,7 +968,7 @@ Write only the thank you message, nothing else."""
                     organizer_goodbye = re.sub(r'\n```', '', organizer_goodbye)
                     organizer_goodbye = organizer_goodbye.strip()
         except Exception as e:
-            print(f"❌ Error generating organizer goodbye: {e}")
+            print(f" Error generating organizer goodbye: {e}")
         
         if not organizer_goodbye or len(organizer_goodbye) < 10:
             organizer_goodbye = f"Thank you all for your time and valuable input today. Have a great rest of your day!"
@@ -1047,7 +1047,7 @@ Write only the goodbye message, nothing else."""
                         attendee_goodbye = re.sub(r'\n```', '', attendee_goodbye)
                         attendee_goodbye = attendee_goodbye.strip()
             except Exception as e:
-                print(f"❌ Error generating goodbye for {attendee.name}: {e}")
+                print(f" Error generating goodbye for {attendee.name}: {e}")
             
             if not attendee_goodbye or len(attendee_goodbye) < 5:
                 attendee_goodbye = "Thanks everyone, see you later!"
@@ -1080,11 +1080,11 @@ Write only the goodbye message, nothing else."""
         
         # Commit the closing sequence
         await safe_commit(self.db)
-        logger.info(f"✅ Generated closing sequence for meeting {meeting.id} with {len(live_messages)} total messages")
+        logger.info(f" Generated closing sequence for meeting {meeting.id} with {len(live_messages)} total messages")
     
     async def _generate_live_meeting_content(self, meeting: Meeting):
         """Generate live meeting messages and update transcript."""
-        logger.info(f"🔄 Generating live content for meeting {meeting.id}: {meeting.title}")
+        logger.info(f" Generating live content for meeting {meeting.id}: {meeting.title}")
         logger.info(f"   Using LLM model: {self.llm_client.model} at {self.llm_client.base_url}")
         
         # Refresh meeting to get latest state
@@ -1097,10 +1097,10 @@ Write only the goodbye message, nothing else."""
         attendees = result.scalars().all()
         
         if len(attendees) < 2:
-            logger.warning(f"⚠️ Meeting {meeting.id} has less than 2 attendees, skipping content generation")
+            logger.warning(f" Meeting {meeting.id} has less than 2 attendees, skipping content generation")
             return
         
-        logger.info(f"✅ Meeting {meeting.id} has {len(attendees)} attendees, proceeding with content generation")
+        logger.info(f" Meeting {meeting.id} has {len(attendees)} attendees, proceeding with content generation")
         
         # Get business context
         from engine.office_simulator import get_business_context
@@ -1122,7 +1122,7 @@ Write only the goodbye message, nothing else."""
         
         # Start with existing messages
         live_messages = list(existing_messages_from_db) if isinstance(existing_messages_from_db, list) else []
-        logger.info(f"   📝 Starting with {len(live_messages)} existing messages from database")
+        logger.info(f"    Starting with {len(live_messages)} existing messages from database")
         
         # Generate ONLY 1 message at a time - no one talks over each other
         # One person speaks, then wait for the next update cycle
@@ -1165,7 +1165,7 @@ Write only the goodbye message, nothing else."""
                     if (speakers[0] == recipients[1] and speakers[1] == recipients[0]):
                         is_loop = True
                         loop_pair = tuple(sorted(speakers))
-                        logger.warning(f"   ⚠️⚠️⚠️ LOOP DETECTED: Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
+                        logger.warning(f"    LOOP DETECTED: Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
             
             # Also check for 3-message loops (A->B, B->A, A->B)
             if not is_loop and len(last_4_messages) >= 3:
@@ -1181,7 +1181,7 @@ Write only the goodbye message, nothing else."""
                     if speakers[-1] == recipients[-2] and speakers[-2] == recipients[-1]:
                         is_loop = True
                         loop_pair = pair
-                        logger.warning(f"   ⚠️⚠️⚠️ LOOP DETECTED (3-message): Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
+                        logger.warning(f"    LOOP DETECTED (3-message): Same two people ({last_message.get('sender_name')} and {last_message.get('recipient_name')}) talking back and forth - BREAKING IT NOW")
             
             # CRITICAL: If someone was just addressed, they MUST respond next
             # BUT: If we're in a loop, BREAK IT by picking someone else
@@ -1194,16 +1194,16 @@ Write only the goodbye message, nothing else."""
                     available = [a for a in attendees if a.id not in excluded]
                     if available:
                         next_speaker_id = random.choice(available).id
-                        logger.info(f"   ✅✅✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} instead (forced rotation, breaking loop)")
+                        logger.info(f"    LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} instead (forced rotation, breaking loop)")
                     else:
                         # Can't break - at least exclude the two in the loop
                         available = [a for a in attendees if a.id not in loop_pair]
                         if available:
                             next_speaker_id = random.choice(available).id
-                            logger.info(f"   ✅ LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} (minimal exclusion)")
+                            logger.info(f"    LOOP BROKEN: Selecting {next((a.name for a in attendees if a.id == next_speaker_id), 'Someone')} (minimal exclusion)")
                         else:
                             next_speaker_id = last_message.get("recipient_id")
-                            logger.warning(f"   ⚠️ Cannot break loop - only 2 attendees")
+                            logger.warning(f"    Cannot break loop - only 2 attendees")
                 else:
                     next_speaker_id = last_message.get("recipient_id")
                     logger.info(f"   Turn-taking: {last_message.get('recipient_name', 'Someone')} was addressed, they will respond next")
@@ -1272,7 +1272,7 @@ Write only the goodbye message, nothing else."""
                     if available_next:
                         # Perfect - we have someone who hasn't spoken in the last 8 messages
                         next_speaker_id = random.choice(available_next).id
-                        logger.info(f"   ✅✅✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (hasn't spoken in last 8 messages - FORCED ROTATION)")
+                        logger.info(f"    BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (hasn't spoken in last 8 messages - FORCED ROTATION)")
                     else:
                         # If we've excluded everyone, at least exclude the two who just spoke + last 4
                         minimal_exclude = {sender.id, recipient.id}
@@ -1281,16 +1281,16 @@ Write only the goodbye message, nothing else."""
                         available_next = [a for a in attendees if a.id not in minimal_exclude]
                         if available_next:
                             next_speaker_id = random.choice(available_next).id
-                            logger.info(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (minimal exclusion - last 4)")
+                            logger.info(f"    BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (minimal exclusion - last 4)")
                         else:
                             # Last resort: exclude just the two who just spoke
                             available_next = [a for a in attendees if a.id not in {sender.id, recipient.id}]
                             if available_next:
                                 next_speaker_id = random.choice(available_next).id
-                                logger.info(f"   ✅ BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (only excluding the two who just spoke)")
+                                logger.info(f"    BREAKING LOOP: After response, selecting {next((a.name for a in available_next if a.id == next_speaker_id), 'Someone')} (only excluding the two who just spoke)")
                             else:
                                 # Only two people in meeting - can't break loop
-                                logger.warning(f"   ⚠️ Only 2 attendees, cannot break loop")
+                                logger.warning(f"    Only 2 attendees, cannot break loop")
                                 next_speaker_id = None  # Don't set it, let it be chosen randomly
                 else:
                     # Not responding - sender addresses someone else
@@ -1332,7 +1332,7 @@ Write only the goodbye message, nothing else."""
                     
                     if good_recipients:
                         recipient = random.choice(good_recipients)
-                        logger.info(f"   ✅ NO LOOP: Addressing {recipient.name} (no recent pair, hasn't been addressed/spoken recently)")
+                        logger.info(f"    NO LOOP: Addressing {recipient.name} (no recent pair, hasn't been addressed/spoken recently)")
                     else:
                         # Fallback: prioritize those who haven't been addressed recently
                         less_recent_recipients = [a for a in available_recipients if a.id not in recent_recipients]
@@ -1348,7 +1348,7 @@ Write only the goodbye message, nothing else."""
                                 logger.info(f"   Turn-taking: Addressing {recipient.name} (avoiding immediate loop)")
                             else:
                                 recipient = random.choice(available_recipients)
-                                logger.warning(f"   ⚠️ Addressing {recipient.name} (random, all pairs used - may create loop)")
+                                logger.warning(f"    Addressing {recipient.name} (random, all pairs used - may create loop)")
                     
                     # Next speaker will be the recipient (they should respond)
                     next_speaker_id = recipient.id
@@ -1532,7 +1532,7 @@ Write only the message, nothing else."""
         # Update metadata - ensure live_messages is always a list
         # Use the metadata we already have (don't refresh - we've been building live_messages in it)
         # The live_messages list already contains existing + new messages
-        logger.info(f"   📊 Final message count: {len(live_messages)} total messages (started with {len(existing_messages_from_db)}, added {len(live_messages) - len(existing_messages_from_db)} new)")
+        logger.info(f"    Final message count: {len(live_messages)} total messages (started with {len(existing_messages_from_db)}, added {len(live_messages) - len(existing_messages_from_db)} new)")
         
         # Refresh meeting one more time to ensure we have latest state
         await self.db.refresh(meeting)
@@ -1550,7 +1550,7 @@ Write only the message, nothing else."""
         # Always update last_content_update to current time when we generate content
         now_iso = local_now().isoformat()
         metadata["last_content_update"] = now_iso
-        logger.info(f"   ⏰ Set last_content_update to: {now_iso}")
+        logger.info(f"    Set last_content_update to: {now_iso}")
         
         # CRITICAL: Ensure live_transcript and transcript are synchronized
         # The live_transcript should always match what's in live_messages
@@ -1589,8 +1589,8 @@ Write only the message, nothing else."""
         await self.db.refresh(meeting)
         final_metadata = meeting.meeting_metadata or {}
         final_update = final_metadata.get("last_content_update", "NOT SET")
-        logger.info(f"   ✅ Verified last_content_update after commit: {final_update}")
-        logger.info(f"✅ Successfully generated {messages_generated} new messages ({len(live_messages)} total) for meeting {meeting.id}")
+        logger.info(f"    Verified last_content_update after commit: {final_update}")
+        logger.info(f" Successfully generated {messages_generated} new messages ({len(live_messages)} total) for meeting {meeting.id}")
     
     async def _generate_final_transcript(self, meeting: Meeting) -> str:
         """Generate a final meeting transcript."""

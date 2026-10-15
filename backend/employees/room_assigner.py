@@ -31,6 +31,23 @@ ROOM_CORNER_EXEC = "corner_exec"
 
 # Floor 4 is dedicated to training overflow - training rooms and cubicles only
 
+# Floor 5 - Additional capacity for overcrowded departments
+# Sales expansion rooms (to handle 96 sales employees)
+ROOM_SALES_ROOM_2 = "sales_room_2"
+ROOM_SALES_ROOM_3 = "sales_room_3"
+ROOM_SALES_ROOM_4 = "sales_room_4"
+ROOM_SALES_ROOM_5 = "sales_room_5"
+
+# HR expansion rooms (to handle 92 HR employees)
+ROOM_HR_ROOM_2 = "hr_room_2"
+ROOM_HR_ROOM_3 = "hr_room_3"
+ROOM_HR_ROOM_4 = "hr_room_4"
+ROOM_HR_ROOM_5 = "hr_room_5"
+
+# IT expansion rooms (to handle 65 IT employees)
+ROOM_IT_ROOM_3 = "it_room_3"
+ROOM_IT_ROOM_4 = "it_room_4"
+
 ALL_ROOMS = [
     ROOM_OPEN_OFFICE,
     ROOM_CUBICLES,
@@ -81,7 +98,7 @@ async def assign_home_room(employee, db_session=None) -> tuple:
     base_room = None
     floor = None
     
-    # CEO/Executives/Chiefs → Executive Suite (floor 2) or Corner Executive (floor 3)
+    # CEO/Executives/Chiefs  Executive Suite (floor 2) or Corner Executive (floor 3)
     if role == "CEO" or "ceo" in title:
         # CEO gets the best office - Corner Executive on floor 3
         base_room = ROOM_CORNER_EXEC
@@ -95,17 +112,63 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = ROOM_EXECUTIVE_SUITE
             floor = 2
     
-    # Sales → Sales Room on floor 2
+    # Sales  Sales Rooms on floors 2 and 5 (distributed across 5 rooms)
     elif department == "sales" or "sales" in title:
-        base_room = ROOM_SALES_ROOM
-        floor = 2  # Sales always on floor 2
+        # Distribute sales employees across 5 rooms to prevent overcrowding
+        if db_session:
+            sales_room_counts = {}
+            for room in [ROOM_SALES_ROOM, ROOM_SALES_ROOM_2, ROOM_SALES_ROOM_3, ROOM_SALES_ROOM_4, ROOM_SALES_ROOM_5]:
+                from database.models import Employee
+                from sqlalchemy import select, func
+                result = await db_session.execute(
+                    select(func.count(Employee.id)).where(
+                        Employee.status == "active",
+                        Employee.home_room.in_([f"{room}_floor2", f"{room}_floor5"])
+                    )
+                )
+                sales_room_counts[room] = result.scalar() or 0
+
+            # Assign to room with fewest employees
+            base_room = min(sales_room_counts, key=sales_room_counts.get)
+        else:
+            import random
+            base_room = random.choice([ROOM_SALES_ROOM, ROOM_SALES_ROOM_2, ROOM_SALES_ROOM_3, ROOM_SALES_ROOM_4, ROOM_SALES_ROOM_5])
+
+        # First two sales rooms on floor 2, rest on floor 5
+        if base_room in [ROOM_SALES_ROOM, ROOM_SALES_ROOM_2]:
+            floor = 2
+        else:
+            floor = 5
     
-    # HR → HR Room on floor 2
+    # HR  HR Rooms on floors 2 and 5 (distributed across 5 rooms)
     elif "hr" in title or "human resources" in title or department == "hr":
-        base_room = ROOM_HR_ROOM
-        floor = 2  # HR always on floor 2
+        # Distribute HR employees across 5 rooms to prevent overcrowding
+        if db_session:
+            hr_room_counts = {}
+            for room in [ROOM_HR_ROOM, ROOM_HR_ROOM_2, ROOM_HR_ROOM_3, ROOM_HR_ROOM_4, ROOM_HR_ROOM_5]:
+                from database.models import Employee
+                from sqlalchemy import select, func
+                result = await db_session.execute(
+                    select(func.count(Employee.id)).where(
+                        Employee.status == "active",
+                        Employee.home_room.in_([f"{room}_floor2", f"{room}_floor5"])
+                    )
+                )
+                hr_room_counts[room] = result.scalar() or 0
+
+            # Assign to room with fewest employees
+            base_room = min(hr_room_counts, key=hr_room_counts.get)
+        else:
+            import random
+            base_room = random.choice([ROOM_HR_ROOM, ROOM_HR_ROOM_2, ROOM_HR_ROOM_3, ROOM_HR_ROOM_4, ROOM_HR_ROOM_5])
+
+        # First two HR rooms on floor 2, rest on floor 5
+        if base_room in [ROOM_HR_ROOM, ROOM_HR_ROOM_2]:
+            floor = 2
+        else:
+            floor = 5
     
-    # Design/Creative → Design Studio (floor 3) or Innovation Lab (floor 3)
+    # Design/Creative  Design Studio (floor 3) or Innovation Lab (floor 3)
     elif "design" in title or "designer" in title or department == "design":
         if random.random() < 0.6:  # 60% design studio
             base_room = ROOM_DESIGN_STUDIO
@@ -114,32 +177,73 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = ROOM_INNOVATION_LAB
             floor = 3
     
-    # R&D/Innovation → Innovation Lab (floor 3)
+    # R&D/Innovation  Innovation Lab (floor 3)
     elif "research" in title or "r&d" in title or "innovation" in title or department == "research":
         base_room = ROOM_INNOVATION_LAB
         floor = 3
     
-    # IT → IT Room (can be on floor 1 or 2)
+    # IT  IT Rooms (can be on floors 1, 2, or 5)
     elif "it" in title or "information technology" in title or department == "it":
-        base_room = ROOM_IT_ROOM
-        floor = await _determine_floor_for_special_room(ROOM_IT_ROOM, db_session)
+        # Distribute IT employees across 4 rooms to prevent overcrowding
+        if db_session:
+            it_room_counts = {}
+            from database.models import Employee
+            from sqlalchemy import select, func
+
+            # Check all IT room variations
+            for room_name in [ROOM_IT_ROOM, f"{ROOM_IT_ROOM}_floor2", ROOM_IT_ROOM_3, ROOM_IT_ROOM_4]:
+                result = await db_session.execute(
+                    select(func.count(Employee.id)).where(
+                        Employee.status == "active",
+                        Employee.home_room == room_name
+                    )
+                )
+                it_room_counts[room_name] = result.scalar() or 0
+
+            # Find room with fewest employees
+            assigned_room = min(it_room_counts, key=it_room_counts.get)
+
+            if assigned_room == ROOM_IT_ROOM:
+                base_room = ROOM_IT_ROOM
+                floor = 1
+            elif assigned_room == f"{ROOM_IT_ROOM}_floor2":
+                base_room = ROOM_IT_ROOM
+                floor = 2
+            elif assigned_room == ROOM_IT_ROOM_3:
+                base_room = ROOM_IT_ROOM_3
+                floor = 5
+            else:
+                base_room = ROOM_IT_ROOM_4
+                floor = 5
+        else:
+            import random
+            choice = random.choice([1, 2, 5, 5])  # Weight toward floor 5
+            if choice == 1:
+                base_room = ROOM_IT_ROOM
+                floor = 1
+            elif choice == 2:
+                base_room = ROOM_IT_ROOM
+                floor = 2
+            else:
+                base_room = random.choice([ROOM_IT_ROOM_3, ROOM_IT_ROOM_4])
+                floor = 5
     
-    # Reception → Reception (usually floor 1, but can have floor 2)
+    # Reception  Reception (usually floor 1, but can have floor 2)
     elif "reception" in title or "receptionist" in title:
         base_room = ROOM_RECEPTION
         floor = await _determine_floor_for_special_room(ROOM_RECEPTION, db_session)
     
-    # Storage → Storage Room (needs coverage on floors 1 and 2)
+    # Storage  Storage Room (needs coverage on floors 1 and 2)
     elif "storage" in title or "warehouse" in title or "inventory" in title or "stock" in title:
         base_room = ROOM_STORAGE
         floor = await _determine_floor_for_special_room(ROOM_STORAGE, db_session)
     
-    # Training → Training Room (can be on floor 1, 2, or 4 for overflow)
+    # Training  Training Room (can be on floor 1, 2, or 4 for overflow)
     elif "training" in title or "trainer" in title:
         base_room = ROOM_TRAINING_ROOM
         floor = await _determine_floor_for_training_room(db_session)
     
-    # Engineering/Development → Focus Pods (floor 3), Cubicles, or Open Office
+    # Engineering/Development  Focus Pods (floor 3), Cubicles, or Open Office
     elif department == "engineering" or department == "development" or "engineer" in title or "developer" in title:
         if random.random() < 0.3:  # 30% floor 3 focus pods
             base_room = ROOM_FOCUS_PODS
@@ -148,7 +252,7 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = await _determine_office_space(db_session, ROOM_CUBICLES, ROOM_OPEN_OFFICE, prefer_first=True)
             floor = await _determine_floor_for_regular_employee(db_session)
     
-    # Product → Collaboration Lounge (floor 3), War Room (floor 3), or traditional spaces
+    # Product  Collaboration Lounge (floor 3), War Room (floor 3), or traditional spaces
     elif department == "product" or "product" in title:
         rand = random.random()
         if rand < 0.3:  # 30% collaboration lounge
@@ -161,7 +265,7 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = await _determine_office_space(db_session, ROOM_OPEN_OFFICE, ROOM_CUBICLES)
             floor = await _determine_floor_for_regular_employee(db_session)
     
-    # Marketing → Hotdesk (floor 3), Collaboration Lounge (floor 3), or traditional spaces
+    # Marketing  Hotdesk (floor 3), Collaboration Lounge (floor 3), or traditional spaces
     elif department == "marketing" or "marketing" in title:
         rand = random.random()
         if rand < 0.3:  # 30% hotdesk
@@ -174,7 +278,7 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = await _determine_office_space(db_session, ROOM_OPEN_OFFICE, ROOM_CUBICLES)
             floor = await _determine_floor_for_regular_employee(db_session)
     
-    # Managers and C-level executives → Executive Suite, Corner Executive, or Manager Office based on seniority
+    # Managers and C-level executives  Executive Suite, Corner Executive, or Manager Office based on seniority
     elif role in ["Manager", "CTO", "COO", "CFO"]:
         if "senior" in title or "director" in title or "vp" in title or "vice president" in title:
             # High-level managers get executive spaces
@@ -190,7 +294,7 @@ async def assign_home_room(employee, db_session=None) -> tuple:
             base_room = await _determine_office_space(db_session, ROOM_OPEN_OFFICE, ROOM_CUBICLES)
             floor = await _determine_floor_for_regular_employee(db_session)
     
-    # Operations → Hotdesk (floor 3) or traditional spaces
+    # Operations  Hotdesk (floor 3) or traditional spaces
     elif department == "operations" or "operations" in title:
         if random.random() < 0.3:  # 30% hotdesk
             base_room = ROOM_HOTDESK
@@ -219,9 +323,11 @@ async def assign_home_room(employee, db_session=None) -> tuple:
         room_id = f"{base_room}_floor3"
     elif floor == 4:
         room_id = f"{base_room}_floor4"
+    elif floor == 5:
+        room_id = f"{base_room}_floor5"
     else:
         room_id = base_room
-    
+
     return (room_id, floor)
 
 

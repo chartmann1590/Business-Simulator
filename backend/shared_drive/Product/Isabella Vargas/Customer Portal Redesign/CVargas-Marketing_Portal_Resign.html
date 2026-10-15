@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Professional grid */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        th, td {
+            border: 1px solid #d0d0d0;
+            padding: 8px;
+        }
+        
+        th {
+            background: #366092;
+            color: white;
+            font-weight: bold;
+            text-align: left;
+        }
+        
+        th:first-child, td:last-child {
+            text-align: right;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        /* Totals row */
+        tr.last {
+            background-color: #e7f3ff;
+            font-weight: bold;
+            border-top: 2px solid #d0d0d0;
+        }
+        
+        /* Number formatting */
+        .currency {
+            padding-left: 8px;
+            color: green;
+        }
+        
+        .percentage {
+            padding-left: 8px;
+            color: blue;
+        }
+        
+        .decimal {
+            padding-left: 8px;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+<table style="width:100%">
+    <tr><td colspan="X" style="text-align: center; font-size: 16pt; font-weight: bold; padding: 12px;">Financial Dashboard for Isabella Vargas (Marketing Senior)</td></tr>
+    <tr>
+        <th>Department</th>
+        <th>Employee Count</th>
+        <th>Project ROI</th>
+        <th>Totals</th>
+    </tr>
+    <tr class="last">
+        <td style="padding-left: 8px;">Operations</td>
+        <td style="padding-left: 8px;">52 employees</td>
+        <td style="padding-left: 8px;">N/A</td>
+        <td style="padding-left: 8px; background-color: #e7f3ff; font-weight: bold;">$0.00</td>
+    </tr>
+    <tr>
+        <th>Design</th>
+        <th>Employee Count</th>
+        <th>Project ROI</th>
+        <th>Totals</th>
+    </tr>
+    <tr class="last">
+        <td style="padding-left: 8px;">$25,831.02</td>
+        <td style="padding-left: 8px; background-color: #f2f2f2;">50 employees</td>
+        <td style="padding-left: 8px; background-color: #f2f2f2;">N/A</td>
+        <td style="padding-left: 8px; background-color: #e7f3ff; font-weight: bold;">$0.00</td>
+    </tr>
+    <!-- Add more rows here -->
+</table>
+</body>
+</html>
