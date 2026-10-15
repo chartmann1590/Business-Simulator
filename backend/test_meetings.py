@@ -53,7 +53,7 @@ async def check_meetings():
             test_response = await client.generate_response("Say 'Hello' in one word")
             print(f"   Test response: {test_response[:50] if test_response else 'FAILED'}")
         except Exception as e:
-            print(f"   ❌ LLM test failed: {e}")
+            print(f"    LLM test failed: {e}")
             import traceback
             traceback.print_exc()
 
